@@ -69,6 +69,7 @@
   });
 })();
 </script>
+<script src="./native-download.bundle.js"></script>
 <script>
 (function(){
 'use strict';
@@ -373,47 +374,43 @@ async function makeBlurredBackgroundComposite(sourceUrl,cutoutUrl,strength){
  return canvas.toDataURL('image/png');
 }
 async function saveFalOutputLocally(source,filename){
- const cap=window.Capacitor;
- const fs=(cap&&cap.Plugins&&cap.Plugins.Filesystem)||(window.Plugins&&window.Plugins.Filesystem);
- if(cap&&cap.isNativePlatform&&cap.isNativePlatform()&&fs&&typeof fs.downloadFile==='function'&&!source.startsWith('data:')){
-  const safeName=filename.replace(/[^a-zA-Z0-9._-]/g,'_');
-  const result=await fs.downloadFile({url:source,path:'ReangStudioFoto/'+safeName,directory:'DOCUMENTS',recursive:true});
-  return {saved:true,path:result&&result.path||'Dokumen/ReangStudioFoto/'+safeName};
+ if(window.ReangNativeDownloads&&typeof window.ReangNativeDownloads.saveFalImage==='function'){
+  return await window.ReangNativeDownloads.saveFalImage(source,filename);
  }
- if(source.startsWith('data:')){
-  const parts=source.split(',');
-  const mime=(parts[0].match(/data:([^;]+)/)||[])[1]||'image/png';
-  const base64=parts[1]||'';
-  const fs2=(cap&&cap.Plugins&&cap.Plugins.Filesystem)||(window.Plugins&&window.Plugins.Filesystem);
-  if(cap&&cap.isNativePlatform&&cap.isNativePlatform()&&fs2&&typeof fs2.writeFile==='function'){
-   const safeName=filename.replace(/[^a-zA-Z0-9._-]/g,'_');
-   const result=await fs2.writeFile({path:'ReangStudioFoto/'+safeName,data:base64,directory:'DOCUMENTS',recursive:true});
-   return {saved:true,path:result&&result.uri||'Dokumen/ReangStudioFoto/'+safeName};
-  }
+ let response;
+ try{
+  response=await fetch(source,{mode:'cors'});
+ }catch(error){
+  throw new Error('Unduhan web lintas domain ditolak browser. Untuk menyimpan langsung ke Download, gunakan APK Android terbaru.');
  }
- const response=await fetch(source,{mode:'cors'});
  if(!response.ok)throw new Error('Unduhan gagal (HTTP '+response.status+').');
  const blob=await response.blob();
+ if(!blob.size)throw new Error('File gambar kosong.');
  const localUrl=URL.createObjectURL(blob);
  const a=document.createElement('a');a.href=localUrl;a.download=filename;a.style.display='none';
  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(localUrl),60000);
- return {saved:true,path:'Unduhan perangkat'};
+ return {saved:true,path:'Unduhan browser'};
 }
 function showFalResult(source,label,filename){
  const result=$('#tool-result');
- result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak ditimpa. Menyimpan hasil secara otomatis ke perangkat…</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div id="fal-save-status" class="notice info" style="margin-top:12px"><span>…</span><div>Menyiapkan unduhan otomatis…</div></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Simpan lagi</button><a class="btn" href="'+esc(source)+'" target="_blank" rel="noopener">Buka gambar hasil</a></div>';
+ result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak ditimpa. Menyimpan hasil secara otomatis ke perangkat…</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div id="fal-save-status" class="notice info" style="margin-top:12px"><span>…</span><div>Menyiapkan unduhan otomatis…</div></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Unduh ke HP</button></div>';
  const status=$('#fal-save-status');
  const save=async()=>{
   const dl=$('#download-fal-output');if(dl){dl.disabled=true;dl.textContent='Menyimpan…'}
   if(status)status.innerHTML='<span>…</span><div>Menyiapkan file untuk disimpan di perangkat…</div>';
   try{
    const saved=await saveFalOutputLocally(source,filename);
-   if(status)status.innerHTML='<span>✓</span><div><b>Hasil berhasil disimpan otomatis.</b><br>'+esc(saved.path||'File tersimpan di perangkat.')+'</div>';
-   if(dl)dl.textContent='Simpan lagi';
+   if(saved&&saved.queued){
+    if(status)status.innerHTML='<span>✓</span><div><b>Unduhan dimulai oleh Android.</b><br>File akan masuk ke <b>Download/ReangStudioFoto/'+esc(filename)+'</b>. Tunggu notifikasi Unduhan selesai.</div>';
+    if(dl)dl.textContent='Unduh lagi';
+   }else{
+    if(status)status.innerHTML='<span>✓</span><div><b>Hasil berhasil disimpan.</b><br>'+esc(saved.path||'File tersimpan di perangkat.')+'</div>';
+    if(dl)dl.textContent='Unduh lagi';
+   }
   }catch(error){
    const msg=String(error&&error.message||error);
-   if(status)status.innerHTML='<span>!</span><div><b>Unduhan otomatis tidak tersedia pada lingkungan ini.</b><br>'+esc(msg)+'<br>Tekan “Simpan lagi” atau “Buka gambar hasil”, lalu gunakan menu unduh browser.</div>';
-   if(dl)dl.textContent='Coba simpan lagi';
+   if(status)status.innerHTML='<span>!</span><div><b>Gambar belum berhasil disimpan.</b><br>'+esc(msg)+'<br>Pastikan APK terbaru sudah terpasang, lalu tekan “Unduh lagi”. Aplikasi tidak akan membuka halaman gambar di browser.</div>';
+   if(dl)dl.textContent='Unduh lagi';
   }finally{if(dl)dl.disabled=false}
  };
  $('#download-fal-output').onclick=save;
