@@ -120,11 +120,11 @@ jobs:
       - name: Publish direct APK download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-test-20261024
-          name: Reang Studio Foto Android (Tes Tombol fal.ai)
+          tag_name: android-workflow-20261024
+          name: Reang Studio Foto Android (Alur 5 Tahap)
           body: |
-            APK pengujian otomatis terbaru untuk Reang Studio Foto.
-            Ini build debug; fitur AI mungkin belum aktif penuh.
+            APK Android berisi perbaikan error label dan alur proyek terpisah: Cahaya → Cutout → Template → Enhance → Export.
+            Hasil AI disimpan ke folder Download/ReangStudioFoto dan cache aplikasi untuk digunakan pada tahap berikutnya.
           files: android/app/build/outputs/apk/debug/app-debug.apk
           overwrite_files: true
           make_latest: true
