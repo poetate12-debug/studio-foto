@@ -484,6 +484,9 @@ function renderProjectGallery(){
 }
 async function advanceWorkflowPhoto(p,ph,key){
  ensurePhotoWorkflow(ph);ph.workflow[key]=true;p.updatedAt=Date.now();
+ if(key==='light'||key==='cutout'||key==='face'){
+  try{const tpl=templates.find(t=>t.id===p.templateId)||null;const preview=await renderComposite(p,ph,tpl,170);ph.finalThumb=preview.toDataURL('image/jpeg',.78)}catch(error){console.warn('Pratinjau foto belum diperbarui',error)}
+ }
  const stageIndex=workflowStages.findIndex(st=>st.key===key);
  if(stageIndex<0){await dbPut('projects',p);goToProjectGallery();return}
  await dbPut('projects',p);
@@ -531,7 +534,7 @@ function renderPhotoEditor(){
  const adj=adjustmentValues(ph);
  const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
- let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">♜</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
+ let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
  html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'"><button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button" id="pf-finish-photo">✓ &nbsp;'+(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto')+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
@@ -578,6 +581,7 @@ function renderPhotoEditor(){
   if(stageIndex===1&&!workflowDone(ph,'cutout')){toast('Proses Cutout dahulu atau tandai tahap selesai jika ingin melewati.');if(!confirm('Lewati Cutout untuk foto ini?'))return}
   if(stageIndex===3&&!workflowDone(ph,'face')){toast('Proses Wajah dahulu atau konfirmasi untuk melewati tahap ini.');if(!confirm('Lewati tahap Wajah untuk foto ini?'))return}
   if(stageIndex===0){try{ph.workflowResults.light=await photoDataWithLight(ph)}catch(error){toast(error.message);return}}
+  if(stageIndex===4){try{await exportCurrentPhoto()}catch(error){toast(error.message||'Ekspor gagal.');return}}
   await advanceWorkflowPhoto(p,ph,stage.key);
  };
  if(stageIndex===0){
