@@ -2,25 +2,32 @@
 
 Prototipe workspace editor foto untuk alur foto acara: proyek, penyesuaian foto, template berlapis, pilihan model AI, dan ekspor cetak.
 
-## Menjalankan aplikasi
+## Deploy backend (disarankan)
 
-### Front-end saja
-Buka melalui GitHub Pages atau server statis. PWA responsif untuk Android dan desktop.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/poetate12-debug/studio-foto)
 
-### Menjalankan dengan backend fal.ai
+1. Buka tombol **Deploy to Render** dan masuk ke akun Render.
+2. Tinjau Blueprint dari file `render.yaml`, lalu deploy.
+3. Setelah service aktif, salin URL HTTPS `*.onrender.com` yang diberikan Render.
+4. Pada aplikasi Android, buka **Pengaturan → AI & fal.ai**, tempel URL itu pada **Alamat backend fal.ai**.
+5. Buat API key baru di dashboard fal.ai, tempel sementara ke kolom API key aplikasi, lalu tekan **Tes koneksi fal.ai**. Tes ini hanya menanyakan status job yang tidak ada dan tidak membuat inference job.
+6. Untuk pemrosesan AI, model harus diizinkan melalui `FAL_ALLOWED_MODELS`; endpoint inference sesungguhnya dan alur alat di front-end masih perlu diselesaikan.
+
+Render akan meminta nilai `FAL_KEY` karena backend dapat menggunakannya sebagai key default. Rahasia itu harus diisi pada environment server, bukan di GitHub atau di APK. Jika memakai key per sesi, aplikasi hanya mengirimkannya melalui HTTPS untuk tes dan tidak menyimpannya di browser.
+
+## Menjalankan secara lokal
+
 Persyaratan: Node.js 20 atau lebih baru.
 
 ```bash
 npm install
 cp .env.example .env
-# Isi FAL_KEY di .env pada server, jangan masukkan ke Git.
-# Isi FAL_ALLOWED_MODELS dengan ID endpoint yang sudah diverifikasi, pisahkan dengan koma.
+# Isi FAL_KEY hanya pada .env lokal/server; jangan commit file ini.
+# Isi FAL_ALLOWED_MODELS dengan endpoint IDs yang sudah diverifikasi.
 npm start
 ```
 
-Kemudian buka `http://localhost:3000`. Endpoint `/api/health` menunjukkan apakah fal.ai sudah dikonfigurasi.
-
-**Catatan:** backend proxy sudah menjadi fondasi, tetapi alur tombol AI pada front-end belum dihubungkan ke endpoint ini. Model ID dan schema input harus diverifikasi per fitur sebelum dipakai.
+Kemudian buka `http://localhost:3000`. Endpoint `/api/health` menunjukkan status backend. Endpoint `/api/fal/connection-test` memeriksa autentikasi key tanpa membuat pekerjaan inferensi.
 
 ## Fitur front-end yang tersedia
 - Navigasi Proyek, Alat AI, Template, dan Pengaturan.
@@ -37,8 +44,9 @@ Kemudian buka `http://localhost:3000`. Endpoint `/api/health` menunjukkan apakah
 ## Batasan saat ini
 Ini masih **prototipe**, belum aplikasi produksi penuh.
 
-- Tombol AI front-end belum memanggil backend fal.ai.
-- Backend proxy mengamankan API key di sisi server dan membatasi endpoint ke model ID dalam `FAL_ALLOWED_MODELS`, tetapi belum ada autentikasi pengguna, kuota per pengguna, atau dashboard penggunaan.
+- Tombol AI di front-end belum memproses semua fitur melalui backend fal.ai.
+- Koneksi test perlu URL backend yang sudah di-deploy dan API key valid.
+- Backend proxy membatasi endpoint melalui `FAL_ALLOWED_MODELS`, tetapi autentikasi pengguna, kuota per pengguna, dan dashboard penggunaan belum tersedia.
 - Penghapusan background/objek, kuas mask Keep/Remove, bokeh berbasis segmentasi, generasi background, enhancement AI asli, serta perbaikan arah mata belum aktif.
 - Ekspor ZIP, antrean ekspor tangguh, pemulihan job gagal, dan sinkronisasi cloud belum tersedia.
 - Komposisi layer perlu diuji dengan foto dan template asli sebelum dipakai untuk produksi cetak A3.
@@ -48,4 +56,4 @@ Ini masih **prototipe**, belum aplikasi produksi penuh.
 A3 potret pada 300 DPI sekitar **3508 × 4961 px**. Hasil akhir juga dibatasi resolusi sumber dan memori perangkat/browser.
 
 ## Keamanan
-Repository ini **publik**. Jangan commit API key, foto pelanggan, template privat, atau data pribadi. Simpan `FAL_KEY` hanya pada environment server, jangan di front-end atau APK.
+Repository ini **publik**. Jangan commit API key, foto pelanggan, template privat, atau data pribadi. API key yang sempat dibagikan di chat harus dicabut dan diganti. Simpan `FAL_KEY` hanya pada environment server, bukan di front-end atau APK.
