@@ -209,7 +209,7 @@ const modelOptions={
  enhance:[['auto','Otomatis: Real-ESRGAN / Clarity'],['esrgan','Real-ESRGAN (natural upscale)'],['clarity','Clarity Upscaler (detail generatif)']],
  gaze:[['auto','Otomatis: pilih terbaik'],['image-edit','Model edit gambar generatif']],
 };
-const featureName={remove:'Hapus background',object:'Hapus objek',blur:'Blur background',generate:'Buat background',enhance:'Enhance foto',gaze:'Perbaiki pandangan mata'};
+const featureName={remove:'Hapus background',object:'Hapus objek',blur:'Blur background',generate:'Buat background',enhance:'Enhance foto',gaze:'Perbaiki wajah'};
 const defaults={
  sizes:[{id:'a3',name:'A3',w:29.7,h:42,unit:'cm',dpi:300},{id:'a4',name:'A4',w:21,h:29.7,unit:'cm',dpi:300},{id:'10x15',name:'10 × 15 cm',w:10,h:15,unit:'cm',dpi:300},{id:'13x18',name:'13 × 18 cm',w:13,h:18,unit:'cm',dpi:300},{id:'20x30',name:'20 × 30 cm',w:20,h:30,unit:'cm',dpi:300}],
  models:{remove:'auto',object:'auto',blur:'auto',generate:'auto',enhance:'auto',gaze:'auto'},
@@ -520,6 +520,8 @@ async function useWorkflowResult(localSource){
  const index=p.photos.findIndex(x=>x.id===context.photoId);
  if(index<0)throw new Error('Foto proyek tidak ditemukan.');
  const ph=ensurePhotoWorkflow(p.photos[index]);
+ if(context.stageKey==='cutout'){ph.workflow.face=false;ph.workflow.export=false;delete ph.workflowResults.face}
+ if(context.stageKey==='face')ph.workflow.export=false;
  ph.workflowResults[context.stageKey]=localSource;
  activeProjectId=p.id;activePhotoIndex=index;page='photo-editor';workflowReturn=null;
  await advanceWorkflowPhoto(p,ph,context.stageKey);
@@ -586,7 +588,7 @@ function renderPhotoEditor(){
  };
  if(stageIndex===0){
   const refreshImage=()=>{const im=$('#pf-photo-preview');if(im)im.style.filter=photoAdjustmentFilter(ph)};
-  const update=async(key,value)=>{ph.adjust=ph.adjust||{};const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;ph.adjust[prop]=Number(value);const label=$('#pf-value-'+key);if(label)label.textContent=(Number(value)>0?'+':'')+value;refreshImage();await dbPut('projects',p)};
+  const update=async(key,value)=>{ph.adjust=ph.adjust||{};const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;ph.adjust[prop]=Number(value);const label=$('#pf-value-'+key);if(label)label.textContent=(Number(value)>0?'+':'')+value;refreshImage();await invalidatePhotoStages(p,ph,'light')};
   for(const [key] of [['exposure'],['contrast'],['highlight'],['shadows'],['saturation'],['warmth'],['glow'],['vignette'],['denoise']])$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value));
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
@@ -606,7 +608,7 @@ function renderPhotoEditor(){
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
   catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Cutout.')}
  };
- if(stageIndex===2)$('#pf-apply-template').onclick=async()=>{if($('#pf-template').value===''){p.templateId=null;for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}p.templateId=$('#pf-template').value;await applyProjectTemplate(p)};
+ if(stageIndex===2)$('#pf-apply-template').onclick=async()=>{const previousTemplate=p.templateId||null;const chosen=$('#pf-template').value||null;if(previousTemplate!==chosen){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.export=false}}p.templateId=chosen;if(!p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}await applyProjectTemplate(p)};
  if(stageIndex===3)$('#pf-run-face').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'face'};toolFileData=await photoDataWithLight(ph);if(ph.workflowResults.cutout)toolFileData=ph.workflowResults.cutout;toolKey='gaze';page='tool-runner';render()}
   catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Wajah.')}
@@ -899,8 +901,8 @@ async function runFalFeature(){
    filename='reang-background-ai.png';
   }else if(key==='gaze'){
    model='fal-ai/flux-kontext/dev';
-   input={image_url:imageUrl,prompt:'Edit only the gaze direction of visible people so their eyes look naturally toward the camera. Preserve each person’s exact identity, facial structure, age, expression, hairstyle, skin tone, clothing, pose, number of people, scene and background. Do not beautify, reshape faces, change clothing, add people, or change anything except eye gaze. For faces that are too small or not clearly visible, leave them unchanged. Photorealistic natural result.',num_inference_steps:mode==='fast'?20:(mode==='quality'?32:28),guidance_scale:2.5,num_images:1,enable_safety_checker:true,output_format:'jpeg'};
-   label='Perbaiki arah mata';
+   input={image_url:imageUrl,prompt:'Naturally improve the clarity and fine details of visible faces in this photograph, with realistic eyes, clean facial detail and natural skin texture. Correct an obviously awkward eye direction only when the face is clearly visible. Preserve each person's exact identity, facial structure, age, expression, hairstyle, skin tone, clothing, body, pose, number of people, decorations and background. Do not beautify, reshape faces, change clothing, add people, remove people, or alter the scene. For faces that are too small, obscured or not clearly visible, leave them unchanged. Photorealistic, subtle, faithful to the original.',num_inference_steps:mode==='fast'?20:(mode==='quality'?32:28),guidance_scale:2.5,num_images:1,enable_safety_checker:true,output_format:'jpeg'};
+   label='Perbaiki wajah';
    filename='reang-arah-mata-ai.jpg';
   }else{
    throw new Error('Alat yang dipilih belum didukung.');
