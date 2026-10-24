@@ -22,5 +22,8 @@
     "express-rate-limit": "^8.0.1",
     "helmet": "^8.1.0",
     "@capacitor/filesystem": "^7.1.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }
