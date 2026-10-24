@@ -89,8 +89,8 @@ jobs:
           path = Path("android/app/src/main/java/id/reang/studiofoto/MainActivity.java")
           source = path.read_text(encoding="utf-8")
           if "import android.os.Bundle;" not in source:
-              package_line_end = source.find("\\n", source.find("package "))
-              source = source[:package_line_end + 1] + "\\nimport android.os.Bundle;\\n" + source[package_line_end + 1:]
+              package_line_end = source.find("\n", source.find("package "))
+              source = source[:package_line_end + 1] + "\nimport android.os.Bundle;\n" + source[package_line_end + 1:]
           marker = "public class MainActivity extends BridgeActivity {"
           if marker not in source:
               raise SystemExit("MainActivity class declaration not found")
