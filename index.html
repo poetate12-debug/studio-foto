@@ -753,7 +753,14 @@ function renderToolRunner(){
  if(key==='remove')html+='<div class="notice info"><span>ⓘ</span><div>Hasil akan berupa PNG dengan latar transparan. Pemilihan model menentukan cara fal.ai memisahkan subjek.</div></div>';
  if(key==='gaze')html+='<div class="notice info">Hasil arah mata harus diperiksa sebelum digunakan. Model edit gambar dapat mengubah detail wajah dan tidak selalu menghasilkan pandangan natural.</div>';
  html+='<button class="btn primary" id="run-tool" style="width:100%">✧ Proses foto</button><div class="notice info" style="margin-top:12px"><span>ⓘ</span><div><b>Terhubung ke fal.ai.</b> Permintaan akan memakai API key sesi ini dan dapat menghabiskan saldo sesuai model. Foto asli tidak akan ditimpa.</div></div><div id="tool-result"></div></section></div>';
- $('#main').innerHTML=html;$('#back-tools').onclick=()=>navTo('tools');$('#tool-upload-button').onclick=()=>$('#tool-file-input').click();$('#tool-file-input').onchange=async e=>{const f=e.target.files[0];if(f){toolFileData=await dataURL(f);renderToolRunner()}};
+ $('#main').innerHTML=html;$('#back-tools').onclick=()=>{
+  if(workflowReturn){
+   const context=workflowReturn;workflowReturn=null;activeProjectId=context.projectId;
+   const project=projects.find(x=>x.id===context.projectId);const index=project?project.photos.findIndex(x=>x.id===context.photoId):-1;
+   activePhotoIndex=Math.max(0,index);page='batch-workflow';render();return;
+  }
+  navTo('tools');
+ };$('#tool-upload-button').onclick=()=>$('#tool-file-input').click();$('#tool-file-input').onchange=async e=>{const f=e.target.files[0];if(f){toolFileData=await dataURL(f);renderToolRunner()}};
  $('#runner-mode').value=settings.mode;$('#runner-model').onchange=()=>{settings.models[key]=$('#runner-model').value;saveSettings()};$('#enhance-strength')?.addEventListener('input',e=>{const el=$('#strength-value');if(el)el.textContent=e.target.value+'%'});$('#blur-strength')?.addEventListener('input',e=>{const el=$('#blur-value');if(el)el.textContent=e.target.value+' px'});
  $('#run-tool').onclick=async()=>{if(!toolFileData){toast('Unggah foto terlebih dahulu.');return}if(key==='enhance'){await runFalEnhancement();return}await runFalFeature()};
 }
