@@ -191,7 +191,7 @@ function renderSettings(){
  $$('[data-delete-size]').forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.deleteSize;if(id===settings.defaultSizeId){toast('Pilih ukuran default lain sebelum menghapus ukuran ini.');return}settings.sizes=settings.sizes.filter(s=>s.id!==id);saveSettings();renderSettings()}));
  $('#reset-local').addEventListener('click',()=>confirmModal('Hapus data lokal?','Semua proyek, foto, template, dan layer yang tersimpan di browser ini akan dihapus. Aksi ini tidak dapat dibatalkan.',async()=>{for(const p of projects)await dbDelete('projects',p.id);for(const t of templates)await dbDelete('templates',t.id);projects=[];templates=[];activeProjectId=null;activeTemplateId=null;renderSettings();toast('Data lokal dihapus.')}));
 }
-function render(){if(page==='projects')renderProjects();else if(page==='tools')renderTools();else if(page==='templates')renderTemplates();else if(page==='settings')renderSettings();else if(page==='project-editor')renderProjectEditor();else if(page==='template-editor')renderTemplateEditor();else if(page==='tool-runner')renderToolRunner();else renderProjects();$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
+function render(){if(page==='batch-workflow')renderBatchWorkflow();else if(page==='projects')renderProjects();else if(page==='tools')renderTools();else if(page==='templates')renderTemplates();else if(page==='settings')renderSettings();else if(page==='project-editor')renderProjectEditor();else if(page==='template-editor')renderTemplateEditor();else if(page==='tool-runner')renderToolRunner();else renderProjects();$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
 function showModal(title,body,actions){$('#modal-root').innerHTML='<div class="modal-backdrop" id="backdrop"><div class="modal"><div class="modal-head"><h2>'+title+'</h2><button class="btn iconbtn" id="close-modal">×</button></div><div class="modal-body">'+body+'</div><div class="modal-foot">'+actions+'</div></div></div>';$('#close-modal').onclick=closeModal;$('#backdrop').addEventListener('click',e=>{if(e.target.id==='backdrop')closeModal()})}
 function closeModal(){$('#modal-root').innerHTML=''}
 function showProjectModal(){const today=new Date().toISOString().slice(0,10);showModal('Buat proyek baru','<div class="field"><label>Nama proyek</label><input id="modal-project-name" placeholder="Contoh: Parade Putra Surti Muda" maxlength="100"></div><div class="form-row"><div class="field"><label>Tanggal acara</label><input id="modal-project-date" type="date" value="'+today+'"></div><div class="field"><label>Catatan (opsional)</label><input id="modal-project-note" placeholder="Lokasi / tema"></div></div><div class="notice info">Tanggal proyek ini bisa digunakan sebagai tanggal cetak pada layer teks template.</div>','<button class="btn" id="cancel-project">Batal</button><button class="btn primary" id="create-project-confirm">Buat proyek</button>');$('#cancel-project').onclick=closeModal;$('#create-project-confirm').onclick=async()=>{const name=$('#modal-project-name').value.trim();if(!name){toast('Isi nama proyek terlebih dahulu.');return}const p={id:uid(),name,eventDate:$('#modal-project-date').value,note:$('#modal-project-note').value,photos:[],createdAt:Date.now(),updatedAt:Date.now()};projects.push(p);await dbPut('projects',p);closeModal();openProject(p.id);toast('Proyek baru berhasil dibuat.')}}
@@ -221,10 +221,67 @@ function renderComposite(project,photo,template,previewWidth){
  return task.then(()=>canvas)
 }
 async function refreshFinalThumb(){const p=activeProject(),ph=currentPhoto();if(!p||!ph)return;const t=templates.find(x=>x.id===p.templateId)||null;try{const canvas=await renderComposite(p,ph,t,170);ph.finalThumb=canvas.toDataURL('image/jpeg',.72);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p)}catch(e){console.warn(e)}}
+const workflowStages=[
+ {key:'light',title:'1. Cahaya',desc:'Atur cahaya untuk setiap foto. Selesaikan semua foto sebelum lanjut ke Cutout.'},
+ {key:'cutout',title:'2. Cutout',desc:'Pisahkan subjek dari latar untuk setiap foto. Selesaikan semua foto sebelum lanjut ke Template.'},
+ {key:'template',title:'3. Template',desc:'Pilih template untuk proyek; template diterapkan ke semua foto.'},
+ {key:'enhance',title:'4. Enhance',desc:'Tingkatkan kualitas setiap foto satu per satu sebelum ekspor.'},
+ {key:'export',title:'5. Export',desc:'Ekspor hasil semua foto setelah tahap sebelumnya selesai.'}
+];
+function workflowDone(ph,key){ph.workflow=ph.workflow||{};return !!ph.workflow[key]}
+async function setWorkflowDone(p,ph,key,value=true){ph.workflow=ph.workflow||{};ph.workflow[key]=value;p.updatedAt=Date.now();await dbPut('projects',p)}
+function renderBatchWorkflow(){
+ const p=activeProject();if(!p){page='projects';render();return}
+ if(!p.photos?.length){page='project-editor';render();toast('Tambahkan foto terlebih dahulu.');return}
+ const stageIndex=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
+ const stage=workflowStages[stageIndex];
+ activePhotoIndex=Math.max(0,Math.min(activePhotoIndex,p.photos.length-1));
+ const ph=p.photos[activePhotoIndex];
+ const completed=p.photos.filter(x=>workflowDone(x,stage.key)).length;
+ let html=head('PROYEK / ALUR BERTAHAP',esc(p.name),'Tahap '+(stageIndex+1)+' dari 5 · '+p.photos.length+' foto','<button class="btn" id="workflow-back">← Kembali ke proyek</button>');
+ html+='<div class="panel" style="margin-bottom:14px"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+workflowStages.map((st,i)=>'<button class="btn '+(i===stageIndex?'primary':'')+'" data-workflow-stage="'+i+'" style="flex:1;min-width:110px">'+(i+1)+'. '+st.title.split('. ')[1]+'</button>').join('')+'</div><div class="progress-track" style="height:6px;background:var(--line);border-radius:9px;overflow:hidden"><div style="height:100%;width:'+((stageIndex+1)*20)+'%;background:var(--accent)"></div></div><h2 style="margin:14px 0 5px">'+stage.title+'</h2><p class="lead">'+stage.desc+'</p><div class="muted">'+completed+' dari '+p.photos.length+' foto ditandai selesai pada tahap ini.</div></div>';
+ html+='<div class="editor"><div class="editor-top"><div><h2>Foto '+(activePhotoIndex+1)+' / '+p.photos.length+'</h2><div class="meta">'+esc(ph.name)+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" id="workflow-prev" '+(activePhotoIndex===0?'disabled':'')+'>← Foto sebelumnya</button><button class="btn" id="workflow-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>Foto berikutnya →</button></div></div>';
+ html+='<div class="photo-strip" style="padding:12px 16px;border-bottom:1px solid var(--line)">'+p.photos.map((x,i)=>'<button class="photo-thumb '+(i===activePhotoIndex?'selected':'')+'" data-workflow-photo="'+i+'" title="'+esc(x.name)+'"><img src="'+(x.finalThumb||x.src)+'"><span style="font-size:10px">'+(workflowDone(x,stage.key)?'✓ Selesai':'Belum')+'</span></button>').join('')+'</div>';
+ html+='<div class="editor-grid"><section class="canvas-wrap"><div class="canvas-frame"><img src="'+(ph.finalThumb||ph.src)+'" alt="Foto yang sedang diedit" style="width:100%;height:auto;max-height:70vh;object-fit:contain"></div><div class="canvas-caption">Foto asli tetap disimpan. Perubahan tahap dicatat per foto.</div></section><aside class="editor-pane right">';
+ if(stage.key==='light'){
+ const a=ph.adjust||{};
+ html+='<div class="pane-title">Atur cahaya</div><div class="editor-controls">'+[['brightness','Kecerahan',50,160,a.brightness??100],['contrast','Kontras',50,160,a.contrast??100],['saturation','Saturasi',0,180,a.saturation??100]].map(([key,label,min,max,val])=>'<div class="control-line"><label>'+label+' <span id="wf-'+key+'-val">'+val+'%</span></label><input type="range" min="'+min+'" max="'+max+'" value="'+val+'" id="wf-'+key+'"></div>').join('')+'<button class="btn" id="wf-reset-light">Reset cahaya</button></div>';
+ }else if(stage.key==='cutout'){
+ html+='<div class="pane-title">Cutout / Hapus latar</div><p class="lead">Pilih foto ini untuk dibawa ke alat Cutout. Setelah hasil diperiksa, kembali ke alur dan tandai tahap ini selesai.</p><button class="btn primary" id="wf-open-cutout">Buka alat Cutout untuk foto ini</button>';
+ }else if(stage.key==='template'){
+ html+='<div class="pane-title">Pilih template</div><div class="field"><label>Template proyek</label><select id="wf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><p class="lead">Pilihan template akan diterapkan ke semua foto dalam proyek.</p>';
+ }else if(stage.key==='enhance'){
+ html+='<div class="pane-title">Enhance foto</div><p class="lead">Buka alat Enhance untuk foto ini. Periksa hasilnya sebelum kembali ke alur.</p><button class="btn primary" id="wf-open-enhance">Buka alat Enhance untuk foto ini</button>';
+ }else{
+ html+='<div class="pane-title">Ekspor hasil</div><p class="lead">Ekspor satu per satu atau seluruh foto setelah tahap Cahaya, Cutout, Template, dan Enhance selesai.</p><button class="btn primary" id="wf-export-current">Ekspor foto ini</button><button class="btn" id="wf-export-all" style="margin-top:8px">Ekspor semua foto</button>';
+ }
+ html+='<div style="margin-top:18px"><button class="btn '+(workflowDone(ph,stage.key)?'':'primary')+'" id="wf-mark-done" style="width:100%">'+(workflowDone(ph,stage.key)?'✓ Tahap foto ini selesai':'Tandai foto ini selesai')+'</button></div></aside></div>';
+ html+='<div class="editor-bottom"><span class="muted">Selesaikan tahap yang sama untuk semua foto, baru pindah ke tahap berikutnya.</span><div style="display:flex;gap:8px"><button class="btn" id="wf-prev-stage" '+(stageIndex===0?'disabled':'')+'>← Tahap sebelumnya</button><button class="btn primary" id="wf-next-stage" '+(stageIndex===4?'disabled':'')+'>Tahap berikutnya →</button></div></div></div>';
+ $('#main').innerHTML=html;
+ $('#workflow-back').onclick=()=>{page='project-editor';render()};
+ $$('[data-workflow-stage]').forEach(b=>b.onclick=async()=>{p.workflowStage=Number(b.dataset.workflowStage);await dbPut('projects',p);renderBatchWorkflow()});
+ $$('[data-workflow-photo]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.workflowPhoto);renderBatchWorkflow()});
+ $('#workflow-prev').onclick=()=>{activePhotoIndex--;renderBatchWorkflow()};
+ $('#workflow-next-photo').onclick=()=>{activePhotoIndex++;renderBatchWorkflow()};
+ $('#wf-mark-done').onclick=async()=>{await setWorkflowDone(p,ph,stage.key,!workflowDone(ph,stage.key));renderBatchWorkflow()};
+ $('#wf-prev-stage').onclick=async()=>{p.workflowStage=stageIndex-1;await dbPut('projects',p);renderBatchWorkflow()};
+ $('#wf-next-stage').onclick=async()=>{
+  if(stageIndex<4){const remaining=p.photos.filter(x=>!workflowDone(x,stage.key)).length;if(remaining){if(!confirm('Masih ada '+remaining+' foto yang belum ditandai selesai pada tahap '+stage.title+'. Tetap lanjut?'))return}p.workflowStage=stageIndex+1;await dbPut('projects',p);renderBatchWorkflow()}
+ };
+ if(stage.key==='light'){
+  const update=async(key,value)=>{ph.adjust=ph.adjust||{brightness:100,contrast:100,saturation:100};ph.adjust[key]=Number(value);$('#wf-'+key+'-val').textContent=value+'%';const a=ph.adjust;const c=document.createElement('canvas');const im=new Image();im.onload=async()=>{c.width=im.naturalWidth;c.height=im.naturalHeight;const ctx=c.getContext('2d');ctx.filter='brightness('+a.brightness+'%) contrast('+a.contrast+'%) saturate('+a.saturation+'%)';ctx.drawImage(im,0,0);ctx.filter='none';const preview=$('#main .canvas-wrap img');if(preview)preview.src=c.toDataURL('image/jpeg',.8);await setWorkflowDone(p,ph,'light',false)};im.src=ph.src;await dbPut('projects',p)};
+  ['brightness','contrast','saturation'].forEach(key=>$('#wf-'+key).oninput=e=>update(key,e.target.value));
+  $('#wf-reset-light').onclick=async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};await setWorkflowDone(p,ph,'light',false);renderBatchWorkflow()};
+ }
+ if(stage.key==='template')$('#wf-template').onchange=async e=>{p.templateId=e.target.value||null;for(const photo of p.photos){photo.workflow=photo.workflow||{};photo.workflow.template=false}await dbPut('projects',p);for(const photo of p.photos)await setWorkflowDone(p,photo,'template',true);renderBatchWorkflow()};
+ if(stage.key==='cutout')$('#wf-open-cutout').onclick=()=>{toolFileData=ph.src;toolKey='remove';page='tool-runner';render()};
+ if(stage.key==='enhance')$('#wf-open-enhance').onclick=()=>{toolFileData=ph.src;toolKey='enhance';page='tool-runner';render()};
+ if(stage.key==='export'){$('#wf-export-current').onclick=()=>exportCurrentPhoto();$('#wf-export-all').onclick=async()=>{for(let i=0;i<p.photos.length;i++){activePhotoIndex=i;await exportCurrentPhoto()}toast('Ekspor semua foto selesai.')}}
+}
 function renderProjectEditor(){
  const p=activeProject();if(!p){page='projects';renderProjects();return}
  const ph=currentPhoto();let html=head('PROYEK / EDITOR',esc(p.name),'<span>'+esc(p.eventDate?fmtDate(p.eventDate):'Tanggal acara belum diatur')+'</span>','<button class="btn" id="back-projects">← Semua proyek</button>');
- html+='<div class="editor"><div class="editor-top"><div><h2>Editor foto</h2><div class="meta">'+p.photos.length+' foto · template '+esc(templates.find(t=>t.id===p.templateId)?.name||'belum dipilih')+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn small" id="add-photos">＋ Tambah foto</button><button class="btn small primary" id="open-export">⇩ Ekspor</button></div></div>';
+ html+='<div class="editor"><div class="editor-top"><div><h2>Editor foto</h2><div class="meta">'+p.photos.length+' foto · template '+esc(templates.find(t=>t.id===p.templateId)?.name||'belum dipilih')+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn small" id="add-photos">＋ Tambah foto</button><button class="btn small" id="open-workflow">Alur 5 tahap</button><button class="btn small primary" id="open-export">⇩ Ekspor</button></div></div>';
  html+='<div style="padding:0 16px;border-bottom:1px solid var(--line)"><div class="photo-strip">'+(p.photos.length?p.photos.map((x,i)=>'<button class="photo-thumb '+(i===activePhotoIndex?'selected':'')+'" data-photo-index="'+i+'" title="'+esc(x.name)+'"><img src="'+(x.finalThumb||x.src)+'"></button>').join(''):'<span style="font-size:12px;color:var(--muted);padding:12px 0">Belum ada foto.</span>')+'</div></div>';
  if(!ph){html+='<div class="empty-state" style="margin:16px"><div class="big">＋</div><h3>Tambahkan foto ke proyek</h3><p>Foto asli disimpan terpisah dari thumbnail hasil komposisi akhir.</p><button class="btn primary" id="upload-first">Unggah foto</button><input id="photo-files" type="file" accept="image/*" multiple hidden></div>'}
  else{
@@ -243,10 +300,10 @@ function renderProjectEditor(){
  $('#add-photo-layer')?.addEventListener('click',()=>$('#photo-layer-input').click());
  $('#photo-layer-input')?.addEventListener('change',async e=>{if(!e.target.files[0])return;const src=await dataURL(e.target.files[0]);ph.layers=ph.layers||[];ph.layers.push({id:uid(),name:e.target.files[0].name,src,type:'image',x:12,y:12,w:76,h:76,opacity:1});p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor()});
  $$('[data-remove-photo-layer]').forEach(b=>b.addEventListener('click',async()=>{ph.layers=ph.layers.filter(l=>l.id!==b.dataset.removePhotoLayer);await dbPut('projects',p);renderProjectEditor()}));
- ['brightness','contrast','saturation'].forEach(k=>$('#'+k)?.addEventListener('input',e=>{ph.adjust=ph.adjust||{};ph.adjust[k==='brightness'?'brightness':k==='contrast'?'contrast':'saturation']=Number(e.target.value);$('#'+k+'-val').textContent=e.target.value+'%';schedulePhotoRender()}));['x','y','w','h'].forEach(k=>$('#subject-'+k)?.addEventListener('input',e=>{ph.subject=ph.subject||{x:9,y:13,w:82,h:79};ph.subject[k]=Number(e.target.value);$('#subject-'+k+'-val').textContent=e.target.value+'%';schedulePhotoRender()}));
+ ['brightness','contrast','saturation'].forEach(k=>$('#'+k)?.addEventListener('input',e=>{ph.adjust=ph.adjust||{};ph.adjust[k==='brightness'?'brightness':k==='contrast'?'contrast':'saturation']=Number(e.target.value);$('#'+(k==='brightness'?'bright':k)+'-val')?.textContent=e.target.value+'%';schedulePhotoRender()}));['x','y','w','h'].forEach(k=>$('#subject-'+k)?.addEventListener('input',e=>{ph.subject=ph.subject||{x:9,y:13,w:82,h:79};ph.subject[k]=Number(e.target.value);$('#subject-'+k+'-val').textContent=e.target.value+'%';schedulePhotoRender()}));
  $('#reset-adjust')?.addEventListener('click',async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};ph.subject={x:9,y:13,w:82,h:79};await dbPut('projects',p);renderProjectEditor()});
  $('#save-project-meta')?.addEventListener('click',async()=>{p.name=$('#project-name-edit').value.trim()||p.name;p.eventDate=$('#project-date').value;p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor();toast('Detail proyek disimpan.')});
- $('#open-export')?.addEventListener('click',()=>showExportModal());$('#export-one')?.addEventListener('click',()=>exportCurrentPhoto());$('#open-tools-from-project')?.addEventListener('click',()=>{toolFileData=ph.src;toolKey='enhance';page='tool-runner';render()});
+ $('#open-workflow')?.addEventListener('click',async()=>{p.workflowStage=0;await dbPut('projects',p);page='batch-workflow';render()});$('#open-export')?.addEventListener('click',()=>showExportModal());$('#export-one')?.addEventListener('click',()=>exportCurrentPhoto());$('#open-tools-from-project')?.addEventListener('click',()=>{toolFileData=ph.src;toolKey='enhance';page='tool-runner';render()});
  if(ph)drawProjectCanvas(p,ph);
 }
 function schedulePhotoRender(){clearTimeout(renderTimer);renderTimer=setTimeout(async()=>{const p=activeProject(),ph=currentPhoto();if(!p||!ph)return;await dbPut('projects',p);drawProjectCanvas(p,ph)},100)}
