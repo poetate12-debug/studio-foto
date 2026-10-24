@@ -80,7 +80,7 @@ const modelOptions={
  object:[['auto','Otomatis: pilih terbaik'],['lama','LaMa Inpainting'],['object-removal','Object Removal'],['flux-fill','FLUX Fill / Inpainting']],
  blur:[['auto','Otomatis: segmentasi + blur'],['segmentation','Model segmentasi'],['bria','Bria Background Removal + blur']],
  generate:[['auto','Otomatis: pilih terbaik'],['flux','FLUX'],['seedream','Seedream'],['nano','Nano Banana Pro'],['imagen','Model text-to-image lain']],
- enhance:[['auto','Otomatis: pilih terbaik'],['esrgan','Real-ESRGAN'],['seedvr','SeedVR2'],['topaz','Topaz Upscale'],['face','Model detail wajah']],
+ enhance:[['auto','Otomatis: Real-ESRGAN / Clarity'],['esrgan','Real-ESRGAN (natural upscale)'],['clarity','Clarity Upscaler (detail generatif)']],
  gaze:[['auto','Otomatis: pilih terbaik'],['image-edit','Model edit gambar generatif']],
 };
 const featureName={remove:'Hapus background',object:'Hapus objek',blur:'Blur background',generate:'Buat background',enhance:'Enhance foto',gaze:'Perbaiki pandangan mata'};
@@ -154,7 +154,7 @@ function renderSettings(){
  html+='<section class="panel"><h2>Ukuran & ekspor</h2><p class="lead">Ukuran dipilih saat membuat atau mengedit template. Pengaturan ini menetapkan default untuk template baru.</p><div class="field"><label for="default-size">Ukuran default template baru</label><select id="default-size">'+settings.sizes.map(s=>'<option value="'+s.id+'" '+(settings.defaultSizeId===s.id?'selected':'')+'>'+esc(s.name)+' ('+s.w+' × '+s.h+' '+s.unit+')</option>').join('')+'</select></div><div class="field"><label for="export-dpi">Resolusi cetak (DPI)</label><select id="export-dpi"><option value="150">150 DPI — cetak draft</option><option value="200">200 DPI</option><option value="300">300 DPI — kualitas tinggi</option></select></div><div class="field"><label for="export-format">Format ekspor</label><select id="export-format"><option value="png">PNG — komposisi tajam</option><option value="jpeg">JPEG — file lebih kecil</option></select></div><div class="hr"></div><div class="section-head" style="margin-top:0"><div><h2>Daftar ukuran</h2><p>A3 aktif sebagai ukuran awal.</p></div><button class="btn small" id="add-size">＋ Tambah</button></div>';
  html+='<table class="table"><thead><tr><th>NAMA</th><th>DIMENSI</th><th></th></tr></thead><tbody>'+settings.sizes.map(s=>'<tr><td><b>'+esc(s.name)+'</b>'+(s.id===settings.defaultSizeId?'<small>Default</small>':'')+'</td><td>'+s.w+' × '+s.h+' '+s.unit+'</td><td><button class="btn small danger" data-delete-size="'+s.id+'" '+(s.id==='a3'?'disabled':'')+'>Hapus</button></td></tr>').join('')+'</tbody></table>';
  html+='<div class="hr"></div><h2>Data aplikasi</h2><p class="lead">Proyek dan template tersimpan di perangkat browser ini menggunakan IndexedDB. Hapus data browser dapat menghapus proyek lokal.</p><button class="btn danger" id="reset-local">Hapus semua proyek & template lokal</button></section></div>';
- $('#main').innerHTML=html;
+ $('#main').innerHTML=html;$('#fal-key').value=apiKeySession;
  $('#ai-mode').value=settings.mode;$('#export-dpi').value=String(settings.exportDpi||300);$('#export-format').value=settings.exportFormat||'png';
  $('#save-model-settings').addEventListener('click',()=>{settings.mode=$('#ai-mode').value;$$('[data-model]').forEach(s=>settings.models[s.dataset.model]=s.value);settings.defaultSizeId=$('#default-size').value;settings.exportDpi=Number($('#export-dpi').value);settings.exportFormat=$('#export-format').value;saveSettings();toast('Preferensi berhasil disimpan di perangkat ini.');renderSettings()});
  $('#clear-api-key').addEventListener('click',()=>{$('#fal-key').value='';apiKeySession='';toast('Kolom API key dikosongkan.')});
@@ -295,21 +295,112 @@ function downloadCanvas(c,name,type){const a=document.createElement('a');a.downl
 async function exportCurrentPhoto(){const p=activeProject(),ph=currentPhoto();if(!p||!ph){toast('Pilih foto yang akan diekspor.');return}toast('Merender gambar akhir…');const t=templates.find(x=>x.id===p.templateId)||null;const dpi=(t&&t.dpi)||settings.exportDpi||300;let pxPerCm=dpi/2.54;let w=Math.round((t?.widthCm||29.7)*pxPerCm),h=Math.round((t?.heightCm||42)*pxPerCm);const ratio=w/h;if(w>4500||h>6500){const f=Math.min(4500/w,6500/h);w=Math.round(w*f);h=Math.round(h*f)}const low=await renderComposite(p,ph,t,1000);const high=await renderComposite(p,ph,t,w);const mime=settings.exportFormat==='jpeg'?'image/jpeg':'image/png';downloadCanvas(high,slug(p.name)+'-'+slug(ph.name.replace(/\.[^.]+$/,''))+(mime==='image/jpeg'?'.jpg':'.png'),mime);ph.finalThumb=low.toDataURL('image/jpeg',.75);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p);toast('Ekspor selesai · '+w+' × '+h+' px.');}
 function showExportModal(){const p=activeProject();if(!p)return;showModal('Ekspor proyek','<div class="notice info">Semua thumbnail di daftar menggunakan preview komposisi akhir, bukan file asli. Ekspor merender komposisi final dengan template yang dipilih.</div><div class="kv"><span>Nama proyek</span><b>'+esc(p.name)+'</b></div><div class="kv"><span>Jumlah foto</span><b>'+p.photos.length+'</b></div><div class="kv"><span>Ukuran template</span><b>'+esc(templates.find(t=>t.id===p.templateId)?.sizeName||'A3 default')+'</b></div><div class="field" style="margin-top:14px"><label>Format file</label><select id="modal-export-format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></div><div class="field"><label>Ekspor foto</label><select id="modal-export-selection"><option value="current">Foto yang sedang dibuka</option><option value="all">Semua foto dalam proyek</option></select></div><p class="lead">Ekspor banyak foto akan mengunduh file satu per satu. ZIP dan batch queue dapat ditambahkan pada tahap backend berikutnya.</p>','<button class="btn" id="cancel-export">Batal</button><button class="btn primary" id="confirm-export">Ekspor sekarang ↓</button>');$('#modal-export-format').value=settings.exportFormat;$('#cancel-export').onclick=closeModal;$('#confirm-export').onclick=async()=>{settings.exportFormat=$('#modal-export-format').value;saveSettings();const selection=$('#modal-export-selection').value;closeModal();if(selection==='current'){await exportCurrentPhoto();return}const photos=activeProject()?.photos||[];for(let i=0;i<photos.length;i++){activePhotoIndex=i;page='project-editor';renderProjectEditor();await new Promise(r=>setTimeout(r,150));await exportCurrentPhoto();await new Promise(r=>setTimeout(r,350))}toast('Selesai mengekspor semua foto.')}}
 function openTool(key){toolKey=key;toolFileData=currentPhoto()?.src||toolFileData||null;page='tool-runner';render()}
+async function falJson(url, options, apiKey){
+ const response=await fetch(url,{...options,headers:{'Authorization':'Key '+apiKey,'Accept':'application/json',...(options&&options.headers||{})}});
+ const raw=await response.text();let data={};try{data=raw?JSON.parse(raw):{}}catch(_){data={detail:raw}}
+ if(!response.ok){const msg=String(data.detail||data.message||data.error||('HTTP '+response.status));const e=new Error(msg);e.status=response.status;throw e}
+ return data;
+}
+function prepareFalImage(source,maxSide=3000){
+ return new Promise((resolve,reject)=>{
+  const img=new Image();
+  img.onload=()=>{
+   try{
+    const width=img.naturalWidth||img.width,height=img.naturalHeight||img.height;
+    if(!width||!height){reject(new Error('Foto tidak dapat dibaca.'));return}
+    if(source.startsWith('data:image/')&&source.length<6500000){resolve(source);return}
+    const scale=Math.min(1,maxSide/Math.max(width,height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+    const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    resolve(canvas.toDataURL('image/jpeg',0.92));
+   }catch(err){reject(new Error('Gagal menyiapkan foto. Pilih file foto dari perangkat lalu coba lagi.'))}
+  };
+  img.onerror=()=>reject(new Error('Foto tidak dapat dibaca. Unggah ulang foto dalam format JPG atau PNG.'));
+  img.src=source;
+ });
+}
+function falWait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+async function runFalEnhancement(){
+ const button=$('#run-tool'),result=$('#tool-result');
+ const apiKey=(apiKeySession||'').trim();
+ if(!apiKey){result.innerHTML='<div class="notice error"><span>!</span><div><b>API key belum tersedia di sesi ini.</b> Buka Pengaturan → AI & fal.ai, masukkan API key, lalu kembali ke Enhance foto. Key tidak disimpan setelah aplikasi ditutup.</div></div>';return}
+ button.disabled=true;button.textContent='Menyiapkan foto…';
+ result.innerHTML='<div class="notice info" role="status"><span>…</span><div><b>Menyiapkan foto untuk fal.ai.</b> Foto asli tetap aman dan tidak ditimpa.</div></div>';
+ try{
+  const inputImage=await prepareFalImage(toolFileData);
+  const style=$('#enhance-style').value;
+  const selectedModel=$('#runner-model').value;
+  const scaleValue=parseFloat($('#upscale').value.replace('×',''))||2;
+  const strength=Math.max(0,Math.min(100,Number($('#enhance-strength').value)||60));
+  const useClarity=selectedModel==='clarity'||(selectedModel==='auto'&&style!=='Natural');
+  const model=useClarity?'fal-ai/clarity-upscaler':'fal-ai/esrgan';
+  let input;
+  if(useClarity){
+   const stylePrompt={
+    'Natural':'photorealistic natural photo restoration, preserve the original subjects, exact facial identity, clothing, colors and composition, subtle details, realistic skin texture',
+    'Jernih / Sharp':'photorealistic photo enhancement, clear details, crisp but natural sharpness, preserve original subjects and exact facial identity, realistic textures, no oversharpening',
+    'Detail wajah':'photorealistic portrait restoration, improve facial clarity and fine details while preserving each person’s exact identity, facial structure, age, expression, skin texture and original composition',
+    'HDR':'natural high dynamic range photo restoration, balanced highlights and shadows, realistic colors, preserve exact subjects, faces and composition'
+   };
+   input={image_url:inputImage,prompt:stylePrompt[style]||stylePrompt.Natural,upscale_factor:scaleValue,negative_prompt:'different person, altered face, extra fingers, changed clothing, changed background, text, watermark, oversaturated, plastic skin, illustration, cartoon, blurry, low quality',creativity:Math.max(0.08,Math.min(0.45,0.08+(strength/100)*0.37)),resemblance:Math.max(0.55,Math.min(0.95,0.95-(strength/100)*0.32)),guidance_scale:4,num_inference_steps:$('#runner-mode').value==='fast'?14:($('#runner-mode').value==='quality'?24:18),enable_safety_checker:true};
+  }else{
+   input={image_url:inputImage,scale:scaleValue,model:scaleValue===2?'RealESRGAN_x2plus':'RealESRGAN_x4plus',face:style==='Detail wajah',output_format:'png'};
+  }
+  result.innerHTML='<div class="notice info" role="status"><span>…</span><div><b>Mengirim foto ke '+(useClarity?'Clarity Upscaler':'Real-ESRGAN')+'…</b> Permintaan ini menggunakan fal.ai dan dapat menghabiskan saldo akun.</div></div>';
+  const job=await falJson('https://queue.fal.run/'+model,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)},apiKey);
+  let output=job;
+  if(job.request_id||job.requestId){
+   const requestId=job.request_id||job.requestId;
+   const statusUrl=job.status_url||('https://queue.fal.run/'+model+'/requests/'+encodeURIComponent(requestId)+'/status');
+   const resultUrl=job.response_url||('https://queue.fal.run/'+model+'/requests/'+encodeURIComponent(requestId));
+   let completed=false;
+   for(let attempt=0;attempt<180;attempt++){
+    await falWait(2000);
+    const status=await falJson(statusUrl,{method:'GET'},apiKey);
+    const state=String(status.status||status.state||'').toUpperCase();
+    const elapsed=Math.round((attempt+1)*2);
+    result.innerHTML='<div class="notice info" role="status"><span>…</span><div><b>AI sedang memproses foto…</b> Status: '+esc(state||'menunggu')+'. Waktu berjalan '+elapsed+' detik.</div></div>';
+    if(state==='COMPLETED'){completed=true;break}
+    if(state==='FAILED'||state==='CANCELLED')throw new Error(status.error||status.detail||'Model fal.ai gagal memproses foto.');
+   }
+   if(!completed)throw new Error('Waktu tunggu pemrosesan terlalu lama. Coba periksa saldo/koneksi lalu ulangi.');
+   output=await falJson(resultUrl,{method:'GET'},apiKey);
+  }
+  const imageObject=output.image||(Array.isArray(output.images)?output.images[0]:null)||(output.data&&output.data.image)||null;
+  const imageUrl=typeof imageObject==='string'?imageObject:(imageObject&&imageObject.url)||(output.image_url)||null;
+  if(!imageUrl)throw new Error('fal.ai merespons, tetapi URL gambar hasil tidak ditemukan. Coba ulangi atau pilih model lain.');
+  result.innerHTML='<div class="notice success"><span>✓</span><div><b>Pemrosesan AI selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak diubah. Unduh hasil sekarang karena URL keluaran layanan dapat bersifat sementara.</div></div><div style="margin-top:12px"><img id="fal-enhance-output" src="'+esc(imageUrl)+'" alt="Hasil AI enhancement" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Unduh hasil AI</button><a class="btn" href="'+esc(imageUrl)+'" target="_blank" rel="noopener">Buka gambar hasil</a></div>';
+  $('#download-fal-output').onclick=async()=>{
+   const dl=$('#download-fal-output');dl.disabled=true;dl.textContent='Menyiapkan unduhan…';
+   try{const response=await fetch(imageUrl);if(!response.ok)throw new Error('Unduhan gagal');const blob=await response.blob();const localUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=localUrl;a.download='reang-enhance-ai.'+((blob.type||'image/png').includes('jpeg')?'jpg':'png');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(localUrl),60000)}
+   catch(_){window.open(imageUrl,'_blank','noopener')}
+   finally{dl.disabled=false;dl.textContent='Unduh hasil AI'}
+  };
+ }catch(error){
+  const message=String(error&&error.message||error);
+  let suggestion='Periksa koneksi internet, saldo akun, dan model yang dipilih lalu coba kembali.';
+  if(error&&error.status===401)suggestion='API key ditolak. Periksa key pada Pengaturan → AI & fal.ai; jangan gunakan key yang sudah dicabut.';
+  else if(error&&error.status===403)suggestion='Akun atau API key tidak memiliki akses ke model ini. Cek izin akun dan model yang tersedia.';
+  else if(error&&error.status===413)suggestion='Ukuran foto terlalu besar. Coba unggah foto yang lebih kecil.';
+  else if(/failed to fetch|networkerror|cors/i.test(message))suggestion='Koneksi langsung terhalang jaringan atau kebijakan CORS WebView. Ini tidak selalu berarti API key salah.';
+  result.innerHTML='<div class="notice error"><span>!</span><div><b>Enhancement AI gagal.</b> '+esc(message)+'<br>'+esc(suggestion)+'</div></div>';
+ }finally{button.disabled=false;button.textContent='✧ Proses foto'}
+}
 function renderToolRunner(){
  const key=toolKey;let title=featureName[key]||'Alat AI';
- let html=head('ALAT AI / '+title.toUpperCase(),title,'Pilih foto dan opsi model. Pengiriman ke model AI belum aktif sampai backend fal.ai dihubungkan.','<button class="btn" id="back-tools">← Semua alat</button>');
+ let html=head('ALAT AI / '+title.toUpperCase(),title,key==='enhance'?'Tingkatkan kualitas foto melalui fal.ai. Foto asli tidak ditimpa; proses AI dapat menggunakan saldo akun.':'Pilih foto dan opsi model. Fitur ini belum terhubung ke pemrosesan AI asli.','<button class="btn" id="back-tools">← Semua alat</button>');
  html+='<div class="settings-grid"><section class="panel"><h2>Foto sumber</h2><p class="lead">Foto asli tidak akan ditimpa. Hasil pemrosesan disimpan sebagai versi terpisah.</p><div class="upload-zone" id="tool-upload-zone"><div style="font-size:26px">▧</div><b>Unggah foto untuk diproses</b><p>JPG, PNG atau WEBP</p><button class="btn small" id="tool-upload-button">Pilih foto</button><input type="file" id="tool-file-input" accept="image/*" hidden></div><div id="tool-preview" '+(!toolFileData?'class="hidden"':'')+'>'+(toolFileData?'<img src="'+toolFileData+'" style="width:100%;max-height:360px;object-fit:contain;border-radius:12px;background:#f0f1f6" alt="Foto sumber">':'')+'</div></section>';
  html+='<section class="panel"><h2>Pengaturan pemrosesan</h2><p class="lead">Fitur: '+esc(title)+'. Pilih model dan mode pemrosesan.</p><div class="field"><label>Model AI</label><select id="runner-model">'+modelOptions[key].map(m=>'<option value="'+m[0]+'" '+((settings.models[key]||'auto')===m[0]?'selected':'')+'>'+m[1]+'</option>').join('')+'</select></div><div class="field"><label>Mode</label><select id="runner-mode"><option value="fast">Cepat</option><option value="balanced">Seimbang</option><option value="quality">Kualitas tinggi</option></select></div>';
- if(key==='enhance')html+='<div class="control-line"><label>Kekuatan enhancement <span id="strength-value">60%</span></label><input id="enhance-strength" type="range" min="0" max="100" value="60"></div><div class="field"><label>Jenis peningkatan</label><select id="enhance-style"><option>Natural</option><option>Jernih / Sharp</option><option>Detail wajah</option><option>HDR</option></select></div><div class="field"><label>Skala upscale</label><select id="upscale"><option>1×</option><option>2×</option><option>4×</option></select></div>';
+ if(key==='enhance')html+='<div class="control-line"><label>Kekuatan enhancement <span id="strength-value">60%</span></label><input id="enhance-strength" type="range" min="0" max="100" value="60"></div><div class="field"><label>Jenis peningkatan</label><select id="enhance-style"><option>Natural</option><option>Jernih / Sharp</option><option>Detail wajah</option><option>HDR</option></select><div class="hint">Natural memakai Real-ESRGAN. Gaya lain otomatis memakai Clarity Upscaler jika model diatur ke Otomatis.</div></div><div class="field"><label>Skala upscale</label><select id="upscale"><option>1×</option><option selected>2×</option><option>4×</option></select></div>
  if(key==='blur')html+='<div class="control-line"><label>Kekuatan blur <span id="blur-value">12 px</span></label><input id="blur-strength" type="range" min="1" max="30" value="12"></div><div class="field"><label>Gaya bokeh</label><select><option>Lembut</option><option>Lingkaran</option><option>Kuat</option></select></div>';
  if(key==='generate')html+='<div class="field"><label>Deskripsi background</label><textarea id="background-prompt" rows="4" placeholder="Contoh: latar panggung parade elegan, awan putih, gunung, tanpa orang"></textarea></div><div class="field"><label>Rasio gambar</label><select><option>Potret</option><option>Lanskap</option><option>Ikuti template</option></select></div>';
  if(key==='object')html+='<div class="field"><label>Petunjuk objek</label><input placeholder="Contoh: orang di belakang, kabel, tulisan"></div><div class="notice info">Editor kuas seleksi/inpainting belum terhubung. Proses penghapusan objek memerlukan mask atau area seleksi.</div>';
  if(key==='remove')html+='<div class="field"><label>Keluaran</label><select><option>PNG transparan</option><option>Ganti background</option><option>Mask untuk koreksi</option></select></div><div class="notice info">Koreksi mask manual Keep/Remove disiapkan sebagai fitur lanjutan, belum diaktifkan pada versi awal ini.</div>';
  if(key==='gaze')html+='<div class="notice info">Hasil arah mata harus diperiksa sebelum digunakan. Model edit gambar dapat mengubah detail wajah dan tidak selalu menghasilkan pandangan natural.</div>';
- html+='<button class="btn primary" id="run-tool" style="width:100%">✧ Proses foto</button><div class="notice" style="margin-top:12px"><span>ⓘ</span><div><b>Integrasi fal.ai belum aktif.</b> Tombol ini tidak akan menghabiskan kredit atau mengirim gambar ke layanan AI.</div></div><div id="tool-result"></div></section></div>';
+ html+='<button class="btn primary" id="run-tool" style="width:100%">✧ Proses foto</button>'+(key==='enhance'?'<div class="notice info" style="margin-top:12px"><span>ⓘ</span><div><b>Pemrosesan AI langsung.</b> Foto akan dikirim ke fal.ai dan dapat menimbulkan biaya sesuai model. Pastikan API key benar dan cek tarif model sebelum memproses.</div></div>':'<div class="notice" style="margin-top:12px"><span>ⓘ</span><div><b>Alat ini belum terhubung.</b> Untuk saat ini, hanya Enhance foto yang terhubung ke fal.ai.</div></div>')+'<div id="tool-result"></div></section></div>';
  $('#main').innerHTML=html;$('#back-tools').onclick=()=>navTo('tools');$('#tool-upload-button').onclick=()=>$('#tool-file-input').click();$('#tool-file-input').onchange=async e=>{const f=e.target.files[0];if(f){toolFileData=await dataURL(f);renderToolRunner()}};
  $('#runner-mode').value=settings.mode;$('#runner-model').onchange=()=>{settings.models[key]=$('#runner-model').value;saveSettings()};$('#enhance-strength')?.addEventListener('input',e=>$('#strength-value').textContent=e.target.value+'%');$('#blur-strength')?.addEventListener('input',e=>$('#blur-value').textContent=e.target.value+' px');
- $('#run-tool').onclick=async()=>{if(!toolFileData){toast('Unggah foto terlebih dahulu.');return}if(key==='enhance'){const st=Number($('#enhance-strength').value);$('#tool-result').innerHTML='<div class="notice success"><span>✓</span><div><b>Pratinjau lokal tersedia.</b> Ini hanya simulasi penyesuaian dasar, bukan model AI. Hasil tidak akan mengubah file asli.</div></div>';const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const scale=Math.min(1,1200/img.width);c.width=img.width*scale;c.height=img.height*scale;const x=c.getContext('2d');x.filter='contrast('+(100+st*.25)+'%) saturate('+(100+st*.12)+'%)';x.drawImage(img,0,0,c.width,c.height);$('#tool-result').appendChild(c);c.style.width='100%';c.style.marginTop='10px';c.style.borderRadius='10px';const b=document.createElement('button');b.className='btn small primary';b.textContent='Unduh pratinjau';b.onclick=()=>downloadCanvas(c,'reang-enhance-preview.png','image/png');$('#tool-result').appendChild(b)};img.src=toolFileData;return}toast('AI belum terhubung: tidak ada permintaan yang dikirim.')};
+ $('#run-tool').onclick=async()=>{if(!toolFileData){toast('Unggah foto terlebih dahulu.');return}if(key==='enhance'){await runFalEnhancement();return}toast('Alat ini belum terhubung ke fal.ai.');};
 }
 function confirmModal(title,text,action){showModal(title,'<p style="font-size:13px;line-height:1.6;color:#666b7f">'+esc(text)+'</p>','<button class="btn" id="confirm-cancel">Batal</button><button class="btn danger" id="confirm-yes">Ya, lanjutkan</button>');$('#confirm-cancel').onclick=closeModal;$('#confirm-yes').onclick=async()=>{closeModal();await action()}}
 function wireNav(){$$('[data-page]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)))}
