@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: reang-studio-foto-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: FAL_KEY
+        sync: false
+      - key: FAL_ALLOWED_MODELS
+        value: ""
+      - key: REANG_ALLOWED_ORIGINS
+        value: "capacitor://localhost,https://localhost,http://localhost"
