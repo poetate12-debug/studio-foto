@@ -53,12 +53,23 @@ jobs:
       - name: Validate front-end JavaScript syntax
         run: |
           python3 - <<'PY'
-          import re
           source = open("index.html", encoding="utf-8").read()
-          blocks = re.findall(r"<script\\b[^>]*>(.*?)</script\\s*>", source, re.I | re.S)
+          blocks = []
+          pos = 0
+          while True:
+              tag = source.find("<script", pos)
+              if tag < 0:
+                  break
+              content_start = source.find(">", tag) + 1
+              content_end = source.find("</script>", content_start)
+              if content_start == 0 or content_end < 0:
+                  raise SystemExit("Malformed script element in index.html")
+              blocks.append(source[content_start:content_end])
+              pos = content_end + len("</script>")
           if not blocks:
-              raise SystemExit("No inline JavaScript found in index.html")
-          open("/tmp/reang-index-inline.js", "w", encoding="utf-8").write("\\n;\\n".join(blocks))
+              raise SystemExit("No JavaScript found in index.html")
+          with open("/tmp/reang-index-inline.js", "w", encoding="utf-8") as output:
+              output.write("\n;\n".join(blocks))
           print(f"Found {len(blocks)} inline script blocks")
           PY
           node --check /tmp/reang-index-inline.js
