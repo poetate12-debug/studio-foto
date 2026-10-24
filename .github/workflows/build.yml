@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'native-download.js'
+      - 'android-native/**'
       - 'manifest.json'
       - 'sw.js'
       - 'server.js'
@@ -40,6 +42,7 @@ jobs:
           cp index.html dist/reang-studio-foto-web.html
           cp manifest.json dist/ 2>/dev/null || true
           cp sw.js dist/ 2>/dev/null || true
+          npx esbuild native-download.js --bundle --format=iife --target=es2020 --outfile=dist/native-download.bundle.js
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
