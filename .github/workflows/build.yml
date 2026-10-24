@@ -1,0 +1,50 @@
+name: Build Reang Studio Foto
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'server.js'
+      - 'package.json'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Validate backend syntax
+        run: npm test
+
+      - name: Prepare distributable source
+        run: |
+          mkdir -p dist
+          zip -r dist/reang-studio-foto-source.zip             index.html manifest.json sw.js server.js package.json README.md .env.example .gitignore             -x '*/node_modules/*' '*/.git/*' '*/.env'
+          cp index.html dist/reang-studio-foto-web.html
+          cp manifest.json dist/ 2>/dev/null || true
+          cp sw.js dist/ 2>/dev/null || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: reang-studio-foto-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
