@@ -84,27 +84,21 @@ jobs:
           npx cap add android
           mkdir -p android/app/src/main/java/id/reang/studiofoto
           cp android-native/NativeDownloaderPlugin.java android/app/src/main/java/id/reang/studiofoto/NativeDownloaderPlugin.java
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("android/app/src/main/java/id/reang/studiofoto/MainActivity.java")
-          source = path.read_text(encoding="utf-8")
-          if "import android.os.Bundle;" not in source:
-              package_line_end = source.find("\n", source.find("package "))
-              source = source[:package_line_end + 1] + "\nimport android.os.Bundle;\n" + source[package_line_end + 1:]
-          marker = "public class MainActivity extends BridgeActivity {"
-          if marker not in source:
-              raise SystemExit("MainActivity class declaration not found")
-          if "registerPlugin(NativeDownloaderPlugin.class)" not in source:
-              source = source.replace(marker, marker + """
+          cat > android/app/src/main/java/id/reang/studiofoto/MainActivity.java <<'JAVA'
+          package id.reang.studiofoto;
+
+          import android.os.Bundle;
+
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(NativeDownloaderPlugin.class);
                   super.onCreate(savedInstanceState);
               }
-          """)
-          path.write_text(source, encoding="utf-8")
-          print("Registered NativeDownloader Capacitor plugin")
-          PY
+          }
+          JAVA
           npx cap sync android
         env:
           CI: true
