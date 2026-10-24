@@ -161,16 +161,16 @@ function renderSettings(){
  $('#backend-url').addEventListener('input',e=>storageWrite('reang-backend-url',e.target.value.trim()));
  $('#test-fal-connection').addEventListener('click',async()=>{
    const b=$('#test-fal-connection'),status=$('#fal-connection-status');
-   const rawBase=$('#backend-url').value.trim().replace(/\\/+$/,'');
+   const rawBase=$('#backend-url').value.trim().replace(/\/+$/, '');
    const apiKey=$('#fal-key').value.trim()||apiKeySession.trim();
    if(!rawBase){status.className='notice info';status.innerHTML='<span>ⓘ</span><div><b>URL backend belum diisi.</b> Server fal.ai belum dipasang. Deploy repository ke Render, kemudian masukkan alamat HTTPS yang diberikan Render.</div>';return}
    let base;
    try{base=new URL(rawBase);if(base.protocol!=='https:'&&base.hostname!=='localhost'&&base.hostname!=='127.0.0.1')throw new Error('Gunakan URL HTTPS.')}catch(e){status.className='notice error';status.innerHTML='<span>!</span><div><b>Alamat backend tidak valid.</b> Masukkan URL lengkap yang dimulai dengan https://.</div>';return}
    if(!apiKey){status.className='notice info';status.innerHTML='<span>ⓘ</span><div><b>API key belum diisi.</b> Masukkan key fal.ai baru. Key tidak akan disimpan pada perangkat.</div>';return}
-   storageWrite('reang-backend-url',base.origin+base.pathname.replace(/\\/+$/,''));
+   storageWrite('reang-backend-url',base.origin+base.pathname.replace(/\/+$/, ''));
    b.disabled=true;b.textContent='Memeriksa…';status.className='notice info';status.innerHTML='<span>…</span><div><b>Menguji server dan autentikasi fal.ai.</b> Tes ini hanya memeriksa status job yang tidak ada, tidak membuat job AI.</div>';
    try{
-     const response=await fetch((base.origin+base.pathname.replace(/\\/+$/,''))+'/api/fal/connection-test',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({apiKey}),cache:'no-store'});
+     const response=await fetch((base.origin+base.pathname.replace(/\/+$/, ''))+'/api/fal/connection-test',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({apiKey}),cache:'no-store'});
      const data=await response.json().catch(()=>({}));
      if(response.ok&&data.ok){status.className='notice success';status.innerHTML='<span>✓</span><div><b>Koneksi fal.ai berhasil.</b> Backend dapat dijangkau dan fal.ai menerima API key. Tes ini tidak menjalankan proses AI.</div>'}
      else{status.className='notice error';status.innerHTML='<span>!</span><div><b>Tes koneksi gagal.</b> '+String(data.message||('Backend merespons HTTP '+response.status)).replace(/[&<>]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]})+'</div>'}
