@@ -43,6 +43,34 @@
 </div>
 <script>
 (function(){
+  function showBootError(title, detail) {
+    const main = document.getElementById('main');
+    if (!main) return;
+    main.innerHTML = '<section class="panel"><h2></h2><p class="lead"></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:35vh;overflow:auto;background:#f5f6fa;padding:10px;border-radius:8px"></pre><button class="btn primary" id="boot-reload">Muat ulang aplikasi</button></section>';
+    main.querySelector('h2').textContent = title;
+    main.querySelector('.lead').textContent = 'Aplikasi mengalami kendala saat memuat. Detail di bawah dapat membantu perbaikan.';
+    main.querySelector('pre').textContent = String(detail || 'Tidak ada detail error.');
+    const button = document.getElementById('boot-reload');
+    if (button) button.onclick = () => location.reload();
+  }
+  window.addEventListener('error', function(event) {
+    if (event.target && event.target !== window) return;
+    showBootError('Reang Studio Foto belum berhasil dimuat', (event.message || 'Kesalahan JavaScript') + (event.filename ? '\n' + event.filename + ':' + event.lineno : ''));
+  });
+  window.addEventListener('unhandledrejection', function(event) {
+    const reason = event.reason;
+    showBootError('Proses aplikasi mengalami kesalahan', reason && (reason.stack || reason.message) || String(reason));
+  });
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      const main = document.getElementById('main');
+      if (main && !main.innerHTML.trim()) showBootError('Halaman utama belum tampil', 'Aplikasi dibuka tetapi belum berhasil merender konten. Tekan Muat ulang; jika tetap terjadi, kirim screenshot halaman ini.');
+    }, 3000);
+  });
+})();
+</script>
+<script>
+(function(){
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 const DB_NAME='reang-studio-db', DB_VERSION=1;
@@ -61,18 +89,28 @@ const defaults={
  models:{remove:'auto',object:'auto',blur:'auto',generate:'auto',enhance:'auto',gaze:'auto'},
  mode:'balanced', defaultSizeId:'a3', exportDpi:300, exportFormat:'png', exportQuality:95, defaultDateFormat:'DD MMMM YYYY'
 };
-let settings; try { settings=JSON.parse(localStorage.getItem('reang-settings')||'null')||structuredCloneSafe(defaults); } catch(storageError) { console.warn('Storage lokal belum tersedia; memakai setelan awal.', storageError); settings=structuredCloneSafe(defaults); }
+function storageRead(key, fallback) {
+  try { const value = localStorage.getItem(key); return value === null ? fallback : value; }
+  catch (error) { console.warn('Tidak dapat membaca storage lokal', error); return fallback; }
+}
+function storageWrite(key, value) {
+  try { localStorage.setItem(key, value); return true; }
+  catch (error) { console.warn('Tidak dapat menulis storage lokal', error); return false; }
+}
+let settings;
+try { settings = JSON.parse(storageRead('reang-settings', 'null')) || structuredCloneSafe(defaults); }
+catch (storageError) { console.warn('Pengaturan lokal tidak valid; memakai setelan awal.', storageError); settings = structuredCloneSafe(defaults); }
 function structuredCloneSafe(v){return JSON.parse(JSON.stringify(v))}
 function dbOpen(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window)){resolve(null);return}const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('projects'))d.createObjectStore('projects',{keyPath:'id'});if(!d.objectStoreNames.contains('templates'))d.createObjectStore('templates',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
-function dbGetAll(store){return new Promise((resolve,reject)=>{if(!db){resolve(JSON.parse(localStorage.getItem('reang-'+store)||'[]'));return}const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
-function dbPut(store,item){return new Promise((resolve,reject)=>{if(!db){const key='reang-'+store;const arr=JSON.parse(localStorage.getItem(key)||'[]');const i=arr.findIndex(x=>x.id===item.id);i>=0?arr[i]=item:arr.push(item);try{localStorage.setItem(key,JSON.stringify(arr));resolve(item)}catch(e){reject(new Error('Penyimpanan browser penuh. Kurangi ukuran/jumlah foto.'))}return}const r=db.transaction(store,'readwrite').objectStore(store).put(item);r.onsuccess=()=>resolve(item);r.onerror=()=>reject(r.error)})}
-function dbDelete(store,id){return new Promise((resolve,reject)=>{if(!db){const key='reang-'+store;localStorage.setItem(key,JSON.stringify((JSON.parse(localStorage.getItem(key)||'[]')).filter(x=>x.id!==id)));resolve();return}const r=db.transaction(store,'readwrite').objectStore(store).delete(id);r.onsuccess=()=>resolve();r.onerror=()=>reject(r.error)})}
+function dbGetAll(store){return new Promise((resolve,reject)=>{if(!db){try{resolve(JSON.parse(storageRead('reang-'+store,'[]'))||[])}catch(e){console.warn('Data lokal tidak valid',e);resolve([])}return}try{const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)}catch(e){reject(e)}})}
+function dbPut(store,item){return new Promise((resolve,reject)=>{if(!db){const key='reang-'+store;let arr=[];try{arr=JSON.parse(storageRead(key,'[]'))||[]}catch(e){arr=[]}const i=arr.findIndex(x=>x.id===item.id);i>=0?arr[i]=item:arr.push(item);if(storageWrite(key,JSON.stringify(arr)))resolve(item);else reject(new Error('Penyimpanan lokal tidak tersedia. Aktifkan izin penyimpanan aplikasi atau gunakan browser HTTPS.'));return}try{const r=db.transaction(store,'readwrite').objectStore(store).put(item);r.onsuccess=()=>resolve(item);r.onerror=()=>reject(r.error)}catch(e){reject(e)}})}
+function dbDelete(store,id){return new Promise((resolve,reject)=>{if(!db){const key='reang-'+store;let arr=[];try{arr=JSON.parse(storageRead(key,'[]'))||[]}catch(e){arr=[]}if(storageWrite(key,JSON.stringify(arr.filter(x=>x.id!==id))))resolve();else reject(new Error('Penyimpanan lokal tidak tersedia.'));return}try{const r=db.transaction(store,'readwrite').objectStore(store).delete(id);r.onsuccess=()=>resolve();r.onerror=()=>reject(r.error)}catch(e){reject(e)}})}
 let projects=[],templates=[];
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmtDate(d){try{return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase()}catch(e){return String(d||'')}}
 function toast(msg){const root=$('#toast-root');root.innerHTML='<div class="toast">'+esc(msg)+'</div>';setTimeout(()=>{root.innerHTML=''},3000)}
-function saveSettings(){localStorage.setItem('reang-settings',JSON.stringify(settings))}
+function saveSettings(){storageWrite('reang-settings',JSON.stringify(settings))}
 function activeProject(){return projects.find(p=>p.id===activeProjectId)||null}
 function activeTemplate(){return templates.find(t=>t.id===activeTemplateId)||null}
 function currentPhoto(){const p=activeProject();return p&&p.photos&&p.photos[activePhotoIndex]||null}
