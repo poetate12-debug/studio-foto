@@ -1,7 +1,7 @@
 {
   "appId": "id.reang.studiofoto",
   "appName": "Reang Studio Foto",
-  "webDir": ".",
+  "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
