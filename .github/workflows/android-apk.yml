@@ -24,6 +24,7 @@ concurrency:
 jobs:
   android-apk:
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,7 +126,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-workflow-20261024-${{ github.run_number }}
-          name: Reang Studio Foto Android (Alur 5 Tahap) #${{ github.run_number }}
+          name: "Reang Studio Foto Android (Alur 5 Tahap) #${{ github.run_number }}"
           body: |
             APK Android berisi perbaikan error label dan alur proyek terpisah: Cahaya → Cutout → Template → Enhance → Export.
             Hasil AI disimpan ke folder Download/ReangStudioFoto dan cache aplikasi untuk digunakan pada tahap berikutnya.
