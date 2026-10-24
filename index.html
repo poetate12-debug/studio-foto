@@ -489,12 +489,6 @@ function renderProjectGallery(){
   const i=Number(b.dataset.pfPhoto);const ph=p.photos[i];if(!ph)return;
   if(gallerySelectMode){if(selectedPhotoIds.has(ph.id))selectedPhotoIds.delete(ph.id);else selectedPhotoIds.add(ph.id);renderProjectGallery();return}
   activePhotoIndex=i;
-  let start=Number(p.workflowStage)||0;start=Math.max(0,Math.min(4,start));
-  const stage=workflowStages[start].key;
-  if(start!==2){
-   const unfinished=p.photos.findIndex(x=>!workflowDone(x,stage));
-   if(unfinished>=0&&workflowDone(ph,stage))activePhotoIndex=unfinished;
-  }
   page='photo-editor';render();
  }));
 }
@@ -578,6 +572,14 @@ function renderPhotoEditor(){
  $('#pf-editor-back').onclick=goToProjectGallery;$('#pf-editor-gallery').onclick=goToProjectGallery;
  $('#pf-editor-add').onclick=()=>$('#pf-editor-files').click();
  $('#pf-editor-files').onchange=async e=>{if(e.target.files?.length)await handlePhotoUpload(e.target.files);e.target.value=''};
+ if(stageIndex>=2){
+  const preview=$('#pf-photo-preview');
+  const template=templates.find(t=>t.id===p.templateId)||null;
+  renderComposite(p,ph,template,760).then(canvas=>{
+   const image=$('#pf-photo-preview');
+   if(image&&page==='photo-editor'&&activePhotoIndex===p.photos.findIndex(x=>x.id===ph.id))image.src=canvas.toDataURL('image/jpeg',.84);
+  }).catch(error=>console.warn('Pratinjau komposisi belum siap',error));
+ }
  $('#pf-delete-current').onclick=()=>confirmModal('Hapus foto?','Foto ini akan dihapus dari proyek.',async()=>{p.photos.splice(activePhotoIndex,1);p.updatedAt=Date.now();await dbPut('projects',p);if(!p.photos.length){page='project-gallery';render()}else{activePhotoIndex=Math.min(activePhotoIndex,p.photos.length-1);renderPhotoEditor()}});
  $('#pf-prev-photo').onclick=()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderPhotoEditor()};
  $('#pf-next-photo').onclick=()=>{activePhotoIndex=Math.min(p.photos.length-1,activePhotoIndex+1);renderPhotoEditor()};
@@ -623,6 +625,11 @@ function renderPhotoEditor(){
  if(stageIndex===1)$('#pf-run-cutout').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
   catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Cutout.')}
+ };
+ if(stageIndex===2)$('#pf-template').onchange=async e=>{
+  const template=templates.find(t=>t.id===e.target.value)||null;
+  const preview=$('#pf-photo-preview');
+  try{const canvas=await renderComposite(p,ph,template,760);const img=$('#pf-photo-preview');if(img)img.src=canvas.toDataURL('image/jpeg',.84)}catch(error){console.warn(error)}
  };
  if(stageIndex===2)$('#pf-apply-template').onclick=async()=>{const previousTemplate=p.templateId||null;const chosen=$('#pf-template').value||null;if(previousTemplate!==chosen){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.export=false}}p.templateId=chosen;if(!p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}await applyProjectTemplate(p)};
  if(stageIndex===3)$('#pf-run-face').onclick=async()=>{
