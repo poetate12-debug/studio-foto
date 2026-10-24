@@ -537,13 +537,8 @@ async function runFalEnhancement(){
   const imageObject=output.image||(Array.isArray(output.images)?output.images[0]:null)||(output.data&&output.data.image)||null;
   const imageUrl=typeof imageObject==='string'?imageObject:(imageObject&&imageObject.url)||(output.image_url)||null;
   if(!imageUrl)throw new Error('fal.ai merespons, tetapi URL gambar hasil tidak ditemukan. Coba ulangi atau pilih model lain.');
-  result.innerHTML='<div class="notice success"><span>✓</span><div><b>Pemrosesan AI selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak diubah. Unduh hasil sekarang karena URL keluaran layanan dapat bersifat sementara.</div></div><div style="margin-top:12px"><img id="fal-enhance-output" src="'+esc(imageUrl)+'" alt="Hasil AI enhancement" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Unduh hasil AI</button><a class="btn" href="'+esc(imageUrl)+'" target="_blank" rel="noopener">Buka gambar hasil</a></div>';
-  $('#download-fal-output').onclick=async()=>{
-   const dl=$('#download-fal-output');dl.disabled=true;dl.textContent='Menyiapkan unduhan…';
-   try{const response=await fetch(imageUrl);if(!response.ok)throw new Error('Unduhan gagal');const blob=await response.blob();const localUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=localUrl;a.download='reang-enhance-ai.'+((blob.type||'image/png').includes('jpeg')?'jpg':'png');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(localUrl),60000)}
-   catch(_){window.open(imageUrl,'_blank','noopener')}
-   finally{dl.disabled=false;dl.textContent='Unduh hasil AI'}
-  };
+  const outputExt=/\\.jpe?g(?:[?#]|$)/i.test(imageUrl)?'jpg':'png';
+  showFalResult(imageUrl,'Pemrosesan AI selesai','reang-enhance-ai.'+outputExt);
  }catch(error){
   const message=String(error&&error.message||error);
   let suggestion='Periksa koneksi internet, saldo akun, dan model yang dipilih lalu coba kembali.';
