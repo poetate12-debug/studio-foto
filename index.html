@@ -33,6 +33,99 @@
 .workflow-footer{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:14px 3px;font-size:11px;line-height:1.55}
 @media(max-width:900px){.workflow-steps{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.workflow-step{padding:8px 5px;flex-direction:column;justify-content:center;text-align:center;gap:5px;font-size:10px}.workflow-editor{grid-template-columns:minmax(0,1fr)}.workflow-controls{border-left:0;border-top:1px solid var(--line)}.workflow-preview{min-height:280px}.workflow-photo-bar{align-items:flex-start;flex-direction:column}.workflow-photo-actions{width:100%}.workflow-footer{flex-direction:column}}
 @media(max-width:430px){.workflow-step{font-size:9px}.workflow-step-num{width:22px;height:22px}.workflow-preview{padding:12px}.workflow-controls{padding:16px}}
+
+/* Project gallery and per-photo editor flow */
+body.photo-flow-active{background:#f7f8fb}
+body.photo-flow-active .topbar,body.photo-flow-active .sidebar,body.photo-flow-active .mobile-nav{display:none!important}
+body.photo-flow-active .layout{display:block;max-width:none;min-height:100dvh}
+body.photo-flow-active .content{padding:0;min-height:100dvh}
+body.photo-flow-active #main{min-width:0}
+.pf-gallery-page{min-height:100dvh;background:#f8f9fc;padding-bottom:28px}
+.pf-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;min-height:66px;padding:10px 14px;background:#fff;border-bottom:1px solid #eceef3}
+.pf-header-title{flex:1;min-width:0}
+.pf-header-title h1{font-size:18px;line-height:1.2;margin:0 0 4px;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#202536}
+.pf-header-title p{margin:0;font-size:12px;color:#9aa1af}
+.pf-icon-btn{flex-shrink:0;border:0;background:transparent;color:#768090;font-size:27px;line-height:1;width:34px;height:40px;display:grid;place-items:center;border-radius:9px;padding:0}
+.pf-icon-btn.orange{color:#e27c2e}
+.pf-icon-btn.danger{color:#dd727d}
+.pf-gallery-hint{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:19px 18px 15px;font-size:13px;line-height:1.45;color:#77808f}
+.pf-gallery-actions{flex-shrink:0}
+.pf-text-btn{border:0;background:transparent;color:#dd7e30;font-weight:750;font-size:13px;padding:5px 3px;white-space:nowrap}
+.pf-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:0 12px 18px}
+.pf-photo-card{border:0;background:transparent;padding:0;min-width:0;text-align:left}
+.pf-photo-image{position:relative;display:block;aspect-ratio:1.42/1;overflow:hidden;background:#e8ebf1;border:1px solid #e5e7ed;border-radius:15px;box-shadow:0 2px 7px #22253610}
+.pf-photo-image img{display:block;width:100%;height:100%;object-fit:cover}
+.pf-photo-progress{position:absolute;right:6px;bottom:6px;background:#69717bdf;color:#fff;padding:5px 8px;border-radius:99px;font-size:11px;font-weight:800}
+.pf-photo-progress.complete{background:#269c65}
+.pf-photo-name{display:block;font-size:11px;color:#6f7787;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px;padding:0 3px}
+.pf-photo-card.selected .pf-photo-image{outline:3px solid #e9832f;outline-offset:1px}
+.pf-select-mark{position:absolute;left:8px;top:8px;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#e47b2d;font-weight:900}
+.pf-empty{margin:25px 15px;border:1px dashed #d6d9e3;background:white;border-radius:16px;padding:34px 18px;text-align:center}
+.pf-empty-icon{font-size:36px;color:#e27c2e}.pf-empty h2{font-size:18px;margin:12px 0 6px}.pf-empty p{font-size:13px;line-height:1.6;color:var(--muted)}
+body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#f8f9fc}
+.pf-editor-header{position:relative;flex:0 0 62px;min-height:62px;padding:8px 10px;gap:7px}
+.pf-editor-header .pf-header-title h1{font-size:17px}
+.pf-editor-header .pf-icon-btn{width:31px;font-size:23px}
+.pf-editor-media{flex-shrink:0;background:#fff;box-shadow:0 3px 12px #25283b10;z-index:6}
+.pf-main-photo{height:min(29vh,250px);min-height:180px;background:#161820;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.pf-main-photo img{display:block;max-width:100%;width:auto;height:100%;max-height:100%;object-fit:contain;transition:filter .08s linear}
+.pf-original-toggle{position:absolute;right:10px;bottom:10px;border:0;border-radius:99px;background:#14161cbf;color:#fff;padding:9px 13px;font-size:12px;font-weight:700}
+.pf-photo-switch{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;color:#79818e;font-weight:750;font-size:14px;background:white}
+.pf-round-btn{height:35px;width:42px;border:1px solid #e4e7ee;border-radius:12px;background:#fff;color:#202536;font-size:25px;line-height:1}
+.pf-round-btn:disabled{opacity:.28}
+.pf-finish-button{display:block;margin:2px 12px 12px;width:calc(100% - 24px);border:0;border-radius:14px;min-height:46px;background:#d9f9e4;color:#21834f;font-weight:800;font-size:15px}
+.pf-editor-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.pf-editor-controls{padding:0 16px 20px;background:#f8f9fc}
+.pf-presets{padding:0 0 11px}
+.pf-presets>label,.pf-color-mix>label{display:block;color:#7b8492;font-size:13px;margin:0 0 9px}
+.pf-preset-row{display:flex;gap:8px}
+.pf-preset-row select{flex:1;min-width:0;height:46px;border:1px solid #e5e7ed;border-radius:14px;padding:0 12px;background:#fff;color:#353b49}
+.pf-save-preset{width:48px;border:1px solid #e5e7ed;border-radius:14px;background:#fff;color:#68717d;font-size:22px}
+.pf-slider-row{padding:11px 0 16px}
+.pf-slider-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#606a79;font-size:13px;margin-bottom:13px}
+.pf-slider-row label span{color:#929baa;font-size:12px;font-variant-numeric:tabular-nums}
+.pf-slider-row input[type=range]{width:100%;margin:0;accent-color:#e9822f;height:24px}
+.pf-color-mix{padding:16px 0 8px;border-top:1px solid #eceef3}
+.pf-color-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#edf0f6;border-radius:14px;padding:4px;margin-bottom:13px}
+.pf-color-mode button{border:0;border-radius:11px;background:transparent;padding:10px 4px;color:#7b8492;font-size:12px}
+.pf-color-mode button.active{background:#fff;color:#343b48;box-shadow:0 2px 5px #20233318}
+.pf-color-dots{display:flex;gap:10px;justify-content:space-between;margin:12px 0 10px}
+.pf-color-dots button{width:29px;height:29px;flex:0 0 29px;border:3px solid #b9c1ce;border-radius:50%;background:var(--dot);padding:0}
+.pf-color-dots button.active{outline:2px solid #3c4250;outline-offset:2px}
+.pf-note{font-size:11px;line-height:1.55;color:#a0a7b3;margin:12px 0}
+.pf-stage-panel{background:#fff;border:1px solid #e8eaf1;border-radius:16px;padding:18px;margin:12px 0}
+.pf-stage-panel h2{font-size:18px;margin:8px 0}.pf-stage-panel p{font-size:13px;line-height:1.55;color:var(--muted)}
+.pf-stage-eyebrow{font-size:10px;letter-spacing:1.2px;font-weight:800;color:#e27c2e}
+.pf-stage-panel .field select{min-height:44px}
+.pf-thumbnails{flex:0 0 69px;display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-top:1px solid #e9ebf0;overflow-x:auto;overscroll-behavior-x:contain}
+.pf-thumb{position:relative;flex:0 0 58px;height:50px;border:2px solid transparent;border-radius:9px;padding:0;overflow:hidden;background:#eef0f5}
+.pf-thumb.active{border-color:#e9822f}
+.pf-thumb img{height:100%;width:100%;object-fit:cover;display:block}
+.pf-thumb span{position:absolute;right:3px;bottom:3px;background:#d9e1e7;width:9px;height:9px;border-radius:50%}
+.pf-thumb span.complete{background:#32bc78}
+.pf-step-nav{flex:0 0 66px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:6px 3px max(8px,env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e9ebf0}
+.pf-step{border:0;background:transparent;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;color:#a2a8b3;font-size:10px;padding:1px 0;min-width:0}
+.pf-step-num{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#eef0f3;color:#888f9d;font-size:12px;font-weight:850}
+.pf-step.current{color:#e47c2d;font-weight:800}
+.pf-step.current .pf-step-num{background:#f07c1c;color:#fff}
+.pf-step.past{color:#23985c;font-weight:800}
+.pf-step.past .pf-step-num{background:#d9f9e4;color:#23985c;border:1px solid #c1efd3}
+.pf-step:disabled{opacity:.55}
+@media(min-width:700px){
+ .pf-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding:0 20px 20px}
+ .pf-gallery-hint{padding-left:24px;padding-right:24px}
+ .pf-main-photo{height:min(40vh,400px)}
+ .pf-editor-controls{padding-left:24px;padding-right:24px}
+ .pf-step{font-size:12px}
+ .pf-thumb{flex-basis:70px;height:58px}
+}
+@media(max-width:380px){
+ .pf-photo-grid{gap:9px;padding-left:9px;padding-right:9px}
+ .pf-header{gap:6px;padding-left:8px;padding-right:8px}
+ .pf-editor-header .pf-icon-btn{width:27px}
+ .pf-step{font-size:9px}
+ .pf-main-photo{min-height:160px}
+}
 </style>
 </head>
 <body>
@@ -223,15 +316,15 @@ function renderSettings(){
  $$('[data-delete-size]').forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.deleteSize;if(id===settings.defaultSizeId){toast('Pilih ukuran default lain sebelum menghapus ukuran ini.');return}settings.sizes=settings.sizes.filter(s=>s.id!==id);saveSettings();renderSettings()}));
  $('#reset-local').addEventListener('click',()=>confirmModal('Hapus data lokal?','Semua proyek, foto, template, dan layer yang tersimpan di browser ini akan dihapus. Aksi ini tidak dapat dibatalkan.',async()=>{for(const p of projects)await dbDelete('projects',p.id);for(const t of templates)await dbDelete('templates',t.id);projects=[];templates=[];activeProjectId=null;activeTemplateId=null;renderSettings();toast('Data lokal dihapus.')}));
 }
-function render(){if(page==='batch-workflow')renderBatchWorkflow();else if(page==='projects')renderProjects();else if(page==='tools')renderTools();else if(page==='templates')renderTemplates();else if(page==='settings')renderSettings();else if(page==='project-editor')renderProjectEditor();else if(page==='template-editor')renderTemplateEditor();else if(page==='tool-runner')renderToolRunner();else renderProjects();$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
+function render(){if(page==='project-gallery')renderProjectGallery();else if(page==='photo-editor')renderPhotoEditor();else if(page==='batch-workflow')renderBatchWorkflow();else if(page==='projects')renderProjects();else if(page==='tools')renderTools();else if(page==='templates')renderTemplates();else if(page==='settings')renderSettings();else if(page==='project-editor')renderProjectEditor();else if(page==='template-editor')renderTemplateEditor();else if(page==='tool-runner')renderToolRunner();else renderProjects();$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
 function showModal(title,body,actions){$('#modal-root').innerHTML='<div class="modal-backdrop" id="backdrop"><div class="modal"><div class="modal-head"><h2>'+title+'</h2><button class="btn iconbtn" id="close-modal">×</button></div><div class="modal-body">'+body+'</div><div class="modal-foot">'+actions+'</div></div></div>';$('#close-modal').onclick=closeModal;$('#backdrop').addEventListener('click',e=>{if(e.target.id==='backdrop')closeModal()})}
 function closeModal(){$('#modal-root').innerHTML=''}
 function showProjectModal(){const today=new Date().toISOString().slice(0,10);showModal('Buat proyek baru','<div class="field"><label>Nama proyek</label><input id="modal-project-name" placeholder="Contoh: Parade Putra Surti Muda" maxlength="100"></div><div class="form-row"><div class="field"><label>Tanggal acara</label><input id="modal-project-date" type="date" value="'+today+'"></div><div class="field"><label>Catatan (opsional)</label><input id="modal-project-note" placeholder="Lokasi / tema"></div></div><div class="notice info">Tanggal proyek ini bisa digunakan sebagai tanggal cetak pada layer teks template.</div>','<button class="btn" id="cancel-project">Batal</button><button class="btn primary" id="create-project-confirm">Buat proyek</button>');$('#cancel-project').onclick=closeModal;$('#create-project-confirm').onclick=async()=>{const name=$('#modal-project-name').value.trim();if(!name){toast('Isi nama proyek terlebih dahulu.');return}const p={id:uid(),name,eventDate:$('#modal-project-date').value,note:$('#modal-project-note').value,photos:[],createdAt:Date.now(),updatedAt:Date.now()};projects.push(p);await dbPut('projects',p);closeModal();openProject(p.id);toast('Proyek baru berhasil dibuat.')}}
-function openProject(id){activeProjectId=id;activePhotoIndex=0;const p=projects.find(x=>x.id===id);page=(p&&p.photos&&p.photos.length)?'batch-workflow':'project-editor';if(p&&p.photos&&p.photos.length){const idx=Math.max(0,Math.min(4,Number(p.workflowStage)||0));const key=workflowStages[idx]?.key;const unfinished=key?p.photos.findIndex(ph=>!workflowDone(ph,key)):-1;if(unfinished>=0)activePhotoIndex=unfinished}render()}
+function openProject(id){activeProjectId=id;activePhotoIndex=0;page='project-gallery';render()}
 function openTemplate(id){activeTemplateId=id;activeLayerId=templates.find(t=>t.id===id)?.layers[0]?.id||null;page='template-editor';render()}
 function dataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(file)})}
 async function imageSizeFromData(src){return new Promise(resolve=>{const im=new Image();im.onload=()=>resolve({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>resolve({w:0,h:0});im.src=src})}
-async function handlePhotoUpload(files){const p=activeProject();if(!p)return;const list=Array.from(files||[]).filter(f=>f.type.startsWith('image/'));if(!list.length)return;toast('Memuat '+list.length+' foto…');for(const file of list){try{const src=await dataURL(file);const dim=await imageSizeFromData(src);const photo={id:uid(),name:file.name,src,originalSrc:src,edited:false,adjust:{brightness:100,contrast:100,saturation:100},subject:{x:9,y:13,w:82,h:79},layers:[],finalThumb:null,width:dim.w,height:dim.h,createdAt:Date.now()};const tpl=templates.find(t=>t.id===p.templateId)||null;const preview=await renderComposite(p,photo,tpl,170);photo.finalThumb=preview.toDataURL('image/jpeg',.72);p.photos.push(photo)}catch(e){toast('Gagal membaca '+file.name)}}p.updatedAt=Date.now();p.workflowStage=0;for(const photo of p.photos){photo.workflow={};photo.workflowResults={}}await dbPut('projects',p);activePhotoIndex=0;page='batch-workflow';render();toast(list.length+' foto ditambahkan. Mulai tahap Cahaya.')}
+async function handlePhotoUpload(files){const p=activeProject();if(!p)return;const list=Array.from(files||[]).filter(f=>f.type.startsWith('image/'));if(!list.length)return;toast('Memuat '+list.length+' foto…');for(const file of list){try{const src=await dataURL(file);const dim=await imageSizeFromData(src);const photo={id:uid(),name:file.name,src,originalSrc:src,edited:false,adjust:{brightness:100,contrast:100,saturation:100},subject:{x:9,y:13,w:82,h:79},layers:[],finalThumb:null,width:dim.w,height:dim.h,createdAt:Date.now()};const tpl=templates.find(t=>t.id===p.templateId)||null;const preview=await renderComposite(p,photo,tpl,170);photo.finalThumb=preview.toDataURL('image/jpeg',.72);p.photos.push(photo)}catch(e){toast('Gagal membaca '+file.name)}}p.updatedAt=Date.now();for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflowResults=photo.workflowResults||{}}p.workflowStage=0;await dbPut('projects',p);activePhotoIndex=Math.max(0,p.photos.length-list.length);page='project-gallery';render();toast(list.length+' foto ditambahkan.')}
 function sizeForTemplate(t){let w=t.widthCm||29.7,h=t.heightCm||42;return{w,h,dpi:t.dpi||300}}
 function normalizedToSize(n,size){return n/100*size}
 function renderComposite(project,photo,template,previewWidth){
@@ -247,67 +340,174 @@ function renderComposite(project,photo,template,previewWidth){
   const bg=layers.find(l=>l.type==='background'&&l.visible!==false);
   if(bg&&bg.src)await drawCover(bg.src,0,0,outW,outH);
   else {const g=ctx.createLinearGradient(0,0,outW,outH);g.addColorStop(0,'#e8e3fa');g.addColorStop(.55,'#f8f1e7');g.addColorStop(1,'#ded3c2');ctx.fillStyle=g;ctx.fillRect(0,0,outW,outH)}
-  if(photo&&(photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.src)){const resultSrc=photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.src;const adj=photo.adjust||{};const sub=photo.subject||{x:9,y:13,w:82,h:79};if(resultSrc===photo.src)ctx.filter='brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)';else ctx.filter='none';await drawContain(resultSrc,outW*sub.x/100,outH*sub.y/100,outW*sub.w/100,outH*sub.h/100,1);ctx.filter='none';for(const pl of (photo.layers||[])){if(pl.visible===false||!pl.src)continue;await drawContain(pl.src,outW*(pl.x??10)/100,outH*(pl.y??10)/100,outW*(pl.w??80)/100,outH*(pl.h??80)/100,pl.opacity??1)}}
+  if(photo&&(photo.workflowResults?.face||photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.workflowResults?.light||photo.src)){const resultSrc=photo.workflowResults?.face||photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.workflowResults?.light||photo.src;const sub=photo.subject||{x:9,y:13,w:82,h:79};ctx.filter=resultSrc===photo.src?photoAdjustmentFilter(photo):'none';await drawContain(resultSrc,outW*sub.x/100,outH*sub.y/100,outW*sub.w/100,outH*sub.h/100,1);ctx.filter='none';for(const pl of (photo.layers||[])){if(pl.visible===false||!pl.src)continue;await drawContain(pl.src,outW*(pl.x??10)/100,outH*(pl.y??10)/100,outW*(pl.w??80)/100,outH*(pl.h??80)/100,pl.opacity??1)}}
   for(const l of layers){if(l.visible===false||l.type==='background')continue;const r=rectForLayer(l);if(l.type==='image'&&l.src){await drawContain(l.src,r.x,r.y,r.w,r.h,l.opacity??1)}else if(l.type==='text'){ctx.save();ctx.globalAlpha=l.opacity??1;ctx.fillStyle=l.color||'#453c57';ctx.font=(l.bold?'bold ':'')+(l.fontSize||30)+'px sans-serif';ctx.textAlign=l.align||'center';const tx=r.x+(l.align==='left'?0:l.align==='right'?r.w:r.w/2);const textValue=String(l.text||'Teks').replace(/NAMA ACARA/g,project?.name||'NAMA ACARA').replace(/TANGGAL ACARA/g,project?.eventDate?fmtDate(project.eventDate):'TANGGAL ACARA');ctx.fillText(textValue,tx,r.y+Math.min(r.h*.85,((l.fontSize||30)+4)));ctx.restore()}else if(l.type==='frame'){ctx.save();ctx.strokeStyle=l.color||'#a58a56';ctx.lineWidth=l.thickness||8;ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.restore()}}
  })();
  return task.then(()=>canvas)
 }
 async function refreshFinalThumb(){const p=activeProject(),ph=currentPhoto();if(!p||!ph)return;const t=templates.find(x=>x.id===p.templateId)||null;try{const canvas=await renderComposite(p,ph,t,170);ph.finalThumb=canvas.toDataURL('image/jpeg',.72);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p)}catch(e){console.warn(e)}}
 const workflowStages=[
- {key:'light',title:'Cahaya',desc:'Atur kecerahan, kontras, dan saturasi untuk setiap foto. Foto berikutnya baru dibuka setelah Anda menyimpan foto ini.'},
- {key:'cutout',title:'Cutout',desc:'Hapus latar foto satu per satu. Setelah hasil terlihat dan tersimpan, lanjut ke foto berikutnya.'},
- {key:'template',title:'Template',desc:'Pilih satu template yang diterapkan ke seluruh foto dalam proyek.'},
- {key:'enhance',title:'Enhance',desc:'Tingkatkan kualitas setiap foto satu per satu, lalu lanjut ke foto berikutnya.'},
- {key:'export',title:'Export',desc:'Ekspor setiap foto yang sudah selesai diproses.'}
+ {key:'light',title:'Cahaya',desc:'Atur cahaya foto satu per satu. Setelah foto terakhir selesai, semua foto beralih ke Cutout.'},
+ {key:'cutout',title:'Cutout',desc:'Hapus latar foto satu per satu menggunakan AI.'},
+ {key:'template',title:'Template',desc:'Pilih satu template untuk diterapkan ke seluruh foto proyek.'},
+ {key:'face',title:'Wajah',desc:'Perbaiki detail/arah pandangan wajah untuk setiap foto.'},
+ {key:'export',title:'Ekspor',desc:'Ekspor foto satu per satu atau seluruh foto yang telah selesai.'}
 ];
-function workflowDone(ph,key){ph.workflow=ph.workflow||{};return !!ph.workflow[key]}
-async function setWorkflowDone(p,ph,key,value=true){ph.workflow=ph.workflow||{};ph.workflow[key]=value;p.updatedAt=Date.now();await dbPut('projects',p)}
-function stagePhotoSource(ph){return ph.workflowResults?.enhance||ph.workflowResults?.cutout||ph.src}
-function workflowProgressMarkup(stageIndex){
- return '<div class="workflow-steps">'+workflowStages.map((st,i)=>'<div class="workflow-step '+(i===stageIndex?'current':(i<stageIndex?'past':''))+'"><span class="workflow-step-num">'+(i<stageIndex?'✓':i+1)+'</span><span>'+esc(st.title)+'</span></div>').join('')+'</div>';
+let gallerySelectMode=false;
+const selectedPhotoIds=new Set();
+function ensurePhotoWorkflow(ph){
+ ph.workflow=ph.workflow||{};
+ ph.workflowResults=ph.workflowResults||{};
+ if(ph.workflow.face===undefined&&ph.workflow.enhance!==undefined)ph.workflow.face=!!ph.workflow.enhance;
+ return ph;
+}
+function workflowDone(ph,key){ensurePhotoWorkflow(ph);return !!ph.workflow[key]}
+async function setWorkflowDone(p,ph,key,value=true){
+ ensurePhotoWorkflow(ph);ph.workflow[key]=value;p.updatedAt=Date.now();await dbPut('projects',p);
+}
+function photoStageCount(ph){return workflowStages.filter(st=>workflowDone(ph,st.key)).length}
+function projectStageComplete(p,key){return !!p?.photos?.length&&p.photos.every(ph=>workflowDone(ph,key))}
+function stagePhotoSource(ph){
+ ensurePhotoWorkflow(ph);
+ return ph.workflowResults.face||ph.workflowResults.cutout||ph.workflowResults.light||ph.originalSrc||ph.src;
+}
+function adjustmentValues(ph){
+ const a=ph.adjust||{};
+ return {
+  exposure:a.exposure??((a.brightness??100)-100),
+  contrast:a.contrastValue??((a.contrast??100)-100),
+  highlight:a.highlight??0,
+  shadows:a.shadows??0,
+  saturation:a.saturationValue??((a.saturation??100)-100),
+  warmth:a.warmth??0,
+  glow:a.glow??0,
+  vignette:a.vignette??0,
+  denoise:a.denoise??0,
+  colorMix:a.colorMix||{red:{sat:0,bright:0},orange:{sat:0,bright:0},yellow:{sat:0,bright:0},green:{sat:0,bright:0},blue:{sat:0,bright:0},purple:{sat:0,bright:0},pink:{sat:0,bright:0}}
+ };
+}
+function photoAdjustmentFilter(ph,original=false){
+ if(original)return 'none';
+ const a=adjustmentValues(ph);
+ const brightness=Math.max(.08,1+a.exposure/100);
+ const contrast=Math.max(.1,1+a.contrast/100);
+ const saturation=Math.max(0,1+a.saturation/100);
+ const sepia=Math.min(.42,Math.abs(a.warmth)/240);
+ const hue=a.warmth<0?Math.abs(a.warmth)*-.16:0;
+ return 'brightness('+brightness+') contrast('+contrast+') saturate('+saturation+') sepia('+sepia+') hue-rotate('+hue+'deg)';
 }
 async function photoDataWithLight(ph){
  const source=ph.originalSrc||ph.src;
- const adj=ph.adjust||{};
- if((adj.brightness??100)===100&&(adj.contrast??100)===100&&(adj.saturation??100)===100)return source;
- return await new Promise((resolve,reject)=>{
+ const a=adjustmentValues(ph);
+ const any=(Math.abs(a.exposure)+Math.abs(a.contrast)+Math.abs(a.highlight)+Math.abs(a.shadows)+Math.abs(a.saturation)+Math.abs(a.warmth)+a.glow+a.vignette+a.denoise)>0;
+ if(!any)return source;
+ return new Promise((resolve,reject)=>{
   const image=new Image();
   image.onload=()=>{
    try{
-    const c=document.createElement('canvas');c.width=image.naturalWidth||image.width;c.height=image.naturalHeight||image.height;
-    const ctx=c.getContext('2d');ctx.filter='brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)';ctx.drawImage(image,0,0,c.width,c.height);ctx.filter='none';
-    resolve(c.toDataURL('image/jpeg',.94));
+    const canvas=document.createElement('canvas');
+    canvas.width=image.naturalWidth||image.width;canvas.height=image.naturalHeight||image.height;
+    const ctx=canvas.getContext('2d');
+    ctx.filter=photoAdjustmentFilter(ph);ctx.drawImage(image,0,0,canvas.width,canvas.height);ctx.filter='none';
+    if(a.highlight!==0||a.shadows!==0){
+     ctx.save();
+     if(a.highlight>0){ctx.globalAlpha=Math.min(.18,a.highlight/600);ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}
+     else if(a.highlight<0){ctx.globalAlpha=Math.min(.15,Math.abs(a.highlight)/700);ctx.fillStyle='#241c18';ctx.fillRect(0,0,canvas.width,canvas.height)}
+     if(a.shadows>0){ctx.globalAlpha=Math.min(.10,a.shadows/900);ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}
+     else if(a.shadows<0){ctx.globalAlpha=Math.min(.14,Math.abs(a.shadows)/700);ctx.fillStyle='#211b24';ctx.fillRect(0,0,canvas.width,canvas.height)}
+     ctx.restore();
+    }
+    if(a.glow>0){
+     ctx.save();ctx.globalAlpha=Math.min(.16,a.glow/550);
+     const g=ctx.createRadialGradient(canvas.width*.5,canvas.height*.42,0,canvas.width*.5,canvas.height*.42,Math.max(canvas.width,canvas.height)*.65);
+     g.addColorStop(0,'#fff');g.addColorStop(1,'rgba(255,255,255,0)');
+     ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
+    }
+    if(a.vignette>0){
+     ctx.save();
+     const g=ctx.createRadialGradient(canvas.width*.5,canvas.height*.5,Math.min(canvas.width,canvas.height)*.2,canvas.width*.5,canvas.height*.5,Math.max(canvas.width,canvas.height)*.68);
+     g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+Math.min(.48,a.vignette/210)+')');
+     ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
+    }
+    resolve(canvas.toDataURL('image/jpeg',.94));
    }catch(error){reject(error)}
   };
-  image.onerror=()=>reject(new Error('Foto tidak dapat disiapkan untuk tahap AI.'));
+  image.onerror=()=>reject(new Error('Foto tidak dapat disiapkan untuk tahap berikutnya.'));
   image.src=source;
  });
 }
-async function advanceWorkflowPhoto(p,ph,key){
- await setWorkflowDone(p,ph,key,true);
- const stageIndex=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
- if(key==='export'){
-  if(p.photos.every(x=>workflowDone(x,'export'))){await dbPut('projects',p);activePhotoIndex=0;renderBatchWorkflow();toast('Semua foto selesai diekspor.')}
-  else{
-   const next=p.photos.findIndex(x=>!workflowDone(x,'export'));
-   activePhotoIndex=next<0?0:next;await dbPut('projects',p);renderBatchWorkflow();
+function workflowProgressMarkup(stageIndex){
+ return '<div class="pf-step-nav">'+workflowStages.map((st,i)=>'<button class="pf-step '+(i===stageIndex?'current':(i<stageIndex?'past':''))+'" data-pf-stage="'+i+'"><span class="pf-step-num">'+(i<stageIndex?'✓':i+1)+'</span><span>'+esc(st.title)+'</span></button>').join('')+'</div>';
+}
+function goToProjectGallery(){page='project-gallery';gallerySelectMode=false;selectedPhotoIds.clear();render()}
+function renderProjectGallery(){
+ const p=activeProject();
+ if(!p){page='projects';render();return}
+ const photos=p.photos||[];
+ let html='<section class="pf-gallery-page"><header class="pf-header"><button class="pf-icon-btn" id="pf-back-projects" aria-label="Kembali">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||new Date(p.createdAt||Date.now()).toISOString().slice(0,10))+' · '+photos.length+' foto</p></div><button class="pf-icon-btn orange" id="pf-add-photos" aria-label="Tambah foto">▧＋</button></header>';
+ html+='<input type="file" id="pf-gallery-files" accept="image/*" multiple hidden>';
+ html+='<div class="pf-gallery-hint"><span>Ketuk 1 foto untuk mulai edit. Angka = jumlah tahap yang sudah selesai.</span><div class="pf-gallery-actions">'+(gallerySelectMode?'<button class="pf-text-btn" id="pf-delete-selected">Hapus ('+selectedPhotoIds.size+')</button><button class="pf-text-btn" id="pf-cancel-select">Batal</button>':'<button class="pf-text-btn" id="pf-toggle-select">☷ Pilih foto</button>')+'</div></div>';
+ if(!photos.length){
+  html+='<div class="pf-empty"><div class="pf-empty-icon">▧</div><h2>Tambahkan foto ke proyek</h2><p>Pilih beberapa foto sekaligus. Setelah itu, ketuk satu foto untuk membuka editor.</p><button class="btn primary" id="pf-add-first">＋ Tambah foto</button></div>';
+ }else{
+  html+='<div class="pf-photo-grid">'+photos.map((ph,i)=>{
+   ensurePhotoWorkflow(ph);const count=photoStageCount(ph);const selected=selectedPhotoIds.has(ph.id);
+   return '<button class="pf-photo-card '+(selected?'selected':'')+'" data-pf-photo="'+i+'" aria-label="'+esc(ph.name)+'"><div class="pf-photo-image"><img loading="lazy" src="'+esc(ph.finalThumb||ph.workflowResults?.face||ph.workflowResults?.cutout||ph.src)+'" alt="'+esc(ph.name)+'"><span class="pf-photo-progress '+(count===5?'complete':'')+'">'+(count===5?'✓ ':'')+count+'/5</span>'+(gallerySelectMode?'<span class="pf-select-mark">'+(selected?'✓':'＋')+'</span>':'')+'</div><span class="pf-photo-name">'+esc(ph.name)+'</span></button>';
+  }).join('')+'</div>';
+ }
+ html+='</section>';
+ $('#main').innerHTML=html;
+ document.body.classList.add('photo-flow-active');document.body.classList.remove('photo-editor-active');
+ $('#pf-back-projects').onclick=()=>{gallerySelectMode=false;selectedPhotoIds.clear();page='projects';render()};
+ $('#pf-add-photos').onclick=()=>$('#pf-gallery-files').click();$('#pf-add-first')?.addEventListener('click',()=>$('#pf-gallery-files').click());
+ $('#pf-gallery-files').onchange=async e=>{const files=e.target.files;if(files&&files.length)await handlePhotoUpload(files);e.target.value=''};
+ $('#pf-toggle-select')?.addEventListener('click',()=>{gallerySelectMode=true;selectedPhotoIds.clear();renderProjectGallery()});
+ $('#pf-cancel-select')?.addEventListener('click',()=>{gallerySelectMode=false;selectedPhotoIds.clear();renderProjectGallery()});
+ $('#pf-delete-selected')?.addEventListener('click',()=>{
+  if(!selectedPhotoIds.size){toast('Pilih foto yang akan dihapus.');return}
+  confirmModal('Hapus foto terpilih?','Sebanyak '+selectedPhotoIds.size+' foto akan dihapus dari proyek ini.',async()=>{
+   p.photos=p.photos.filter(ph=>!selectedPhotoIds.has(ph.id));selectedPhotoIds.clear();gallerySelectMode=false;p.updatedAt=Date.now();await dbPut('projects',p);renderProjectGallery();toast('Foto terpilih dihapus.')
+  });
+ });
+ $$('[data-pf-photo]').forEach(b=>b.addEventListener('click',()=>{
+  const i=Number(b.dataset.pfPhoto);const ph=p.photos[i];if(!ph)return;
+  if(gallerySelectMode){if(selectedPhotoIds.has(ph.id))selectedPhotoIds.delete(ph.id);else selectedPhotoIds.add(ph.id);renderProjectGallery();return}
+  activePhotoIndex=i;
+  let start=Number(p.workflowStage)||0;start=Math.max(0,Math.min(4,start));
+  const stage=workflowStages[start].key;
+  if(start!==2){
+   const unfinished=p.photos.findIndex(x=>!workflowDone(x,stage));
+   if(unfinished>=0&&workflowDone(ph,stage))activePhotoIndex=unfinished;
   }
-  return;
+  page='photo-editor';render();
+ }));
+}
+async function advanceWorkflowPhoto(p,ph,key){
+ ensurePhotoWorkflow(ph);ph.workflow[key]=true;p.updatedAt=Date.now();
+ const stageIndex=workflowStages.findIndex(st=>st.key===key);
+ if(stageIndex<0){await dbPut('projects',p);goToProjectGallery();return}
+ await dbPut('projects',p);
+ if(key==='template'){
+  for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}
+  p.workflowStage=3;
+  const first=p.photos.findIndex(x=>!workflowDone(x,'face'));
+  activePhotoIndex=first<0?0:first;await dbPut('projects',p);page='photo-editor';render();toast('Template diterapkan. Lanjut ke tahap Wajah.');return;
  }
- const next=p.photos.findIndex((x,i)=>i>activePhotoIndex&&!workflowDone(x,key));
- if(next>=0){
-  activePhotoIndex=next;await dbPut('projects',p);renderBatchWorkflow();
-  toast('Tahap '+workflowStages[stageIndex].title+' tersimpan. Lanjut foto '+(next+1)+'.');
-  return;
+ if(key==='export'){
+  if(projectStageComplete(p,'export')){p.workflowStage=4;await dbPut('projects',p);goToProjectGallery();toast('Semua foto selesai diekspor.');return}
  }
- const remaining=p.photos.findIndex(x=>!workflowDone(x,key));
- if(remaining>=0){
-  activePhotoIndex=remaining;await dbPut('projects',p);renderBatchWorkflow();return;
+ const stillPending=p.photos.findIndex(x=>!workflowDone(x,key));
+ if(stillPending>=0){
+  activePhotoIndex=stillPending;page='photo-editor';await dbPut('projects',p);render();toast('Foto tersimpan. Lanjut ke foto '+(stillPending+1)+'.');return;
  }
  if(stageIndex<4){
-  p.workflowStage=stageIndex+1;activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();
-  toast('Semua foto selesai tahap '+workflowStages[stageIndex].title+'. Lanjut ke '+workflowStages[stageIndex+1].title+'.');
- }else{await dbPut('projects',p);renderBatchWorkflow()}
+  p.workflowStage=stageIndex+1;
+  const nextKey=workflowStages[stageIndex+1].key;
+  let next=p.photos.findIndex(x=>!workflowDone(x,nextKey));
+  activePhotoIndex=next<0?0:next;
+  await dbPut('projects',p);page='photo-editor';render();toast('Semua foto selesai pada tahap '+workflowStages[stageIndex].title+'.');return;
+ }
+ await dbPut('projects',p);goToProjectGallery();
 }
 async function useWorkflowResult(localSource){
  const context=workflowReturn;
@@ -316,85 +516,115 @@ async function useWorkflowResult(localSource){
  if(!p)throw new Error('Proyek tidak ditemukan.');
  const index=p.photos.findIndex(x=>x.id===context.photoId);
  if(index<0)throw new Error('Foto proyek tidak ditemukan.');
- const ph=p.photos[index];
- ph.workflowResults=ph.workflowResults||{};
+ const ph=ensurePhotoWorkflow(p.photos[index]);
  ph.workflowResults[context.stageKey]=localSource;
- activeProjectId=p.id;activePhotoIndex=index;page='batch-workflow';
- workflowReturn=null;
+ activeProjectId=p.id;activePhotoIndex=index;page='photo-editor';workflowReturn=null;
  await advanceWorkflowPhoto(p,ph,context.stageKey);
 }
-function renderBatchWorkflow(){
- const p=activeProject();
- if(!p){page='projects';render();return}
- if(!p.photos?.length){page='project-editor';render();toast('Tambahkan foto terlebih dahulu.');return}
- p.workflowStage=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
- const stageIndex=p.workflowStage, stage=workflowStages[stageIndex];
+function renderPhotoEditor(){
+ const p=activeProject();if(!p){page='projects';render();return}
+ if(!p.photos?.length){page='project-gallery';renderProjectGallery();return}
  activePhotoIndex=Math.max(0,Math.min(activePhotoIndex,p.photos.length-1));
- const ph=p.photos[activePhotoIndex];
+ const ph=ensurePhotoWorkflow(p.photos[activePhotoIndex]);
+ const stageIndex=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
+ const stage=workflowStages[stageIndex];
+ const adj=adjustmentValues(ph);
+ const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
- const imageSrc=stagePhotoSource(ph);
- const adj=ph.adjust||{};
- let html=head('PROYEK / TAHAP '+(stageIndex+1)+' DARI 5',esc(stage.title),esc(p.name)+' · '+stage.desc,'<button class="btn" id="workflow-back">← Daftar proyek</button>');
- html+=workflowProgressMarkup(stageIndex);
- html+='<div class="workflow-photo-bar"><div><div class="eyebrow">FOTO '+(activePhotoIndex+1)+' DARI '+p.photos.length+'</div><h2>'+esc(ph.name)+'</h2><p>'+doneCount+' dari '+p.photos.length+' foto selesai pada tahap '+esc(stage.title)+'.</p></div><div class="workflow-photo-actions"><button class="btn" id="workflow-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>← Sebelumnya</button><span class="badge '+(workflowDone(ph,stage.key)?'green':'gray')+'">'+(workflowDone(ph,stage.key)?'Selesai':'Belum selesai')+'</span></div></div>';
- html+='<div class="editor workflow-editor"><section class="workflow-preview"><img id="workflow-photo-preview" src="'+esc(imageSrc)+'" alt="Foto tahap '+esc(stage.title)+'" style="filter:'+(stage.key==='light'?'brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)':'none')+'"><div class="canvas-caption">Foto asli tetap tersimpan. Setiap tahap disimpan untuk foto yang sedang dipilih.</div></section><aside class="workflow-controls">';
- if(stage.key==='light'){
-  html+='<div class="pane-title">Atur cahaya foto ini</div><p class="lead">Selesaikan foto ini dahulu. Setelah menekan tombol lanjut, aplikasi membuka foto berikutnya pada tahap Cahaya.</p><div class="editor-controls">'+[['brightness','Kecerahan',50,160,adj.brightness??100],['contrast','Kontras',50,160,adj.contrast??100],['saturation','Saturasi',0,180,adj.saturation??100]].map(([key,label,min,max,val])=>'<div class="control-line"><label>'+label+' <span id="wf-'+key+'-val">'+val+'%</span></label><input type="range" min="'+min+'" max="'+max+'" value="'+val+'" id="wf-'+key+'"></div>').join('')+'<button class="btn" id="wf-reset-light">Reset cahaya</button></div><button class="btn primary workflow-primary" id="wf-finish-photo">'+(activePhotoIndex===p.photos.length-1?'Simpan cahaya & lanjut ke Cutout':'Simpan cahaya & lanjut foto berikutnya')+'</button>';
- }else if(stage.key==='cutout'){
-  html+='<div class="pane-title">Cutout / Hapus latar</div><p class="lead">Proses foto ini saja. Setelah hasil AI selesai, periksa gambar lalu tekan “Gunakan hasil & lanjut”.</p><button class="btn primary workflow-primary" id="wf-open-cutout">Proses Cutout foto ini</button><div class="notice info">Foto '+(activePhotoIndex+1)+' selesai diproses? Gunakan hasil pada halaman hasil AI untuk melanjutkan otomatis.</div>';
- }else if(stage.key==='template'){
-  html+='<div class="pane-title">Template untuk proyek</div><p class="lead">Tahap ini diterapkan sekali ke semua foto, bukan diulang untuk setiap foto.</p><div class="field"><label>Pilih template</label><select id="wf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><button class="btn primary workflow-primary" id="wf-apply-template">Terapkan template ke semua foto & lanjut</button>';
- }else if(stage.key==='enhance'){
-  html+='<div class="pane-title">Enhance foto ini</div><p class="lead">Tingkatkan kualitas satu foto dahulu. Hasil akan disimpan secara lokal dan menjadi sumber pada tahap Export.</p><button class="btn primary workflow-primary" id="wf-open-enhance">Proses Enhance foto ini</button><div class="notice info">Gunakan hasil AI untuk melanjutkan ke foto berikutnya.</div>';
+ let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">♜</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
+ html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'"><button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button" id="pf-finish-photo">✓ &nbsp;'+(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto')+'</button></div>';
+ html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
+ if(stageIndex===0){
+  const color=ph.adjust?.selectedColor||'red';
+  html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
+  const sliders=[['exposure','Exposure',-100,100,adj.exposure],['contrast','Kontras',-100,100,adj.contrast],['highlight','Highlight',-100,100,adj.highlight],['shadows','Bayangan',-100,100,adj.shadows],['saturation','Saturasi',-100,100,adj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,adj.warmth],['glow','Glow (cahaya lembut)',0,100,adj.glow],['vignette','Vignette (gelap pinggir)',0,100,adj.vignette],['denoise','Denoise (kurangi noise)',0,100,adj.denoise]];
+  html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
+  html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="active" id="pf-color-all">Seluruh subjek</button><button id="pf-color-brush">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Preset dan penyesuaian disimpan pada foto ini.</p></div>';
+ }else if(stageIndex===1){
+  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Pisahkan subjek dari latar. Hasil transparan disimpan terpisah dari foto asli.</p><button class="btn primary workflow-primary" id="pf-run-cutout">✂ Proses Cutout dengan AI</button><p class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Foto ini sudah memiliki hasil Cutout. Anda bisa memproses ulang.':'Selesaikan semua foto pada tahap Cutout untuk melanjutkan ke Template.')+'</p></div>';
+ }else if(stageIndex===2){
+  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 3 DARI 5</span><h2>Template proyek</h2><p>Pilih template yang sama untuk semua foto di proyek ini.</p><div class="field"><label>Template</label><select id="pf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><button class="btn primary workflow-primary" id="pf-apply-template">Terapkan template & lanjut</button></div>';
+ }else if(stageIndex===3){
+  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 4 DARI 5</span><h2>Wajah</h2><p>Perbaiki arah pandangan mata menggunakan AI. Periksa hasil sebelum menggunakannya.</p><button class="btn primary workflow-primary" id="pf-run-face">✧ Proses Wajah dengan AI</button><p class="pf-note">'+(workflowDone(ph,'face')?'✓ Hasil Wajah sudah tersimpan untuk foto ini.':'Hasil akan digunakan pada tahap Ekspor.')+'</p></div>';
  }else{
-  html+='<div class="pane-title">Ekspor hasil</div><p class="lead">Ekspor foto yang sudah selesai. File tersimpan ke Download/ReangStudioFoto pada APK Android terbaru.</p><button class="btn primary workflow-primary" id="wf-export-current">Ekspor foto ini</button><button class="btn workflow-primary" id="wf-export-all">Ekspor semua foto</button>';
+  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 5 DARI 5</span><h2>Ekspor foto</h2><p>Ekspor foto ini dengan seluruh penyesuaian dan template yang dipilih.</p><button class="btn primary workflow-primary" id="pf-export-this">⇩ Ekspor foto ini</button><button class="btn workflow-primary" id="pf-export-all">Ekspor semua foto</button></div>';
  }
- html+='</aside></div>';
- html+='<div class="workflow-footer"><span class="muted">Urutan dikunci: Cahaya semua foto → Cutout semua foto → Template → Enhance semua foto → Export.</span><span class="muted">Progres tersimpan otomatis.</span></div>';
+ html+='</div></div><div class="pf-thumbnails">'+p.photos.map((photo,i)=>'<button class="pf-thumb '+(i===activePhotoIndex?'active':'')+'" data-pf-thumb="'+i+'"><img loading="lazy" src="'+esc(photo.finalThumb||photo.workflowResults?.face||photo.workflowResults?.cutout||photo.src)+'"><span class="'+(photoStageCount(photo)===5?'complete':'')+'"></span></button>').join('')+'</div>';
+ html+=workflowProgressMarkup(stageIndex)+'</section>';
  $('#main').innerHTML=html;
- $('#workflow-back').onclick=()=>{page='projects';render()};
- $('#workflow-prev-photo')?.addEventListener('click',()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderBatchWorkflow()});
- if(stage.key==='light'){
-  const filterPreview=()=>{const preview=$('#workflow-photo-preview');if(preview)preview.style.filter='brightness('+(ph.adjust?.brightness??100)+'%) contrast('+(ph.adjust?.contrast??100)+'%) saturate('+(ph.adjust?.saturation??100)+'%)'};
-  const update=async(key,value)=>{ph.adjust=ph.adjust||{brightness:100,contrast:100,saturation:100};ph.adjust[key]=Number(value);const valueLabel=$('#wf-'+key+'-val');if(valueLabel)valueLabel.textContent=value+'%';filterPreview();await setWorkflowDone(p,ph,'light',false)};
-  ['brightness','contrast','saturation'].forEach(key=>$('#wf-'+key)?.addEventListener('input',e=>update(key,e.target.value)));
-  $('#wf-reset-light').onclick=async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};await setWorkflowDone(p,ph,'light',false);renderBatchWorkflow()};
-  $('#wf-finish-photo').onclick=async()=>{await dbPut('projects',p);await advanceWorkflowPhoto(p,ph,'light')};
+ document.body.classList.add('photo-flow-active','photo-editor-active');
+ $('#pf-editor-back').onclick=goToProjectGallery;$('#pf-editor-gallery').onclick=goToProjectGallery;
+ $('#pf-editor-add').onclick=()=>$('#pf-editor-files').click();
+ $('#pf-editor-files').onchange=async e=>{if(e.target.files?.length)await handlePhotoUpload(e.target.files);e.target.value=''};
+ $('#pf-delete-current').onclick=()=>confirmModal('Hapus foto?','Foto ini akan dihapus dari proyek.',async()=>{p.photos.splice(activePhotoIndex,1);p.updatedAt=Date.now();await dbPut('projects',p);if(!p.photos.length){page='project-gallery';render()}else{activePhotoIndex=Math.min(activePhotoIndex,p.photos.length-1);renderPhotoEditor()}});
+ $('#pf-prev-photo').onclick=()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderPhotoEditor()};
+ $('#pf-next-photo').onclick=()=>{activePhotoIndex=Math.min(p.photos.length-1,activePhotoIndex+1);renderPhotoEditor()};
+ $$('[data-pf-thumb]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.pfThumb);renderPhotoEditor()});
+ $$('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
+  const target=Number(b.dataset.pfStage);if(target===stageIndex)return;
+  for(let i=0;i<target;i++){
+   const prevKey=workflowStages[i].key;
+   if(prevKey==='template'&&p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}}
+   if(!projectStageComplete(p,prevKey)){toast('Selesaikan tahap '+workflowStages[i].title+' untuk semua foto dahulu.');return}
+  }
+  p.workflowStage=target;const targetKey=workflowStages[target].key;const pending=p.photos.findIndex(photo=>!workflowDone(photo,targetKey));if(pending>=0)activePhotoIndex=pending;await dbPut('projects',p);renderPhotoEditor();
+ });
+ $('#pf-hold-original').addEventListener('pointerdown',()=>{const im=$('#pf-photo-preview');if(im){im.style.filter='none';im.src=ph.originalSrc||ph.src}});
+ const restoreOriginal=()=>{const im=$('#pf-photo-preview');if(im){im.src=source;im.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}};
+ ['pointerup','pointercancel','pointerleave'].forEach(ev=>$('#pf-hold-original').addEventListener(ev,restoreOriginal));
+ $('#pf-finish-photo').onclick=async()=>{
+  if(stageIndex===2){if(!p.templateId){toast('Pilih template atau pilih “Tanpa template” terlebih dahulu.');return}await applyProjectTemplate(p);return}
+  if(stageIndex===1&&!workflowDone(ph,'cutout')){toast('Proses Cutout dahulu atau tandai tahap selesai jika ingin melewati.');if(!confirm('Lewati Cutout untuk foto ini?'))return}
+  if(stageIndex===3&&!workflowDone(ph,'face')){toast('Proses Wajah dahulu atau konfirmasi untuk melewati tahap ini.');if(!confirm('Lewati tahap Wajah untuk foto ini?'))return}
+  if(stageIndex===0){try{ph.workflowResults.light=await photoDataWithLight(ph)}catch(error){toast(error.message);return}}
+  await advanceWorkflowPhoto(p,ph,stage.key);
+ };
+ if(stageIndex===0){
+  const refreshImage=()=>{const im=$('#pf-photo-preview');if(im)im.style.filter=photoAdjustmentFilter(ph)};
+  const update=async(key,value)=>{ph.adjust=ph.adjust||{};const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;ph.adjust[prop]=Number(value);const label=$('#pf-value-'+key);if(label)label.textContent=(Number(value)>0?'+':'')+value;refreshImage();await dbPut('projects',p)};
+  for(const [key] of [['exposure'],['contrast'],['highlight'],['shadows'],['saturation'],['warmth'],['glow'],['vignette'],['denoise']])$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value));
+  $('#pf-preset').onchange=async e=>{
+   const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
+   ph.adjust={...(ph.adjust||{}),...presets[e.target.value]};await dbPut('projects',p);renderPhotoEditor();
+  };
+  $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
+  $('#pf-preset-cancel')?.addEventListener('click',closeModal);
+  $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
+  const colorState=()=>{const a=adjustmentValues(ph);return a.colorMix[ph.adjust?.selectedColor||'red']||{sat:0,bright:0}};
+  $$('[data-pf-color]').forEach(b=>b.onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;dbPut('projects',p);renderPhotoEditor()});
+  $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
+  $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
+  $('#pf-color-brush').onclick=()=>toast('Mode kuas akan membatasi penyesuaian warna ke area yang disapukan; fitur kuas belum tersedia pada versi ini.');
+  $('#pf-color-all').onclick=()=>toast('Penyesuaian warna saat ini diterapkan ke seluruh subjek.');
  }
- if(stage.key==='cutout')$('#wf-open-cutout').onclick=async()=>{
+ if(stageIndex===1)$('#pf-run-cutout').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
   catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Cutout.')}
  };
- if(stage.key==='template'){
-  $('#wf-apply-template').onclick=async()=>{
-   p.templateId=$('#wf-template').value||null;
-   for(const photo of p.photos){photo.workflow=photo.workflow||{};photo.workflow.template=true}
-   p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();
-   toast(p.templateId?'Template diterapkan ke semua foto.':'Tahap template dilewati tanpa template.');
-  };
- }
- if(stage.key==='enhance')$('#wf-open-enhance').onclick=async()=>{
-  try{
-   workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'enhance'};
-   toolFileData=ph.workflowResults?.cutout||await photoDataWithLight(ph);
-   toolKey='enhance';page='tool-runner';render();
-  }catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Enhance.')}
+ if(stageIndex===2)$('#pf-apply-template').onclick=async()=>{if($('#pf-template').value===''){p.templateId=null;for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}p.templateId=$('#pf-template').value;await applyProjectTemplate(p)};
+ if(stageIndex===3)$('#pf-run-face').onclick=async()=>{
+  try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'face'};toolFileData=await photoDataWithLight(ph);if(ph.workflowResults.cutout)toolFileData=ph.workflowResults.cutout;toolKey='gaze';page='tool-runner';render()}
+  catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Wajah.')}
  };
- if(stage.key==='export'){
-  $('#wf-export-current').onclick=async()=>{try{await exportCurrentPhoto();await advanceWorkflowPhoto(p,ph,'export')}catch(error){toast(error.message||'Ekspor gagal.')}};
-  $('#wf-export-all').onclick=async()=>{
-   const button=$('#wf-export-all');button.disabled=true;button.textContent='Mengekspor…';
-   try{
-    for(let i=0;i<p.photos.length;i++){activePhotoIndex=i;await exportCurrentPhoto();await setWorkflowDone(p,p.photos[i],'export',true)}
-    activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();toast('Semua foto selesai diekspor.');
-   }catch(error){toast(error.message||'Ekspor semua foto gagal.')}
-   finally{const current=$('#wf-export-all');if(current){current.disabled=false;current.textContent='Ekspor semua foto'}}
+ if(stageIndex===4){
+  $('#pf-export-this').onclick=async()=>{try{await exportCurrentPhoto();await advanceWorkflowPhoto(p,ph,'export')}catch(error){toast(error.message||'Ekspor gagal.')}};
+  $('#pf-export-all').onclick=async()=>{
+   const button=$('#pf-export-all');button.disabled=true;button.textContent='Mengekspor…';
+   try{for(let i=0;i<p.photos.length;i++){activePhotoIndex=i;const photo=p.photos[i];await exportCurrentPhoto();await setWorkflowDone(p,photo,'export',true)}p.workflowStage=4;activePhotoIndex=0;await dbPut('projects',p);goToProjectGallery();toast('Semua foto berhasil diekspor.')}
+   catch(error){toast(error.message||'Ekspor semua foto gagal.')}
   };
  }
 }
+async function applyProjectTemplate(p){
+ for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}
+ const tpl=templates.find(t=>t.id===p.templateId)||null;
+ for(const photo of p.photos){try{const can=await renderComposite(p,photo,tpl,170);photo.finalThumb=can.toDataURL('image/jpeg',.72)}catch(error){console.warn(error)}}
+ p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Template diterapkan ke seluruh proyek. Lanjut ke tahap Wajah.');
+}
 function renderProjectEditor(){
  const p=activeProject();if(!p){page='projects';renderProjects();return}
- if(p.photos&&p.photos.length){page='batch-workflow';renderBatchWorkflow();return}
+ if(p.photos&&p.photos.length){page='project-gallery';renderProjectGallery();return}
  const ph=currentPhoto();let html=head('PROYEK / EDITOR',esc(p.name),'<span>'+esc(p.eventDate?fmtDate(p.eventDate):'Tanggal acara belum diatur')+'</span>','<button class="btn" id="back-projects">← Semua proyek</button>');
  html+='<div class="editor"><div class="editor-top"><div><h2>Editor foto</h2><div class="meta">'+p.photos.length+' foto · template '+esc(templates.find(t=>t.id===p.templateId)?.name||'belum dipilih')+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn small" id="add-photos">＋ Tambah foto</button><button class="btn small" id="open-workflow">Alur 5 tahap</button><button class="btn small primary" id="open-export">⇩ Ekspor</button></div></div>';
  html+='<div style="padding:0 16px;border-bottom:1px solid var(--line)"><div class="photo-strip">'+(p.photos.length?p.photos.map((x,i)=>'<button class="photo-thumb '+(i===activePhotoIndex?'selected':'')+'" data-photo-index="'+i+'" title="'+esc(x.name)+'"><img src="'+(x.finalThumb||x.src)+'"></button>').join(''):'<span style="font-size:12px;color:var(--muted);padding:12px 0">Belum ada foto.</span>')+'</div></div>';
@@ -464,8 +694,17 @@ function renderTemplateEditor(){
 }
 function drawTemplateCanvas(t){const c=$('#template-canvas');if(!c)return;renderComposite(null,null,t,650).then(out=>{const ctx=c.getContext('2d');c.width=out.width;c.height=out.height;ctx.drawImage(out,0,0);const l=currentLayer();if(l&&!l.locked&&l.visible!==false){ctx.save();ctx.strokeStyle='#6d5ce8';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.strokeRect((l.x||0)/100*c.width,(l.y||0)/100*c.height,(l.w||100)/100*c.width,(l.h||100)/100*c.height);ctx.restore()}scheduleTemplateThumbs(t)})}function scheduleTemplateThumbs(t){clearTimeout(templateThumbTimer);templateThumbTimer=setTimeout(async()=>{for(const p of projects.filter(x=>x.templateId===t.id)){for(const ph of p.photos){const thumb=await renderComposite(p,ph,t,170);ph.finalThumb=thumb.toDataURL('image/jpeg',.72)}p.updatedAt=Date.now();await dbPut('projects',p)}},450)}
 function slug(s){return String(s||'reang-foto').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'reang-foto'}
+async function saveCanvasToDevice(canvas,filename,mime){
+ const data=canvas.toDataURL(mime||'image/png',mime==='image/jpeg'?settings.exportQuality/100:undefined);
+ if(window.ReangNativeDownloads&&typeof window.ReangNativeDownloads.saveFalImage==='function'){
+  const result=await window.ReangNativeDownloads.saveFalImage(data,filename);
+  if(result&&result.saved)return result;
+ }
+ const link=document.createElement('a');link.href=data;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+ return {saved:true,path:'Unduhan perangkat'};
+}
 function downloadCanvas(c,name,type){const a=document.createElement('a');a.download=name;a.href=c.toDataURL(type||'image/png',type==='image/jpeg'?settings.exportQuality/100:undefined);a.click()}
-async function exportCurrentPhoto(){const p=activeProject(),ph=currentPhoto();if(!p||!ph){toast('Pilih foto yang akan diekspor.');return}toast('Merender gambar akhir…');const t=templates.find(x=>x.id===p.templateId)||null;const dpi=(t&&t.dpi)||settings.exportDpi||300;let pxPerCm=dpi/2.54;let w=Math.round((t?.widthCm||29.7)*pxPerCm),h=Math.round((t?.heightCm||42)*pxPerCm);const ratio=w/h;if(w>4500||h>6500){const f=Math.min(4500/w,6500/h);w=Math.round(w*f);h=Math.round(h*f)}const low=await renderComposite(p,ph,t,1000);const high=await renderComposite(p,ph,t,w);const mime=settings.exportFormat==='jpeg'?'image/jpeg':'image/png';downloadCanvas(high,slug(p.name)+'-'+slug(ph.name.replace(/\.[^.]+$/,''))+(mime==='image/jpeg'?'.jpg':'.png'),mime);ph.finalThumb=low.toDataURL('image/jpeg',.75);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p);toast('Ekspor selesai · '+w+' × '+h+' px.');}
+async function exportCurrentPhoto(){const p=activeProject(),ph=currentPhoto();if(!p||!ph){toast('Pilih foto yang akan diekspor.');return}toast('Merender gambar akhir…');const t=templates.find(x=>x.id===p.templateId)||null;const dpi=(t&&t.dpi)||settings.exportDpi||300;let pxPerCm=dpi/2.54;let w=Math.round((t?.widthCm||29.7)*pxPerCm),h=Math.round((t?.heightCm||42)*pxPerCm);const ratio=w/h;if(w>4500||h>6500){const f=Math.min(4500/w,6500/h);w=Math.round(w*f);h=Math.round(h*f)}const low=await renderComposite(p,ph,t,1000);const high=await renderComposite(p,ph,t,w);const mime=settings.exportFormat==='jpeg'?'image/jpeg':'image/png';await saveCanvasToDevice(high,slug(p.name)+'-'+slug(ph.name.replace(/\.[^.]+$/,''))+(mime==='image/jpeg'?'.jpg':'.png'),mime);ph.finalThumb=low.toDataURL('image/jpeg',.75);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p);toast('Ekspor selesai · '+w+' × '+h+' px.');}
 function showExportModal(){const p=activeProject();if(!p)return;showModal('Ekspor proyek','<div class="notice info">Semua thumbnail di daftar menggunakan preview komposisi akhir, bukan file asli. Ekspor merender komposisi final dengan template yang dipilih.</div><div class="kv"><span>Nama proyek</span><b>'+esc(p.name)+'</b></div><div class="kv"><span>Jumlah foto</span><b>'+p.photos.length+'</b></div><div class="kv"><span>Ukuran template</span><b>'+esc(templates.find(t=>t.id===p.templateId)?.sizeName||'A3 default')+'</b></div><div class="field" style="margin-top:14px"><label>Format file</label><select id="modal-export-format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></div><div class="field"><label>Ekspor foto</label><select id="modal-export-selection"><option value="current">Foto yang sedang dibuka</option><option value="all">Semua foto dalam proyek</option></select></div><p class="lead">Ekspor banyak foto akan mengunduh file satu per satu. ZIP dan batch queue dapat ditambahkan pada tahap backend berikutnya.</p>','<button class="btn" id="cancel-export">Batal</button><button class="btn primary" id="confirm-export">Ekspor sekarang ↓</button>');$('#modal-export-format').value=settings.exportFormat;$('#cancel-export').onclick=closeModal;$('#confirm-export').onclick=async()=>{settings.exportFormat=$('#modal-export-format').value;saveSettings();const selection=$('#modal-export-selection').value;closeModal();if(selection==='current'){await exportCurrentPhoto();return}const photos=activeProject()?.photos||[];for(let i=0;i<photos.length;i++){activePhotoIndex=i;page='project-editor';renderProjectEditor();await new Promise(r=>setTimeout(r,150));await exportCurrentPhoto();await new Promise(r=>setTimeout(r,350))}toast('Selesai mengekspor semua foto.')}}
 function openTool(key){workflowReturn=null;toolKey=key;toolFileData=currentPhoto()?.src||toolFileData||null;page='tool-runner';render()}
 async function falJson(url, options, apiKey){
