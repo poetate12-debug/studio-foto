@@ -2,45 +2,50 @@
 
 Prototipe workspace editor foto untuk alur foto acara: proyek, penyesuaian foto, template berlapis, pilihan model AI, dan ekspor cetak.
 
-## Jalankan aplikasi
+## Menjalankan aplikasi
 
-**Cara paling mudah:** buka `index.html` melalui server statis atau GitHub Pages. Aplikasi dirancang sebagai web app responsif yang bisa digunakan dari Android dan desktop. Jika dipasang melalui HTTPS, service worker menyediakan app shell offline.
+### Front-end saja
+Buka melalui GitHub Pages atau server statis. PWA responsif untuk Android dan desktop.
 
-Untuk GitHub Pages:
-1. Buka **Settings → Pages** pada repository ini.
-2. Pilih **Deploy from a branch**.
-3. Pilih branch **main**, folder **/(root)**, lalu simpan.
-4. Buka URL Pages yang diberikan GitHub.
+### Menjalankan dengan backend fal.ai
+Persyaratan: Node.js 20 atau lebih baru.
 
-## Fitur yang sudah tersedia pada prototipe
+```bash
+npm install
+cp .env.example .env
+# Isi FAL_KEY di .env pada server, jangan masukkan ke Git.
+# Isi FAL_ALLOWED_MODELS dengan ID endpoint yang sudah diverifikasi, pisahkan dengan koma.
+npm start
+```
 
+Kemudian buka `http://localhost:3000`. Endpoint `/api/health` menunjukkan apakah fal.ai sudah dikonfigurasi.
+
+**Catatan:** backend proxy sudah menjadi fondasi, tetapi alur tombol AI pada front-end belum dihubungkan ke endpoint ini. Model ID dan schema input harus diverifikasi per fitur sebelum dipakai.
+
+## Fitur front-end yang tersedia
 - Navigasi Proyek, Alat AI, Template, dan Pengaturan.
-- Membuat proyek, memasukkan banyak foto, dan menyimpan metadata lokal.
-- Penyimpanan proyek dan template menggunakan IndexedDB pada browser.
+- Membuat proyek, memasukkan banyak foto, dan menyimpan metadata lokal di IndexedDB.
 - Penyesuaian lokal kecerahan, kontras, saturasi, serta posisi dan ukuran area subjek.
-- Template per-proyek dengan pilihan ukuran A3, A4, ukuran foto, dan dimensi khusus.
-- Layer template: background, gambar/logo/ornamen, bingkai, dan teks; urutan, visibilitas, penguncian, dan properti layer.
-- Nama acara dan tanggal proyek dapat dipakai pada teks template melalui placeholder `NAMA ACARA` dan `TANGGAL ACARA`.
-- Thumbnail proyek memakai pratinjau komposisi final, bukan file sumber secara langsung.
-- Ekspor PNG/JPEG untuk satu foto atau batch unduhan berurutan; ekspor template.
+- Template per-proyek dengan ukuran A3 default, A4, ukuran foto, dan dimensi khusus.
+- Layer template untuk background, gambar/logo/ornamen, bingkai, dan teks; urutan, visibilitas, penguncian, dan properti layer.
+- Nama acara dan tanggal proyek dapat digunakan pada teks template.
+- Thumbnail proyek menggunakan pratinjau komposisi akhir.
+- Ekspor PNG/JPEG satu foto atau batch unduhan berurutan; ekspor template.
 - Pemilih kandidat model per fitur: hapus background, hapus objek, blur background, buat background, enhance/upscale, dan perbaikan arah mata.
 - PWA manifest dan service worker untuk app shell.
 
-## Batasan penting versi ini
+## Batasan saat ini
+Ini masih **prototipe**, belum aplikasi produksi penuh.
 
-Ini **prototipe front-end awal**, belum aplikasi produksi penuh.
-
-- Panggilan fal.ai belum terhubung. Pilihan model di UI adalah kandidat konfigurasi; endpoint, parameter, biaya aktual, dan kompatibilitas wajib diverifikasi sebelum integrasi.
-- API key tidak disimpan atau ditanam pada browser/repository. Integrasi produksi membutuhkan backend proxy untuk menjaga rahasia API, mengatur autentikasi, pembatasan biaya, dan validasi input.
+- Tombol AI front-end belum memanggil backend fal.ai.
+- Backend proxy mengamankan API key di sisi server dan membatasi endpoint ke model ID dalam `FAL_ALLOWED_MODELS`, tetapi belum ada autentikasi pengguna, kuota per pengguna, atau dashboard penggunaan.
 - Penghapusan background/objek, kuas mask Keep/Remove, bokeh berbasis segmentasi, generasi background, enhancement AI asli, serta perbaikan arah mata belum aktif.
-- Ekspor saat ini berupa file gambar per foto. Pembuatan ZIP, antrean ekspor yang tangguh, pemulihan job gagal, dan sinkronisasi cloud belum tersedia.
-- Tata letak layer dan alur komposisi adalah dasar yang bisa diuji; perlu pengujian dengan foto asli dan template Anda sebelum dipakai untuk produksi cetak A3.
-- Proyek dan template tersimpan di perangkat/browser yang digunakan. Menghapus data browser dapat menghilangkannya; belum ada backup cloud.
+- Ekspor ZIP, antrean ekspor tangguh, pemulihan job gagal, dan sinkronisasi cloud belum tersedia.
+- Komposisi layer perlu diuji dengan foto dan template asli sebelum dipakai untuk produksi cetak A3.
+- Proyek dan template tersimpan pada browser/perangkat; menghapus data browser dapat menghilangkannya.
 
 ## Ukuran cetak
-
-A3 potret pada 300 DPI sekitar **3508 × 4961 px**. Hasil akhir dapat dibatasi oleh memori perangkat/browser dan dimensi foto sumber. Untuk foto penting, lakukan pemeriksaan kualitas hasil ekspor sebelum dicetak.
+A3 potret pada 300 DPI sekitar **3508 × 4961 px**. Hasil akhir juga dibatasi resolusi sumber dan memori perangkat/browser.
 
 ## Keamanan
-
-Repository ini bersifat **public**. Jangan commit API key, foto pelanggan, file template privat, ataupun data pribadi. Aplikasi menyimpan proyek lokal di browser, bukan pada repository GitHub.
+Repository ini **publik**. Jangan commit API key, foto pelanggan, template privat, atau data pribadi. Simpan `FAL_KEY` hanya pada environment server, jangan di front-end atau APK.
