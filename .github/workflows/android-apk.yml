@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   android-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,11 +35,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
 
       - name: Install app dependencies
         run: |
           npm install
-          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+          npm install --no-save @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
 
       - name: Prepare web assets
         run: |
