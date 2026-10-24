@@ -7,12 +7,16 @@
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js",
-    "test": "npm run check"
+    "test": "npm run check",
+    "build:android": "npx cap sync android"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "express-rate-limit": "^8.0.1",
