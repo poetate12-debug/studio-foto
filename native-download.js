@@ -4,9 +4,9 @@ const NativeDownloader = registerPlugin('NativeDownloader');
 
 function safeFilename(value) {
   const cleaned = String(value || 'reang-hasil.png')
-    .replace(/[\\/:*?"<>|\\u0000-\\u001F]/g, '_')
-    .replace(/\\s+/g, '_')
-    .replace(/^\\.+/, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^\.+/, '')
     .slice(0, 120);
   return cleaned || 'reang-hasil.png';
 }
@@ -60,7 +60,7 @@ async function saveFalImage(source, requestedFilename) {
     try {
       response = await fetch(source, { mode: 'cors' });
     } catch {
-      throw new Error('Browser menolak unduhan lintas domain. Buka aplikasi APK untuk menyimpan gambar langsung ke folder Download.');
+      throw new Error('Browser menolak unduhan lintas domain. Gunakan APK Reang Studio Foto untuk menyimpan langsung ke folder Download.');
     }
     if (!response.ok) throw new Error(`Unduhan gagal (HTTP ${response.status}).`);
     blob = await response.blob();
