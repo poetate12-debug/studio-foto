@@ -76,9 +76,9 @@ const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll
 const DB_NAME='reang-studio-db', DB_VERSION=1;
 let db=null, page='projects', activeProjectId=null, activeTemplateId=null, activePhotoIndex=0, activeLayerId=null, toolKey='remove', toolFileData=null, apiKeySession='', draftModels={}, renderTimer=null, templateThumbTimer=null;
 const modelOptions={
- remove:[['auto','Otomatis: pilih terbaik'],['rmbg','RMBG (gratis sesuai compute)'],['bria','Bria RMBG 2.0'],['birefnet','BiRefNet']],
+ remove:[['auto','Otomatis: Bria RMBG 2.0 (disarankan)'],['bria','Bria RMBG 2.0'],['birefnet','BiRefNet'],['rmbg','RMBG']],
  object:[['auto','Otomatis: Object Removal'],['object-removal','fal.ai Object Removal']],
- blur:[['auto','Otomatis: RMBG + blur lokal'],['rmbg','RMBG + blur lokal'],['bria','Bria RMBG + blur lokal'],['birefnet','BiRefNet + blur lokal']],
+ blur:[['auto','Otomatis: Bria RMBG + blur'],['bria','Bria RMBG + blur'],['birefnet','BiRefNet + blur'],['rmbg','RMBG + blur']],
  generate:[['auto','Otomatis: Bria Background Replace'],['bria','Bria Background Replace']],
  enhance:[['auto','Otomatis: Real-ESRGAN / Clarity'],['esrgan','Real-ESRGAN (natural upscale)'],['clarity','Clarity Upscaler (detail generatif)']],
  gaze:[['auto','Otomatis: pilih terbaik'],['image-edit','Model edit gambar generatif']],
@@ -372,17 +372,52 @@ async function makeBlurredBackgroundComposite(sourceUrl,cutoutUrl,strength){
  ctx.drawImage(cutout,0,0,w,h);
  return canvas.toDataURL('image/png');
 }
+async function saveFalOutputLocally(source,filename){
+ const cap=window.Capacitor;
+ const fs=(cap&&cap.Plugins&&cap.Plugins.Filesystem)||(window.Plugins&&window.Plugins.Filesystem);
+ if(cap&&cap.isNativePlatform&&cap.isNativePlatform()&&fs&&typeof fs.downloadFile==='function'&&!source.startsWith('data:')){
+  const safeName=filename.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const result=await fs.downloadFile({url:source,path:'ReangStudioFoto/'+safeName,directory:'DOCUMENTS',recursive:true});
+  return {saved:true,path:result&&result.path||'Dokumen/ReangStudioFoto/'+safeName};
+ }
+ if(source.startsWith('data:')){
+  const parts=source.split(',');
+  const mime=(parts[0].match(/data:([^;]+)/)||[])[1]||'image/png';
+  const base64=parts[1]||'';
+  const fs2=(cap&&cap.Plugins&&cap.Plugins.Filesystem)||(window.Plugins&&window.Plugins.Filesystem);
+  if(cap&&cap.isNativePlatform&&cap.isNativePlatform()&&fs2&&typeof fs2.writeFile==='function'){
+   const safeName=filename.replace(/[^a-zA-Z0-9._-]/g,'_');
+   const result=await fs2.writeFile({path:'ReangStudioFoto/'+safeName,data:base64,directory:'DOCUMENTS',recursive:true});
+   return {saved:true,path:result&&result.uri||'Dokumen/ReangStudioFoto/'+safeName};
+  }
+ }
+ const response=await fetch(source,{mode:'cors'});
+ if(!response.ok)throw new Error('Unduhan gagal (HTTP '+response.status+').');
+ const blob=await response.blob();
+ const localUrl=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=localUrl;a.download=filename;a.style.display='none';
+ document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(localUrl),60000);
+ return {saved:true,path:'Unduhan perangkat'};
+}
 function showFalResult(source,label,filename){
  const result=$('#tool-result');
- result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak ditimpa. Unduh hasil jika ingin menyimpannya.</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Unduh hasil</button><a class="btn" href="'+esc(source)+'" target="_blank" rel="noopener">Buka gambar hasil</a></div>';
- $('#download-fal-output').onclick=async()=>{
-  const dl=$('#download-fal-output');dl.disabled=true;dl.textContent='Menyiapkan unduhan…';
+ result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak ditimpa. Menyimpan hasil secara otomatis ke perangkat…</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div id="fal-save-status" class="notice info" style="margin-top:12px"><span>…</span><div>Menyiapkan unduhan otomatis…</div></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Simpan lagi</button><a class="btn" href="'+esc(source)+'" target="_blank" rel="noopener">Buka gambar hasil</a></div>';
+ const status=$('#fal-save-status');
+ const save=async()=>{
+  const dl=$('#download-fal-output');if(dl){dl.disabled=true;dl.textContent='Menyimpan…'}
+  if(status)status.innerHTML='<span>…</span><div>Menyiapkan file untuk disimpan di perangkat…</div>';
   try{
-   if(source.startsWith('data:')){const a=document.createElement('a');a.href=source;a.download=filename;document.body.appendChild(a);a.click();a.remove()}
-   else{const response=await fetch(source);if(!response.ok)throw new Error('Unduhan gagal');const blob=await response.blob();const localUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=localUrl;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(localUrl),60000)}
-  }catch(_){window.open(source,'_blank','noopener')}
-  finally{dl.disabled=false;dl.textContent='Unduh hasil'}
+   const saved=await saveFalOutputLocally(source,filename);
+   if(status)status.innerHTML='<span>✓</span><div><b>Hasil berhasil disimpan otomatis.</b><br>'+esc(saved.path||'File tersimpan di perangkat.')+'</div>';
+   if(dl)dl.textContent='Simpan lagi';
+  }catch(error){
+   const msg=String(error&&error.message||error);
+   if(status)status.innerHTML='<span>!</span><div><b>Unduhan otomatis tidak tersedia pada lingkungan ini.</b><br>'+esc(msg)+'<br>Tekan “Simpan lagi” atau “Buka gambar hasil”, lalu gunakan menu unduh browser.</div>';
+   if(dl)dl.textContent='Coba simpan lagi';
+  }finally{if(dl)dl.disabled=false}
  };
+ $('#download-fal-output').onclick=save;
+ save();
 }
 async function runFalFeature(){
  const button=$('#run-tool'),result=$('#tool-result'),key=toolKey;
@@ -398,7 +433,7 @@ async function runFalFeature(){
 
   if(key==='remove'){
    const choice=$('#runner-model').value;
-   model=choice==='bria'?'fal-ai/bria/background/remove':(choice==='birefnet'?'fal-ai/birefnet':'fal-ai/imageutils/rembg');
+   model=(choice==='auto'||choice==='bria')?'fal-ai/bria/background/remove':(choice==='birefnet'?'fal-ai/birefnet':'fal-ai/imageutils/rembg');
    input={image_url:imageUrl};
    if(choice==='birefnet')input.model=mode==='quality'?'General Use (Heavy)':'General Use (Light)';
    label='Hapus background';
@@ -412,7 +447,7 @@ async function runFalFeature(){
    filename='reang-objek-dihapus.png';
   }else if(key==='blur'){
    const choice=$('#runner-model').value;
-   model=choice==='bria'?'fal-ai/bria/background/remove':(choice==='birefnet'?'fal-ai/birefnet':'fal-ai/imageutils/rembg');
+   model=(choice==='auto'||choice==='bria')?'fal-ai/bria/background/remove':(choice==='birefnet'?'fal-ai/birefnet':'fal-ai/imageutils/rembg');
    input={image_url:imageUrl};
    if(choice==='birefnet')input.model=mode==='quality'?'General Use (Heavy)':'General Use (Light)';
    setProgress('Memisahkan subjek…','fal.ai menghapus latar untuk menjaga subjek tetap tajam.');
