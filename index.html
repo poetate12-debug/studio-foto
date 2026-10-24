@@ -365,6 +365,22 @@ function workflowDone(ph,key){ensurePhotoWorkflow(ph);return !!ph.workflow[key]}
 async function setWorkflowDone(p,ph,key,value=true){
  ensurePhotoWorkflow(ph);ph.workflow[key]=value;p.updatedAt=Date.now();await dbPut('projects',p);
 }
+async function invalidatePhotoStages(p,ph,fromStage){
+ ensurePhotoWorkflow(ph);
+ const stageIndex=workflowStages.findIndex(st=>st.key===fromStage);
+ if(stageIndex<0)return;
+ for(let i=stageIndex;i<workflowStages.length;i++){
+  const key=workflowStages[i].key;
+  if(key==='template'&&i>stageIndex)continue;
+  ph.workflow[key]=false;
+  if(key==='light')delete ph.workflowResults.light;
+  if(key==='cutout')delete ph.workflowResults.cutout;
+  if(key==='face')delete ph.workflowResults.face;
+ }
+ p.workflowStage=Math.min(Number(p.workflowStage)||0,stageIndex);
+ p.updatedAt=Date.now();
+ await dbPut('projects',p);
+}
 function photoStageCount(ph){return workflowStages.filter(st=>workflowDone(ph,st.key)).length}
 function projectStageComplete(p,key){return !!p?.photos?.length&&p.photos.every(ph=>workflowDone(ph,key))}
 function stagePhotoSource(ph){
@@ -592,7 +608,7 @@ function renderPhotoEditor(){
   for(const [key] of [['exposure'],['contrast'],['highlight'],['shadows'],['saturation'],['warmth'],['glow'],['vignette'],['denoise']])$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value));
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
-   ph.adjust={...(ph.adjust||{}),...presets[e.target.value]};await dbPut('projects',p);renderPhotoEditor();
+   ph.adjust={...(ph.adjust||{}),...presets[e.target.value]};await invalidatePhotoStages(p,ph,'light');renderPhotoEditor();
   };
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
