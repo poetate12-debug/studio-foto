@@ -1,5 +1,5 @@
 const CACHE_NAME = "reang-studio-foto-v2";
-const APP_SHELL = ["./", "./index.html", "./manifest.json", "./native-download.bundle.js"];
+const APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
