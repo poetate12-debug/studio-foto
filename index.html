@@ -53,13 +53,25 @@
     const button = document.getElementById('boot-reload');
     if (button) button.onclick = () => location.reload();
   }
+  function showRuntimeNotice(message) {
+    const root = document.getElementById('toast-root');
+    if (!root) return;
+    const item = document.createElement('div');
+    item.className = 'toast';
+    item.textContent = 'Terjadi kesalahan: ' + String(message || 'operasi tidak berhasil');
+    root.replaceChildren(item);
+  }
   window.addEventListener('error', function(event) {
     if (event.target && event.target !== window) return;
-    showBootError('Reang Studio Foto belum berhasil dimuat', (event.message || 'Kesalahan JavaScript') + (event.filename ? '\n' + event.filename + ':' + event.lineno : ''));
+    const message = (event.message || 'Kesalahan JavaScript') + (event.filename ? '\n' + event.filename + ':' + event.lineno : '');
+    if (!window.__reangAppBooted) showBootError('Reang Studio Foto belum berhasil dimuat', message);
+    else { console.error(message); showRuntimeNotice(message); }
   });
   window.addEventListener('unhandledrejection', function(event) {
     const reason = event.reason;
-    showBootError('Proses aplikasi mengalami kesalahan', reason && (reason.stack || reason.message) || String(reason));
+    const message = reason && (reason.stack || reason.message) || String(reason);
+    if (!window.__reangAppBooted) showBootError('Proses aplikasi mengalami kesalahan', message);
+    else { console.error(message); showRuntimeNotice(message); }
   });
   window.addEventListener('load', function() {
     setTimeout(function() {
@@ -75,7 +87,7 @@
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 const DB_NAME='reang-studio-db', DB_VERSION=1;
-let db=null, page='projects', activeProjectId=null, activeTemplateId=null, activePhotoIndex=0, activeLayerId=null, toolKey='remove', toolFileData=null, apiKeySession='', draftModels={}, renderTimer=null, templateThumbTimer=null;
+let db=null, page='projects', activeProjectId=null, activeTemplateId=null, activePhotoIndex=0, activeLayerId=null, toolKey='remove', toolFileData=null, apiKeySession='', draftModels={}, renderTimer=null, templateThumbTimer=null, workflowReturn=null;
 const modelOptions={
  remove:[['auto','Otomatis: Bria RMBG 2.0 (disarankan)'],['bria','Bria RMBG 2.0'],['birefnet','BiRefNet'],['rmbg','RMBG']],
  object:[['auto','Otomatis: Object Removal'],['object-removal','fal.ai Object Removal']],
@@ -195,11 +207,11 @@ function render(){if(page==='batch-workflow')renderBatchWorkflow();else if(page=
 function showModal(title,body,actions){$('#modal-root').innerHTML='<div class="modal-backdrop" id="backdrop"><div class="modal"><div class="modal-head"><h2>'+title+'</h2><button class="btn iconbtn" id="close-modal">×</button></div><div class="modal-body">'+body+'</div><div class="modal-foot">'+actions+'</div></div></div>';$('#close-modal').onclick=closeModal;$('#backdrop').addEventListener('click',e=>{if(e.target.id==='backdrop')closeModal()})}
 function closeModal(){$('#modal-root').innerHTML=''}
 function showProjectModal(){const today=new Date().toISOString().slice(0,10);showModal('Buat proyek baru','<div class="field"><label>Nama proyek</label><input id="modal-project-name" placeholder="Contoh: Parade Putra Surti Muda" maxlength="100"></div><div class="form-row"><div class="field"><label>Tanggal acara</label><input id="modal-project-date" type="date" value="'+today+'"></div><div class="field"><label>Catatan (opsional)</label><input id="modal-project-note" placeholder="Lokasi / tema"></div></div><div class="notice info">Tanggal proyek ini bisa digunakan sebagai tanggal cetak pada layer teks template.</div>','<button class="btn" id="cancel-project">Batal</button><button class="btn primary" id="create-project-confirm">Buat proyek</button>');$('#cancel-project').onclick=closeModal;$('#create-project-confirm').onclick=async()=>{const name=$('#modal-project-name').value.trim();if(!name){toast('Isi nama proyek terlebih dahulu.');return}const p={id:uid(),name,eventDate:$('#modal-project-date').value,note:$('#modal-project-note').value,photos:[],createdAt:Date.now(),updatedAt:Date.now()};projects.push(p);await dbPut('projects',p);closeModal();openProject(p.id);toast('Proyek baru berhasil dibuat.')}}
-function openProject(id){activeProjectId=id;activePhotoIndex=0;page='project-editor';render()}
+function openProject(id){activeProjectId=id;activePhotoIndex=0;const p=projects.find(x=>x.id===id);page=(p&&p.photos&&p.photos.length)?'batch-workflow':'project-editor';if(p&&p.photos&&p.photos.length){const idx=Math.max(0,Math.min(4,Number(p.workflowStage)||0));const key=workflowStages[idx]?.key;const unfinished=key?p.photos.findIndex(ph=>!workflowDone(ph,key)):-1;if(unfinished>=0)activePhotoIndex=unfinished}render()}
 function openTemplate(id){activeTemplateId=id;activeLayerId=templates.find(t=>t.id===id)?.layers[0]?.id||null;page='template-editor';render()}
 function dataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(file)})}
 async function imageSizeFromData(src){return new Promise(resolve=>{const im=new Image();im.onload=()=>resolve({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>resolve({w:0,h:0});im.src=src})}
-async function handlePhotoUpload(files){const p=activeProject();if(!p)return;const list=Array.from(files||[]).filter(f=>f.type.startsWith('image/'));if(!list.length)return;toast('Memuat '+list.length+' foto…');for(const file of list){try{const src=await dataURL(file);const dim=await imageSizeFromData(src);const photo={id:uid(),name:file.name,src,originalSrc:src,edited:false,adjust:{brightness:100,contrast:100,saturation:100},subject:{x:9,y:13,w:82,h:79},layers:[],finalThumb:null,width:dim.w,height:dim.h,createdAt:Date.now()};const tpl=templates.find(t=>t.id===p.templateId)||null;const preview=await renderComposite(p,photo,tpl,170);photo.finalThumb=preview.toDataURL('image/jpeg',.72);p.photos.push(photo)}catch(e){toast('Gagal membaca '+file.name)}}p.updatedAt=Date.now();await dbPut('projects',p);activePhotoIndex=Math.max(0,p.photos.length-list.length);render();toast(list.length+' foto ditambahkan.')}
+async function handlePhotoUpload(files){const p=activeProject();if(!p)return;const list=Array.from(files||[]).filter(f=>f.type.startsWith('image/'));if(!list.length)return;toast('Memuat '+list.length+' foto…');for(const file of list){try{const src=await dataURL(file);const dim=await imageSizeFromData(src);const photo={id:uid(),name:file.name,src,originalSrc:src,edited:false,adjust:{brightness:100,contrast:100,saturation:100},subject:{x:9,y:13,w:82,h:79},layers:[],finalThumb:null,width:dim.w,height:dim.h,createdAt:Date.now()};const tpl=templates.find(t=>t.id===p.templateId)||null;const preview=await renderComposite(p,photo,tpl,170);photo.finalThumb=preview.toDataURL('image/jpeg',.72);p.photos.push(photo)}catch(e){toast('Gagal membaca '+file.name)}}p.updatedAt=Date.now();p.workflowStage=0;for(const photo of p.photos){photo.workflow=photo.workflow||{};photo.workflowResults=photo.workflowResults||{}}await dbPut('projects',p);activePhotoIndex=0;page='batch-workflow';render();toast(list.length+' foto ditambahkan. Mulai tahap Cahaya.')}
 function sizeForTemplate(t){let w=t.widthCm||29.7,h=t.heightCm||42;return{w,h,dpi:t.dpi||300}}
 function normalizedToSize(n,size){return n/100*size}
 function renderComposite(project,photo,template,previewWidth){
@@ -215,71 +227,156 @@ function renderComposite(project,photo,template,previewWidth){
   const bg=layers.find(l=>l.type==='background'&&l.visible!==false);
   if(bg&&bg.src)await drawCover(bg.src,0,0,outW,outH);
   else {const g=ctx.createLinearGradient(0,0,outW,outH);g.addColorStop(0,'#e8e3fa');g.addColorStop(.55,'#f8f1e7');g.addColorStop(1,'#ded3c2');ctx.fillStyle=g;ctx.fillRect(0,0,outW,outH)}
-  if(photo&&photo.src){const adj=photo.adjust||{};const sub=photo.subject||{x:9,y:13,w:82,h:79};ctx.filter='brightness('+(adj.brightness||100)+'%) contrast('+(adj.contrast||100)+'%) saturate('+(adj.saturation||100)+'%)';await drawContain(photo.src,outW*sub.x/100,outH*sub.y/100,outW*sub.w/100,outH*sub.h/100,1);ctx.filter='none';for(const pl of (photo.layers||[])){if(pl.visible===false||!pl.src)continue;await drawContain(pl.src,outW*(pl.x??10)/100,outH*(pl.y??10)/100,outW*(pl.w??80)/100,outH*(pl.h??80)/100,pl.opacity??1)}}
+  if(photo&&(photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.src)){const resultSrc=photo.workflowResults?.enhance||photo.workflowResults?.cutout||photo.src;const adj=photo.adjust||{};const sub=photo.subject||{x:9,y:13,w:82,h:79};if(resultSrc===photo.src)ctx.filter='brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)';else ctx.filter='none';await drawContain(resultSrc,outW*sub.x/100,outH*sub.y/100,outW*sub.w/100,outH*sub.h/100,1);ctx.filter='none';for(const pl of (photo.layers||[])){if(pl.visible===false||!pl.src)continue;await drawContain(pl.src,outW*(pl.x??10)/100,outH*(pl.y??10)/100,outW*(pl.w??80)/100,outH*(pl.h??80)/100,pl.opacity??1)}}
   for(const l of layers){if(l.visible===false||l.type==='background')continue;const r=rectForLayer(l);if(l.type==='image'&&l.src){await drawContain(l.src,r.x,r.y,r.w,r.h,l.opacity??1)}else if(l.type==='text'){ctx.save();ctx.globalAlpha=l.opacity??1;ctx.fillStyle=l.color||'#453c57';ctx.font=(l.bold?'bold ':'')+(l.fontSize||30)+'px sans-serif';ctx.textAlign=l.align||'center';const tx=r.x+(l.align==='left'?0:l.align==='right'?r.w:r.w/2);const textValue=String(l.text||'Teks').replace(/NAMA ACARA/g,project?.name||'NAMA ACARA').replace(/TANGGAL ACARA/g,project?.eventDate?fmtDate(project.eventDate):'TANGGAL ACARA');ctx.fillText(textValue,tx,r.y+Math.min(r.h*.85,((l.fontSize||30)+4)));ctx.restore()}else if(l.type==='frame'){ctx.save();ctx.strokeStyle=l.color||'#a58a56';ctx.lineWidth=l.thickness||8;ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.restore()}}
  })();
  return task.then(()=>canvas)
 }
 async function refreshFinalThumb(){const p=activeProject(),ph=currentPhoto();if(!p||!ph)return;const t=templates.find(x=>x.id===p.templateId)||null;try{const canvas=await renderComposite(p,ph,t,170);ph.finalThumb=canvas.toDataURL('image/jpeg',.72);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p)}catch(e){console.warn(e)}}
 const workflowStages=[
- {key:'light',title:'1. Cahaya',desc:'Atur cahaya untuk setiap foto. Selesaikan semua foto sebelum lanjut ke Cutout.'},
- {key:'cutout',title:'2. Cutout',desc:'Pisahkan subjek dari latar untuk setiap foto. Selesaikan semua foto sebelum lanjut ke Template.'},
- {key:'template',title:'3. Template',desc:'Pilih template untuk proyek; template diterapkan ke semua foto.'},
- {key:'enhance',title:'4. Enhance',desc:'Tingkatkan kualitas setiap foto satu per satu sebelum ekspor.'},
- {key:'export',title:'5. Export',desc:'Ekspor hasil semua foto setelah tahap sebelumnya selesai.'}
+ {key:'light',title:'Cahaya',desc:'Atur kecerahan, kontras, dan saturasi untuk setiap foto. Foto berikutnya baru dibuka setelah Anda menyimpan foto ini.'},
+ {key:'cutout',title:'Cutout',desc:'Hapus latar foto satu per satu. Setelah hasil terlihat dan tersimpan, lanjut ke foto berikutnya.'},
+ {key:'template',title:'Template',desc:'Pilih satu template yang diterapkan ke seluruh foto dalam proyek.'},
+ {key:'enhance',title:'Enhance',desc:'Tingkatkan kualitas setiap foto satu per satu, lalu lanjut ke foto berikutnya.'},
+ {key:'export',title:'Export',desc:'Ekspor setiap foto yang sudah selesai diproses.'}
 ];
 function workflowDone(ph,key){ph.workflow=ph.workflow||{};return !!ph.workflow[key]}
 async function setWorkflowDone(p,ph,key,value=true){ph.workflow=ph.workflow||{};ph.workflow[key]=value;p.updatedAt=Date.now();await dbPut('projects',p)}
-function renderBatchWorkflow(){
- const p=activeProject();if(!p){page='projects';render();return}
- if(!p.photos?.length){page='project-editor';render();toast('Tambahkan foto terlebih dahulu.');return}
+function stagePhotoSource(ph){return ph.workflowResults?.enhance||ph.workflowResults?.cutout||ph.src}
+function workflowProgressMarkup(stageIndex){
+ return '<div class="workflow-steps">'+workflowStages.map((st,i)=>'<div class="workflow-step '+(i===stageIndex?'current':(i<stageIndex?'past':''))+'"><span class="workflow-step-num">'+(i<stageIndex?'✓':i+1)+'</span><span>'+esc(st.title)+'</span></div>').join('')+'</div>';
+}
+async function photoDataWithLight(ph){
+ const source=ph.originalSrc||ph.src;
+ const adj=ph.adjust||{};
+ if((adj.brightness??100)===100&&(adj.contrast??100)===100&&(adj.saturation??100)===100)return source;
+ return await new Promise((resolve,reject)=>{
+  const image=new Image();
+  image.onload=()=>{
+   try{
+    const c=document.createElement('canvas');c.width=image.naturalWidth||image.width;c.height=image.naturalHeight||image.height;
+    const ctx=c.getContext('2d');ctx.filter='brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)';ctx.drawImage(image,0,0,c.width,c.height);ctx.filter='none';
+    resolve(c.toDataURL('image/jpeg',.94));
+   }catch(error){reject(error)}
+  };
+  image.onerror=()=>reject(new Error('Foto tidak dapat disiapkan untuk tahap AI.'));
+  image.src=source;
+ });
+}
+async function advanceWorkflowPhoto(p,ph,key){
+ await setWorkflowDone(p,ph,key,true);
  const stageIndex=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
- const stage=workflowStages[stageIndex];
+ if(key==='export'){
+  if(p.photos.every(x=>workflowDone(x,'export'))){await dbPut('projects',p);activePhotoIndex=0;renderBatchWorkflow();toast('Semua foto selesai diekspor.')}
+  else{
+   const next=p.photos.findIndex(x=>!workflowDone(x,'export'));
+   activePhotoIndex=next<0?0:next;await dbPut('projects',p);renderBatchWorkflow();
+  }
+  return;
+ }
+ const next=p.photos.findIndex((x,i)=>i>activePhotoIndex&&!workflowDone(x,key));
+ if(next>=0){
+  activePhotoIndex=next;await dbPut('projects',p);renderBatchWorkflow();
+  toast('Tahap '+workflowStages[stageIndex].title+' tersimpan. Lanjut foto '+(next+1)+'.');
+  return;
+ }
+ const remaining=p.photos.findIndex(x=>!workflowDone(x,key));
+ if(remaining>=0){
+  activePhotoIndex=remaining;await dbPut('projects',p);renderBatchWorkflow();return;
+ }
+ if(stageIndex<4){
+  p.workflowStage=stageIndex+1;activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();
+  toast('Semua foto selesai tahap '+workflowStages[stageIndex].title+'. Lanjut ke '+workflowStages[stageIndex+1].title+'.');
+ }else{await dbPut('projects',p);renderBatchWorkflow()}
+}
+async function useWorkflowResult(localSource){
+ const context=workflowReturn;
+ if(!context)throw new Error('Konteks tahap proyek tidak ditemukan.');
+ const p=projects.find(x=>x.id===context.projectId);
+ if(!p)throw new Error('Proyek tidak ditemukan.');
+ const index=p.photos.findIndex(x=>x.id===context.photoId);
+ if(index<0)throw new Error('Foto proyek tidak ditemukan.');
+ const ph=p.photos[index];
+ ph.workflowResults=ph.workflowResults||{};
+ ph.workflowResults[context.stageKey]=localSource;
+ activeProjectId=p.id;activePhotoIndex=index;page='batch-workflow';
+ workflowReturn=null;
+ await advanceWorkflowPhoto(p,ph,context.stageKey);
+}
+function renderBatchWorkflow(){
+ const p=activeProject();
+ if(!p){page='projects';render();return}
+ if(!p.photos?.length){page='project-editor';render();toast('Tambahkan foto terlebih dahulu.');return}
+ p.workflowStage=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
+ const stageIndex=p.workflowStage, stage=workflowStages[stageIndex];
+ const unfinished=p.photos.findIndex(x=>!workflowDone(x,stage.key));
+ if(unfinished>=0 && stageIndex!==2) activePhotoIndex=unfinished;
  activePhotoIndex=Math.max(0,Math.min(activePhotoIndex,p.photos.length-1));
  const ph=p.photos[activePhotoIndex];
- const completed=p.photos.filter(x=>workflowDone(x,stage.key)).length;
- let html=head('PROYEK / ALUR BERTAHAP',esc(p.name),'Tahap '+(stageIndex+1)+' dari 5 · '+p.photos.length+' foto','<button class="btn" id="workflow-back">← Kembali ke proyek</button>');
- html+='<div class="panel" style="margin-bottom:14px"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+workflowStages.map((st,i)=>'<button class="btn '+(i===stageIndex?'primary':'')+'" data-workflow-stage="'+i+'" style="flex:1;min-width:110px">'+(i+1)+'. '+st.title.split('. ')[1]+'</button>').join('')+'</div><div class="progress-track" style="height:6px;background:var(--line);border-radius:9px;overflow:hidden"><div style="height:100%;width:'+((stageIndex+1)*20)+'%;background:var(--accent)"></div></div><h2 style="margin:14px 0 5px">'+stage.title+'</h2><p class="lead">'+stage.desc+'</p><div class="muted">'+completed+' dari '+p.photos.length+' foto ditandai selesai pada tahap ini.</div></div>';
- html+='<div class="editor"><div class="editor-top"><div><h2>Foto '+(activePhotoIndex+1)+' / '+p.photos.length+'</h2><div class="meta">'+esc(ph.name)+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" id="workflow-prev" '+(activePhotoIndex===0?'disabled':'')+'>← Foto sebelumnya</button><button class="btn" id="workflow-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>Foto berikutnya →</button></div></div>';
- html+='<div class="photo-strip" style="padding:12px 16px;border-bottom:1px solid var(--line)">'+p.photos.map((x,i)=>'<button class="photo-thumb '+(i===activePhotoIndex?'selected':'')+'" data-workflow-photo="'+i+'" title="'+esc(x.name)+'"><img src="'+(x.finalThumb||x.src)+'"><span style="font-size:10px">'+(workflowDone(x,stage.key)?'✓ Selesai':'Belum')+'</span></button>').join('')+'</div>';
- html+='<div class="editor-grid"><section class="canvas-wrap"><div class="canvas-frame"><img src="'+(ph.finalThumb||ph.src)+'" alt="Foto yang sedang diedit" style="width:100%;height:auto;max-height:70vh;object-fit:contain"></div><div class="canvas-caption">Foto asli tetap disimpan. Perubahan tahap dicatat per foto.</div></section><aside class="editor-pane right">';
+ const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
+ const imageSrc=stagePhotoSource(ph);
+ const adj=ph.adjust||{};
+ let html=head('PROYEK / TAHAP '+(stageIndex+1)+' DARI 5',esc(stage.title),esc(p.name)+' · '+stage.desc,'<button class="btn" id="workflow-back">← Daftar proyek</button>');
+ html+=workflowProgressMarkup(stageIndex);
+ html+='<div class="workflow-photo-bar"><div><div class="eyebrow">FOTO '+(activePhotoIndex+1)+' DARI '+p.photos.length+'</div><h2>'+esc(ph.name)+'</h2><p>'+doneCount+' dari '+p.photos.length+' foto selesai pada tahap '+esc(stage.title)+'.</p></div><div class="workflow-photo-actions"><button class="btn" id="workflow-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>← Sebelumnya</button><span class="badge '+(workflowDone(ph,stage.key)?'green':'gray')+'">'+(workflowDone(ph,stage.key)?'Selesai':'Belum selesai')+'</span></div></div>';
+ html+='<div class="editor workflow-editor"><section class="workflow-preview"><img id="workflow-photo-preview" src="'+esc(imageSrc)+'" alt="Foto tahap '+esc(stage.title)+'" style="filter:'+(stage.key==='light'?'brightness('+(adj.brightness??100)+'%) contrast('+(adj.contrast??100)+'%) saturate('+(adj.saturation??100)+'%)':'none')+'"><div class="canvas-caption">Foto asli tetap tersimpan. Setiap tahap disimpan untuk foto yang sedang dipilih.</div></section><aside class="workflow-controls">';
  if(stage.key==='light'){
- const a=ph.adjust||{};
- html+='<div class="pane-title">Atur cahaya</div><div class="editor-controls">'+[['brightness','Kecerahan',50,160,a.brightness??100],['contrast','Kontras',50,160,a.contrast??100],['saturation','Saturasi',0,180,a.saturation??100]].map(([key,label,min,max,val])=>'<div class="control-line"><label>'+label+' <span id="wf-'+key+'-val">'+val+'%</span></label><input type="range" min="'+min+'" max="'+max+'" value="'+val+'" id="wf-'+key+'"></div>').join('')+'<button class="btn" id="wf-reset-light">Reset cahaya</button></div>';
+  html+='<div class="pane-title">Atur cahaya foto ini</div><p class="lead">Selesaikan foto ini dahulu. Setelah menekan tombol lanjut, aplikasi membuka foto berikutnya pada tahap Cahaya.</p><div class="editor-controls">'+[['brightness','Kecerahan',50,160,adj.brightness??100],['contrast','Kontras',50,160,adj.contrast??100],['saturation','Saturasi',0,180,adj.saturation??100]].map(([key,label,min,max,val])=>'<div class="control-line"><label>'+label+' <span id="wf-'+key+'-val">'+val+'%</span></label><input type="range" min="'+min+'" max="'+max+'" value="'+val+'" id="wf-'+key+'"></div>').join('')+'<button class="btn" id="wf-reset-light">Reset cahaya</button></div><button class="btn primary workflow-primary" id="wf-finish-photo">'+(activePhotoIndex===p.photos.length-1?'Simpan cahaya & lanjut ke Cutout':'Simpan cahaya & lanjut foto berikutnya')+'</button>';
  }else if(stage.key==='cutout'){
- html+='<div class="pane-title">Cutout / Hapus latar</div><p class="lead">Pilih foto ini untuk dibawa ke alat Cutout. Setelah hasil diperiksa, kembali ke alur dan tandai tahap ini selesai.</p><button class="btn primary" id="wf-open-cutout">Buka alat Cutout untuk foto ini</button>';
+  html+='<div class="pane-title">Cutout / Hapus latar</div><p class="lead">Proses foto ini saja. Setelah hasil AI selesai, periksa gambar lalu tekan “Gunakan hasil & lanjut”.</p><button class="btn primary workflow-primary" id="wf-open-cutout">Proses Cutout foto ini</button><div class="notice info">Foto '+(activePhotoIndex+1)+' selesai diproses? Gunakan hasil pada halaman hasil AI untuk melanjutkan otomatis.</div>';
  }else if(stage.key==='template'){
- html+='<div class="pane-title">Pilih template</div><div class="field"><label>Template proyek</label><select id="wf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><p class="lead">Pilihan template akan diterapkan ke semua foto dalam proyek.</p>';
+  html+='<div class="pane-title">Template untuk proyek</div><p class="lead">Tahap ini diterapkan sekali ke semua foto, bukan diulang untuk setiap foto.</p><div class="field"><label>Pilih template</label><select id="wf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><button class="btn primary workflow-primary" id="wf-apply-template">Terapkan template ke semua foto & lanjut</button>';
  }else if(stage.key==='enhance'){
- html+='<div class="pane-title">Enhance foto</div><p class="lead">Buka alat Enhance untuk foto ini. Periksa hasilnya sebelum kembali ke alur.</p><button class="btn primary" id="wf-open-enhance">Buka alat Enhance untuk foto ini</button>';
+  html+='<div class="pane-title">Enhance foto ini</div><p class="lead">Tingkatkan kualitas satu foto dahulu. Hasil akan disimpan secara lokal dan menjadi sumber pada tahap Export.</p><button class="btn primary workflow-primary" id="wf-open-enhance">Proses Enhance foto ini</button><div class="notice info">Gunakan hasil AI untuk melanjutkan ke foto berikutnya.</div>';
  }else{
- html+='<div class="pane-title">Ekspor hasil</div><p class="lead">Ekspor satu per satu atau seluruh foto setelah tahap Cahaya, Cutout, Template, dan Enhance selesai.</p><button class="btn primary" id="wf-export-current">Ekspor foto ini</button><button class="btn" id="wf-export-all" style="margin-top:8px">Ekspor semua foto</button>';
+  html+='<div class="pane-title">Ekspor hasil</div><p class="lead">Ekspor foto yang sudah selesai. File tersimpan ke Download/ReangStudioFoto pada APK Android terbaru.</p><button class="btn primary workflow-primary" id="wf-export-current">Ekspor foto ini</button><button class="btn workflow-primary" id="wf-export-all">Ekspor semua foto</button>';
  }
- html+='<div style="margin-top:18px"><button class="btn '+(workflowDone(ph,stage.key)?'':'primary')+'" id="wf-mark-done" style="width:100%">'+(workflowDone(ph,stage.key)?'✓ Tahap foto ini selesai':'Tandai foto ini selesai')+'</button></div></aside></div>';
- html+='<div class="editor-bottom"><span class="muted">Selesaikan tahap yang sama untuk semua foto, baru pindah ke tahap berikutnya.</span><div style="display:flex;gap:8px"><button class="btn" id="wf-prev-stage" '+(stageIndex===0?'disabled':'')+'>← Tahap sebelumnya</button><button class="btn primary" id="wf-next-stage" '+(stageIndex===4?'disabled':'')+'>Tahap berikutnya →</button></div></div></div>';
+ html+='</aside></div>';
+ html+='<div class="workflow-footer"><span class="muted">Urutan dikunci: Cahaya semua foto → Cutout semua foto → Template → Enhance semua foto → Export.</span><span class="muted">Progres tersimpan otomatis.</span></div>';
  $('#main').innerHTML=html;
- $('#workflow-back').onclick=()=>{page='project-editor';render()};
- $$('[data-workflow-stage]').forEach(b=>b.onclick=async()=>{p.workflowStage=Number(b.dataset.workflowStage);await dbPut('projects',p);renderBatchWorkflow()});
- $$('[data-workflow-photo]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.workflowPhoto);renderBatchWorkflow()});
- $('#workflow-prev').onclick=()=>{activePhotoIndex--;renderBatchWorkflow()};
- $('#workflow-next-photo').onclick=()=>{activePhotoIndex++;renderBatchWorkflow()};
- $('#wf-mark-done').onclick=async()=>{await setWorkflowDone(p,ph,stage.key,!workflowDone(ph,stage.key));renderBatchWorkflow()};
- $('#wf-prev-stage').onclick=async()=>{p.workflowStage=stageIndex-1;await dbPut('projects',p);renderBatchWorkflow()};
- $('#wf-next-stage').onclick=async()=>{
-  if(stageIndex<4){const remaining=p.photos.filter(x=>!workflowDone(x,stage.key)).length;if(remaining){if(!confirm('Masih ada '+remaining+' foto yang belum ditandai selesai pada tahap '+stage.title+'. Tetap lanjut?'))return}p.workflowStage=stageIndex+1;await dbPut('projects',p);renderBatchWorkflow()}
- };
+ $('#workflow-back').onclick=()=>{page='projects';render()};
+ $('#workflow-prev-photo')?.addEventListener('click',()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderBatchWorkflow()});
  if(stage.key==='light'){
-  const update=async(key,value)=>{ph.adjust=ph.adjust||{brightness:100,contrast:100,saturation:100};ph.adjust[key]=Number(value);$('#wf-'+key+'-val').textContent=value+'%';const a=ph.adjust;const c=document.createElement('canvas');const im=new Image();im.onload=async()=>{c.width=im.naturalWidth;c.height=im.naturalHeight;const ctx=c.getContext('2d');ctx.filter='brightness('+a.brightness+'%) contrast('+a.contrast+'%) saturate('+a.saturation+'%)';ctx.drawImage(im,0,0);ctx.filter='none';const preview=$('#main .canvas-wrap img');if(preview)preview.src=c.toDataURL('image/jpeg',.8);await setWorkflowDone(p,ph,'light',false)};im.src=ph.src;await dbPut('projects',p)};
-  ['brightness','contrast','saturation'].forEach(key=>$('#wf-'+key).oninput=e=>update(key,e.target.value));
+  const filterPreview=()=>{const preview=$('#workflow-photo-preview');if(preview)preview.style.filter='brightness('+(ph.adjust?.brightness??100)+'%) contrast('+(ph.adjust?.contrast??100)+'%) saturate('+(ph.adjust?.saturation??100)+'%)'};
+  const update=async(key,value)=>{ph.adjust=ph.adjust||{brightness:100,contrast:100,saturation:100};ph.adjust[key]=Number(value);const valueLabel=$('#wf-'+key+'-val');if(valueLabel)valueLabel.textContent=value+'%';filterPreview();await setWorkflowDone(p,ph,'light',false)};
+  ['brightness','contrast','saturation'].forEach(key=>$('#wf-'+key)?.addEventListener('input',e=>update(key,e.target.value)));
   $('#wf-reset-light').onclick=async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};await setWorkflowDone(p,ph,'light',false);renderBatchWorkflow()};
+  $('#wf-finish-photo').onclick=async()=>{await dbPut('projects',p);await advanceWorkflowPhoto(p,ph,'light')};
  }
- if(stage.key==='template')$('#wf-template').onchange=async e=>{p.templateId=e.target.value||null;for(const photo of p.photos){photo.workflow=photo.workflow||{};photo.workflow.template=false}await dbPut('projects',p);for(const photo of p.photos)await setWorkflowDone(p,photo,'template',true);renderBatchWorkflow()};
- if(stage.key==='cutout')$('#wf-open-cutout').onclick=()=>{toolFileData=ph.src;toolKey='remove';page='tool-runner';render()};
- if(stage.key==='enhance')$('#wf-open-enhance').onclick=()=>{toolFileData=ph.src;toolKey='enhance';page='tool-runner';render()};
- if(stage.key==='export'){$('#wf-export-current').onclick=()=>exportCurrentPhoto();$('#wf-export-all').onclick=async()=>{for(let i=0;i<p.photos.length;i++){activePhotoIndex=i;await exportCurrentPhoto()}toast('Ekspor semua foto selesai.')}}
+ if(stage.key==='cutout')$('#wf-open-cutout').onclick=async()=>{
+  try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
+  catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Cutout.')}
+ };
+ if(stage.key==='template'){
+  $('#wf-apply-template').onclick=async()=>{
+   p.templateId=$('#wf-template').value||null;
+   for(const photo of p.photos){photo.workflow=photo.workflow||{};photo.workflow.template=true}
+   p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();
+   toast(p.templateId?'Template diterapkan ke semua foto.':'Tahap template dilewati tanpa template.');
+  };
+ }
+ if(stage.key==='enhance')$('#wf-open-enhance').onclick=async()=>{
+  try{
+   workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'enhance'};
+   toolFileData=ph.workflowResults?.cutout||await photoDataWithLight(ph);
+   toolKey='enhance';page='tool-runner';render();
+  }catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Enhance.')}
+ };
+ if(stage.key==='export'){
+  $('#wf-export-current').onclick=async()=>{try{await exportCurrentPhoto();await advanceWorkflowPhoto(p,ph,'export')}catch(error){toast(error.message||'Ekspor gagal.')}};
+  $('#wf-export-all').onclick=async()=>{
+   const button=$('#wf-export-all');button.disabled=true;button.textContent='Mengekspor…';
+   try{
+    for(let i=0;i<p.photos.length;i++){activePhotoIndex=i;await exportCurrentPhoto();await setWorkflowDone(p,p.photos[i],'export',true)}
+    activePhotoIndex=0;await dbPut('projects',p);renderBatchWorkflow();toast('Semua foto selesai diekspor.');
+   }catch(error){toast(error.message||'Ekspor semua foto gagal.')}
+   finally{const current=$('#wf-export-all');if(current){current.disabled=false;current.textContent='Ekspor semua foto'}}
+  };
+ }
 }
 function renderProjectEditor(){
  const p=activeProject();if(!p){page='projects';renderProjects();return}
+ if(p.photos&&p.photos.length){page='batch-workflow';renderBatchWorkflow();return}
  const ph=currentPhoto();let html=head('PROYEK / EDITOR',esc(p.name),'<span>'+esc(p.eventDate?fmtDate(p.eventDate):'Tanggal acara belum diatur')+'</span>','<button class="btn" id="back-projects">← Semua proyek</button>');
  html+='<div class="editor"><div class="editor-top"><div><h2>Editor foto</h2><div class="meta">'+p.photos.length+' foto · template '+esc(templates.find(t=>t.id===p.templateId)?.name||'belum dipilih')+'</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn small" id="add-photos">＋ Tambah foto</button><button class="btn small" id="open-workflow">Alur 5 tahap</button><button class="btn small primary" id="open-export">⇩ Ekspor</button></div></div>';
  html+='<div style="padding:0 16px;border-bottom:1px solid var(--line)"><div class="photo-strip">'+(p.photos.length?p.photos.map((x,i)=>'<button class="photo-thumb '+(i===activePhotoIndex?'selected':'')+'" data-photo-index="'+i+'" title="'+esc(x.name)+'"><img src="'+(x.finalThumb||x.src)+'"></button>').join(''):'<span style="font-size:12px;color:var(--muted);padding:12px 0">Belum ada foto.</span>')+'</div></div>';
@@ -300,7 +397,7 @@ function renderProjectEditor(){
  $('#add-photo-layer')?.addEventListener('click',()=>$('#photo-layer-input').click());
  $('#photo-layer-input')?.addEventListener('change',async e=>{if(!e.target.files[0])return;const src=await dataURL(e.target.files[0]);ph.layers=ph.layers||[];ph.layers.push({id:uid(),name:e.target.files[0].name,src,type:'image',x:12,y:12,w:76,h:76,opacity:1});p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor()});
  $$('[data-remove-photo-layer]').forEach(b=>b.addEventListener('click',async()=>{ph.layers=ph.layers.filter(l=>l.id!==b.dataset.removePhotoLayer);await dbPut('projects',p);renderProjectEditor()}));
- ['brightness','contrast','saturation'].forEach(k=>$('#'+k)?.addEventListener('input',e=>{ph.adjust=ph.adjust||{};ph.adjust[k==='brightness'?'brightness':k==='contrast'?'contrast':'saturation']=Number(e.target.value);const labelEl=$('#'+(k==='brightness'?'bright':k)+'-val');if(labelEl)labelEl.textContent=e.target.value+'%';schedulePhotoRender()}));['x','y','w','h'].forEach(k=>$('#subject-'+k)?.addEventListener('input',e=>{ph.subject=ph.subject||{x:9,y:13,w:82,h:79};ph.subject[k]=Number(e.target.value);$('#subject-'+k+'-val').textContent=e.target.value+'%';schedulePhotoRender()}));
+ ['brightness','contrast','saturation'].forEach(k=>$('#'+k)?.addEventListener('input',e=>{ph.adjust=ph.adjust||{};ph.adjust[k==='brightness'?'brightness':k==='contrast'?'contrast':'saturation']=Number(e.target.value);const labelEl=$('#'+(k==='brightness'?'bright':k)+'-val');if(labelEl)labelEl.textContent=e.target.value+'%';schedulePhotoRender()}));['x','y','w','h'].forEach(k=>$('#subject-'+k)?.addEventListener('input',e=>{ph.subject=ph.subject||{x:9,y:13,w:82,h:79};ph.subject[k]=Number(e.target.value);const subjectLabel=$('#subject-'+k+'-val');if(subjectLabel)subjectLabel.textContent=e.target.value+'%';schedulePhotoRender()}));
  $('#reset-adjust')?.addEventListener('click',async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};ph.subject={x:9,y:13,w:82,h:79};await dbPut('projects',p);renderProjectEditor()});
  $('#save-project-meta')?.addEventListener('click',async()=>{p.name=$('#project-name-edit').value.trim()||p.name;p.eventDate=$('#project-date').value;p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor();toast('Detail proyek disimpan.')});
  $('#open-workflow')?.addEventListener('click',async()=>{p.workflowStage=0;await dbPut('projects',p);page='batch-workflow';render()});$('#open-export')?.addEventListener('click',()=>showExportModal());$('#export-one')?.addEventListener('click',()=>exportCurrentPhoto());$('#open-tools-from-project')?.addEventListener('click',()=>{toolFileData=ph.src;toolKey='enhance';page='tool-runner';render()});
@@ -352,7 +449,7 @@ function slug(s){return String(s||'reang-foto').toLowerCase().normalize('NFD').r
 function downloadCanvas(c,name,type){const a=document.createElement('a');a.download=name;a.href=c.toDataURL(type||'image/png',type==='image/jpeg'?settings.exportQuality/100:undefined);a.click()}
 async function exportCurrentPhoto(){const p=activeProject(),ph=currentPhoto();if(!p||!ph){toast('Pilih foto yang akan diekspor.');return}toast('Merender gambar akhir…');const t=templates.find(x=>x.id===p.templateId)||null;const dpi=(t&&t.dpi)||settings.exportDpi||300;let pxPerCm=dpi/2.54;let w=Math.round((t?.widthCm||29.7)*pxPerCm),h=Math.round((t?.heightCm||42)*pxPerCm);const ratio=w/h;if(w>4500||h>6500){const f=Math.min(4500/w,6500/h);w=Math.round(w*f);h=Math.round(h*f)}const low=await renderComposite(p,ph,t,1000);const high=await renderComposite(p,ph,t,w);const mime=settings.exportFormat==='jpeg'?'image/jpeg':'image/png';downloadCanvas(high,slug(p.name)+'-'+slug(ph.name.replace(/\.[^.]+$/,''))+(mime==='image/jpeg'?'.jpg':'.png'),mime);ph.finalThumb=low.toDataURL('image/jpeg',.75);ph.edited=true;p.updatedAt=Date.now();await dbPut('projects',p);toast('Ekspor selesai · '+w+' × '+h+' px.');}
 function showExportModal(){const p=activeProject();if(!p)return;showModal('Ekspor proyek','<div class="notice info">Semua thumbnail di daftar menggunakan preview komposisi akhir, bukan file asli. Ekspor merender komposisi final dengan template yang dipilih.</div><div class="kv"><span>Nama proyek</span><b>'+esc(p.name)+'</b></div><div class="kv"><span>Jumlah foto</span><b>'+p.photos.length+'</b></div><div class="kv"><span>Ukuran template</span><b>'+esc(templates.find(t=>t.id===p.templateId)?.sizeName||'A3 default')+'</b></div><div class="field" style="margin-top:14px"><label>Format file</label><select id="modal-export-format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></div><div class="field"><label>Ekspor foto</label><select id="modal-export-selection"><option value="current">Foto yang sedang dibuka</option><option value="all">Semua foto dalam proyek</option></select></div><p class="lead">Ekspor banyak foto akan mengunduh file satu per satu. ZIP dan batch queue dapat ditambahkan pada tahap backend berikutnya.</p>','<button class="btn" id="cancel-export">Batal</button><button class="btn primary" id="confirm-export">Ekspor sekarang ↓</button>');$('#modal-export-format').value=settings.exportFormat;$('#cancel-export').onclick=closeModal;$('#confirm-export').onclick=async()=>{settings.exportFormat=$('#modal-export-format').value;saveSettings();const selection=$('#modal-export-selection').value;closeModal();if(selection==='current'){await exportCurrentPhoto();return}const photos=activeProject()?.photos||[];for(let i=0;i<photos.length;i++){activePhotoIndex=i;page='project-editor';renderProjectEditor();await new Promise(r=>setTimeout(r,150));await exportCurrentPhoto();await new Promise(r=>setTimeout(r,350))}toast('Selesai mengekspor semua foto.')}}
-function openTool(key){toolKey=key;toolFileData=currentPhoto()?.src||toolFileData||null;page='tool-runner';render()}
+function openTool(key){workflowReturn=null;toolKey=key;toolFileData=currentPhoto()?.src||toolFileData||null;page='tool-runner';render()}
 async function falJson(url, options, apiKey){
  const response=await fetch(url,{...options,headers:{'Authorization':'Key '+apiKey,'Accept':'application/json',...(options&&options.headers||{})}});
  const raw=await response.text();let data={};try{data=raw?JSON.parse(raw):{}}catch(_){data={detail:raw}}
@@ -450,28 +547,47 @@ async function saveFalOutputLocally(source,filename){
 }
 function showFalResult(source,label,filename){
  const result=$('#tool-result');
- result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Hasil berasal dari fal.ai. Foto sumber tidak ditimpa. Menyimpan hasil secara otomatis ke perangkat…</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div id="fal-save-status" class="notice info" style="margin-top:12px"><span>…</span><div>Menyiapkan unduhan otomatis…</div></div><div class="form-row" style="margin-top:12px"><button class="btn primary" id="download-fal-output">Unduh ke HP</button></div>';
+ const fromWorkflow=!!workflowReturn;
+ result.innerHTML='<div class="notice success"><span>✓</span><div><b>'+esc(label)+' selesai.</b> Foto sumber tidak ditimpa. Menyimpan hasil ke perangkat…</div></div><div style="margin-top:12px"><img id="fal-output-image" src="'+esc(source)+'" alt="'+esc(label)+'" style="width:100%;max-height:620px;object-fit:contain;border-radius:12px;background:#f0f1f6" referrerpolicy="no-referrer"></div><div id="fal-save-status" class="notice info" style="margin-top:12px"><span>…</span><div>Menyiapkan unduhan…</div></div><div class="form-row" style="margin-top:12px"><button class="btn" id="download-fal-output">Unduh ke HP</button>'+(fromWorkflow?'<button class="btn primary" id="workflow-use-output">Gunakan hasil & lanjut</button><button class="btn" id="workflow-cancel-output">Kembali ke tahap</button>':'')+'</div>';
  const status=$('#fal-save-status');
+ let savedOutput=null,savePromise=null;
  const save=async()=>{
   const dl=$('#download-fal-output');if(dl){dl.disabled=true;dl.textContent='Menyimpan…'}
-  if(status)status.innerHTML='<span>…</span><div>Menyiapkan file untuk disimpan di perangkat…</div>';
+  if(status)status.innerHTML='<span>…</span><div>Mengunduh dan menyiapkan file lokal…</div>';
   try{
    const saved=await saveFalOutputLocally(source,filename);
-   if(saved&&saved.queued){
-    if(status)status.innerHTML='<span>✓</span><div><b>Unduhan dimulai oleh Android.</b><br>File akan masuk ke <b>Download/ReangStudioFoto/'+esc(filename)+'</b>. Tunggu notifikasi Unduhan selesai.</div>';
-    if(dl)dl.textContent='Unduh lagi';
-   }else{
-    if(status)status.innerHTML='<span>✓</span><div><b>Hasil berhasil disimpan.</b><br>'+esc(saved.path||'File tersimpan di perangkat.')+'</div>';
-    if(dl)dl.textContent='Unduh lagi';
-   }
+   savedOutput=saved||null;
+   if(status)status.innerHTML='<span>✓</span><div><b>Hasil berhasil disimpan.</b><br>'+esc(saved&&saved.path||'File tersimpan di perangkat.')+'</div>';
+   if(dl)dl.textContent='Unduh lagi';
+   return saved;
   }catch(error){
    const msg=String(error&&error.message||error);
-   if(status)status.innerHTML='<span>!</span><div><b>Gambar belum berhasil disimpan.</b><br>'+esc(msg)+'<br>Pastikan APK terbaru sudah terpasang, lalu tekan “Unduh lagi”. Aplikasi tidak akan membuka halaman gambar di browser.</div>';
-   if(dl)dl.textContent='Unduh lagi';
+   if(status)status.innerHTML='<span>!</span><div><b>Gambar belum berhasil disimpan.</b><br>'+esc(msg)+'<br>Periksa koneksi dan gunakan APK Android terbaru.</div>';
+   if(dl)dl.textContent='Coba unduh lagi';
+   return null;
   }finally{if(dl)dl.disabled=false}
  };
- $('#download-fal-output').onclick=save;
- save();
+ $('#download-fal-output').onclick=()=>{savePromise=save()};
+ if(fromWorkflow){
+  $('#workflow-use-output').onclick=async()=>{
+   const use=$('#workflow-use-output');if(use){use.disabled=true;use.textContent='Menyimpan hasil ke proyek…'}
+   try{
+    const saved=savedOutput||(savePromise?await savePromise:await save());
+    const localSource=saved&&saved.localUrl;
+    if(!localSource)throw new Error('Hasil belum tersedia sebagai file lokal. Pastikan Anda memakai APK Android terbaru dan coba unduh kembali.');
+    await useWorkflowResult(localSource);
+    toast('Hasil disimpan ke proyek. Lanjut ke foto/tahap berikutnya.');
+   }catch(error){
+    toast(error.message||'Hasil tidak bisa dipakai di alur proyek.');
+    const button=$('#workflow-use-output');if(button){button.disabled=false;button.textContent='Coba gunakan hasil lagi'}
+   }
+  };
+  $('#workflow-cancel-output').onclick=()=>{
+   const context=workflowReturn;
+   if(context){const p=projects.find(x=>x.id===context.projectId);const index=p?p.photos.findIndex(x=>x.id===context.photoId):-1;activeProjectId=context.projectId;activePhotoIndex=Math.max(0,index);page='batch-workflow';workflowReturn=null;render()}
+  };
+ }
+ savePromise=save();
 }
 async function runFalFeature(){
  const button=$('#run-tool'),result=$('#tool-result'),key=toolKey;
@@ -620,12 +736,12 @@ function renderToolRunner(){
  if(key==='gaze')html+='<div class="notice info">Hasil arah mata harus diperiksa sebelum digunakan. Model edit gambar dapat mengubah detail wajah dan tidak selalu menghasilkan pandangan natural.</div>';
  html+='<button class="btn primary" id="run-tool" style="width:100%">✧ Proses foto</button><div class="notice info" style="margin-top:12px"><span>ⓘ</span><div><b>Terhubung ke fal.ai.</b> Permintaan akan memakai API key sesi ini dan dapat menghabiskan saldo sesuai model. Foto asli tidak akan ditimpa.</div></div><div id="tool-result"></div></section></div>';
  $('#main').innerHTML=html;$('#back-tools').onclick=()=>navTo('tools');$('#tool-upload-button').onclick=()=>$('#tool-file-input').click();$('#tool-file-input').onchange=async e=>{const f=e.target.files[0];if(f){toolFileData=await dataURL(f);renderToolRunner()}};
- $('#runner-mode').value=settings.mode;$('#runner-model').onchange=()=>{settings.models[key]=$('#runner-model').value;saveSettings()};$('#enhance-strength')?.addEventListener('input',e=>$('#strength-value').textContent=e.target.value+'%');$('#blur-strength')?.addEventListener('input',e=>$('#blur-value').textContent=e.target.value+' px');
+ $('#runner-mode').value=settings.mode;$('#runner-model').onchange=()=>{settings.models[key]=$('#runner-model').value;saveSettings()};$('#enhance-strength')?.addEventListener('input',e=>{const el=$('#strength-value');if(el)el.textContent=e.target.value+'%'});$('#blur-strength')?.addEventListener('input',e=>{const el=$('#blur-value');if(el)el.textContent=e.target.value+' px'});
  $('#run-tool').onclick=async()=>{if(!toolFileData){toast('Unggah foto terlebih dahulu.');return}if(key==='enhance'){await runFalEnhancement();return}await runFalFeature()};
 }
 function confirmModal(title,text,action){showModal(title,'<p style="font-size:13px;line-height:1.6;color:#666b7f">'+esc(text)+'</p>','<button class="btn" id="confirm-cancel">Batal</button><button class="btn danger" id="confirm-yes">Ya, lanjutkan</button>');$('#confirm-cancel').onclick=closeModal;$('#confirm-yes').onclick=async()=>{closeModal();await action()}}
 function wireNav(){$$('[data-page]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)))}
-async function init(){try{db=await dbOpen()}catch(e){db=null;console.warn(e)}try{projects=await dbGetAll('projects');templates=await dbGetAll('templates')}catch(e){projects=[];templates=[]}wireNav();render();if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+async function init(){try{db=await dbOpen()}catch(e){db=null;console.warn(e)}try{projects=await dbGetAll('projects');templates=await dbGetAll('templates')}catch(e){projects=[];templates=[]}wireNav();render();window.__reangAppBooted=true;if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{})}
 init();
 })();
 </script>
