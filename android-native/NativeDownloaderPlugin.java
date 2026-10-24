@@ -18,7 +18,6 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.net.URLConnection;
 
 @CapacitorPlugin(name = "NativeDownloader")
 public class NativeDownloaderPlugin extends Plugin {
@@ -119,7 +118,7 @@ public class NativeDownloaderPlugin extends Plugin {
 
     private String safeFilename(String value) {
         String name = value == null ? "reang-hasil.png" : value;
-        name = name.replaceAll("[\\\\/:*?\\"<>|\\\\p{Cntrl}]", "_");
+                name = name.replaceAll("[^a-zA-Z0-9._-]", "_");
         name = name.replaceAll("\\s+", "_");
         while (name.startsWith(".")) name = name.substring(1);
         if (name.isEmpty()) name = "reang-hasil.png";
