@@ -40,9 +40,7 @@ jobs:
           accept-android-sdk-licenses: true
 
       - name: Install app dependencies
-        run: |
-          npm install
-          npm install --no-save @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
+        run: npm install
 
       - name: Prepare web assets
         run: |
@@ -56,12 +54,14 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+        env:
+          CI: true
 
       - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
