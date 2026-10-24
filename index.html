@@ -61,7 +61,7 @@ const defaults={
  models:{remove:'auto',object:'auto',blur:'auto',generate:'auto',enhance:'auto',gaze:'auto'},
  mode:'balanced', defaultSizeId:'a3', exportDpi:300, exportFormat:'png', exportQuality:95, defaultDateFormat:'DD MMMM YYYY'
 };
-let settings;\ntry { settings=JSON.parse(localStorage.getItem('reang-settings')||'null')||structuredCloneSafe(defaults); } catch(storageError) { console.warn('Storage lokal belum tersedia; memakai setelan awal.', storageError); settings=structuredCloneSafe(defaults); }
+let settings; try { settings=JSON.parse(localStorage.getItem('reang-settings')||'null')||structuredCloneSafe(defaults); } catch(storageError) { console.warn('Storage lokal belum tersedia; memakai setelan awal.', storageError); settings=structuredCloneSafe(defaults); }
 function structuredCloneSafe(v){return JSON.parse(JSON.stringify(v))}
 function dbOpen(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window)){resolve(null);return}const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('projects'))d.createObjectStore('projects',{keyPath:'id'});if(!d.objectStoreNames.contains('templates'))d.createObjectStore('templates',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function dbGetAll(store){return new Promise((resolve,reject)=>{if(!db){resolve(JSON.parse(localStorage.getItem('reang-'+store)||'[]'));return}const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
