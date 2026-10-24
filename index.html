@@ -537,7 +537,8 @@ async function runFalEnhancement(){
   const imageObject=output.image||(Array.isArray(output.images)?output.images[0]:null)||(output.data&&output.data.image)||null;
   const imageUrl=typeof imageObject==='string'?imageObject:(imageObject&&imageObject.url)||(output.image_url)||null;
   if(!imageUrl)throw new Error('fal.ai merespons, tetapi URL gambar hasil tidak ditemukan. Coba ulangi atau pilih model lain.');
-  const outputExt=/\\.jpe?g(?:[?#]|$)/i.test(imageUrl)?'jpg':'png';
+  const outputPath=imageUrl.toLowerCase().split(/[?#]/)[0];
+  const outputExt=(outputPath.endsWith('.jpg')||outputPath.endsWith('.jpeg'))?'jpg':'png';
   showFalResult(imageUrl,'Pemrosesan AI selesai','reang-enhance-ai.'+outputExt);
  }catch(error){
   const message=String(error&&error.message||error);
