@@ -98,8 +98,8 @@ jobs:
       - name: Publish direct APK download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-latest
-          name: Reang Studio Foto Android (Latest)
+          tag_name: android-test-20261024
+          name: Reang Studio Foto Android (Tes Tombol fal.ai)
           body: |
             APK pengujian otomatis terbaru untuk Reang Studio Foto.
             Ini build debug; fitur AI mungkin belum aktif penuh.
