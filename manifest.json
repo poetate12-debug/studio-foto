@@ -1,0 +1,14 @@
+{
+  "id": "./",
+  "name": "Reang Studio Foto",
+  "short_name": "Reang Studio",
+  "description": "Workspace editing foto dengan template berlapis dan pengaturan model AI.",
+  "lang": "id-ID",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#171923",
+  "orientation": "any",
+  "icons": []
+}
