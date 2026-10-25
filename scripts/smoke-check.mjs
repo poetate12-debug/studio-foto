@@ -32,7 +32,7 @@ requireSource(orderedStageKeys.every((index, i) => index >= 0 && (i === 0 || ind
 requireSource(html.includes("function wireNav()") && html.includes("function navTo(next)"), "navigation is wired and has a route guard");
 requireSource(html.includes("function setActivePageNav(nextPage)") && html.includes("Array.from(document.querySelectorAll('[data-page]')).forEach"), "navigation safely iterates a real array of page buttons");
 requireSource(html.includes("function invalidatePhotoStages("), "editing an earlier stage invalidates dependent results");
-requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes("input.dataset.pfIgnoredTrackTap='1'"), "range sliders ignore track taps away from the thumb");
+requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes('input.style.pointerEvents="none"') && html.includes("hitRadius=13"), "range sliders only start dragging when the thumb is touched");
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
 requireSource(html.includes('id="pf-reset-light"') && html.includes("Cahaya direset ke Original."), "light stage includes a reset-to-original control");
 requireSource(html.includes("touch-action:pan-y") && html.includes("--pf-range-fill"), "range sliders support vertical scrolling and visible progress fill");
