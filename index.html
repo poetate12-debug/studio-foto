@@ -107,7 +107,7 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-preset-row select{flex:1;min-width:0;height:46px;border:1px solid #e5e7ed;border-radius:14px;padding:0 12px;background:#fff;color:#353b49}
 .pf-save-preset{width:48px;border:1px solid #e5e7ed;border-radius:14px;background:#fff;color:#68717d;font-size:22px}
 #pf-reset-light{color:#d77b2c;font-size:26px;flex:0 0 44px;width:44px}
-.pf-slider-row{padding:11px 0 16px}
+.pf-slider-row{padding:11px 0 16px;touch-action:pan-y}
 .pf-slider-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#606a79;font-size:13px;margin-bottom:13px}
 .pf-slider-row label span{color:#929baa;font-size:12px;font-variant-numeric:tabular-nums}
 .pf-slider-row input[type=range]{width:100%;margin:0;accent-color:#e9822f;height:24px}
@@ -471,6 +471,7 @@ let colorMixPreviewTimer=null;
 let colorMixSaveTimer=null;
 let colorBrushEnabledPhotoId=null;
 let colorBrushDrawing=null;
+let colorBrushPointer=null;
 let lightBrushEnabledPhotoId=null;
 let lightBrushDrawing=null;
 let lightBrushPointer=null;
@@ -658,9 +659,10 @@ function renderColorMixBrushSelection(ph,maskCanvas){
  if(overlay.width!==w)overlay.width=w;if(overlay.height!==h)overlay.height=h;
  const ctx=overlay.getContext("2d");ctx.clearRect(0,0,w,h);
  if(maskCanvas){ctx.drawImage(maskCanvas,0,0,w,h);ctx.globalCompositeOperation="source-in";ctx.fillStyle="rgba(57,125,255,.38)";ctx.fillRect(0,0,w,h);ctx.globalCompositeOperation="source-over"}
- if(colorBrushDrawing&&colorBrushDrawing.photoId===ph.id){
+ const pointer=colorBrushPointer&&colorBrushPointer.photoId===ph.id?colorBrushPointer:colorBrushDrawing&&colorBrushDrawing.photoId===ph.id?colorBrushDrawing:null;
+ if(pointer){
   const brush=ensureColorMixBrushState(ph),radius=Math.max(3,rect.width*brush.size/200);
-  ctx.beginPath();ctx.arc(colorBrushDrawing.x,colorBrushDrawing.y,radius,0,Math.PI*2);ctx.lineWidth=1.5;ctx.strokeStyle="#2678ff";ctx.stroke();
+  ctx.beginPath();ctx.arc(pointer.x,pointer.y,radius,0,Math.PI*2);ctx.lineWidth=1.5;ctx.strokeStyle="#2678ff";ctx.stroke();
  }
 }
 async function bindColorMixBrushControls(ph,p){
@@ -670,7 +672,7 @@ async function bindColorMixBrushControls(ph,p){
  const point=event=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(rect.width,event.clientX-rect.left)),y:Math.max(0,Math.min(rect.height,event.clientY-rect.top)),displayWidth:rect.width}};
  const finish=async()=>{
   const stroke=colorBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;
-  colorBrushDrawing=null;brush.mask=lightBrushCanvasHasPaint(mask)?mask.toDataURL("image/png"):null;
+  colorBrushDrawing=null;colorBrushPointer=null;brush.mask=lightBrushCanvasHasPaint(mask)?mask.toDataURL("image/png"):null;
   colorMixBrushCanvases.set("color-mix:"+String(ph.id),mask);
   await invalidatePhotoStages(p,ph,"light");await dbPut("projects",p);
   scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);renderColorMixBrushSelection(ph,mask);
@@ -687,9 +689,10 @@ async function bindColorMixBrushControls(ph,p){
   if(stroke&&stroke.photoId===ph.id){
    event.preventDefault();paintLightBrushSegment(mask,stroke.last,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);stroke.last=pt;
   }
-  colorBrushDrawing=stroke?{...stroke,x:pt.x,y:pt.y}:null;
+  colorBrushPointer={photoId:ph.id,x:pt.x,y:pt.y};
   renderColorMixBrushSelection(ph,mask);
  });
+ overlay.addEventListener("pointerleave",()=>{if(!colorBrushDrawing)colorBrushPointer=null;renderColorMixBrushSelection(ph,mask)});
  overlay.addEventListener("pointerup",()=>{finish().catch(error=>{console.error(error);toast("Seleksi warna gagal disimpan")})});
  overlay.addEventListener("pointercancel",()=>{finish().catch(error=>console.error(error))});
  const size=document.getElementById("pf-color-brush-size");
@@ -1112,7 +1115,7 @@ function renderPhotoEditor(){
   const sliders=[['exposure','Exposure',-100,100,adj.exposure],['contrast','Kontras',-100,100,adj.contrast],['highlight','Highlight',-100,100,adj.highlight],['shadows','Bayangan',-100,100,adj.shadows],['saturation','Saturasi',-100,100,adj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,adj.warmth],['glow','Glow (cahaya lembut)',0,100,adj.glow],['vignette','Vignette (gelap pinggir)',0,100,adj.vignette],['denoise','Denoise (kurangi noise)',0,100,adj.denoise]];
   html+=lightBrushPanelMarkup(ph);
   html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
-  html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
+  html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===(adj.selectedColor||'red')?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
  }else if(stageIndex===1){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Pisahkan subjek dari latar. Hasil transparan disimpan terpisah dari foto asli.</p><button class="btn primary workflow-primary" id="pf-run-cutout">✂ Proses Cutout dengan AI</button><p class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Foto ini sudah memiliki hasil Cutout. Anda bisa memproses ulang.':'Selesaikan semua foto pada tahap Cutout untuk melanjutkan ke Template.')+'</p></div>';
  }else if(stageIndex===2){
