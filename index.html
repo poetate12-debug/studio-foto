@@ -241,10 +241,15 @@ function activeProject(){return projects.find(p=>p.id===activeProjectId)||null}
 function activeTemplate(){return templates.find(t=>t.id===activeTemplateId)||null}
 function currentPhoto(){const p=activeProject();return p&&p.photos&&p.photos[activePhotoIndex]||null}
 function currentLayer(){const t=activeTemplate();return t&&t.layers.find(l=>l.id===activeLayerId)||null}
+function setActivePageNav(nextPage){
+ Array.from(document.querySelectorAll('[data-page]')).forEach(button=>{
+  button.classList.toggle('active',button.dataset.page===nextPage);
+ });
+}
 function navTo(next){
  const allowed=new Set(['projects','tools','templates','settings']);
  page=allowed.has(next)?next:'projects';
- document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
+ setActivePageNav(page);
  render();
 }
 function head(eyebrow,title,desc,action){return '<div class="page-head"><div><div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p>'+desc+'</p></div>'+(action||'')+'</div>'}
@@ -353,7 +358,7 @@ function render(){
    case 'tool-runner': renderToolRunner(); break;
    default: page='projects'; renderProjects(); break;
   }
-  document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
+  setActivePageNav(page);
   window.__reangAppLastSuccessfulRender=Date.now();
   window.__reangAppBooted=true;
   return true;
@@ -361,7 +366,7 @@ function render(){
   console.error('Gagal merender halaman '+requestedPage,error);
   page=requestedPage;
   renderErrorScreen(error,requestedPage);
-  document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===requestedPage));
+  setActivePageNav(requestedPage);
   window.__reangAppBooted=true;
   return false;
  }
