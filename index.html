@@ -822,8 +822,12 @@ async function bindLightBrushControls(ph,p){
  const updateBrushRange=(key,value)=>{brush[key]=Number(value);const label=document.getElementById('pf-light-brush-'+key+'-value');if(label)label.textContent=String(brush[key])+'%';renderLightBrushSelection(ph,brightMask,darkMask);if(key==='size')scheduleLightBrushPreview(ph);saveSettings()};
  toggle.onclick=()=>{
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
-  const active=lightBrushEnabledPhotoId===ph.id;if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
-  if(!active)lightBrushDrawing=null;refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+  const active=lightBrushEnabledPhotoId===ph.id;
+  if(active)colorBrushEnabledPhotoId=null;else if(ph.adjust?.colorMixMode==='brush')colorBrushEnabledPhotoId=ph.id;
+  if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
+  if(!active)lightBrushDrawing=null;
+  getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
+  refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
  };
  document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{brush.mode=button.dataset.pfBrushMode;brush.erase=false;updateModeButtons();saveSettings();scheduleLightBrushPreview(ph)});
  document.getElementById('pf-light-brush-erase').onclick=()=>{brush.erase=!brush.erase;updateModeButtons();saveSettings()};
@@ -852,7 +856,17 @@ async function bindLightBrushControls(ph,p){
  overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
  overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null});
  const holdButton=document.getElementById('pf-hold-original');
- if(holdButton)holdButton.addEventListener('pointerdown',()=>{const effect=document.getElementById('pf-light-effect-preview');if(effect)effect.style.display='none';overlay.style.display='none'});
+ if(holdButton){
+  const showOriginal=event=>{
+   const effect=document.getElementById('pf-light-effect-preview'),colorPreview=document.getElementById('pf-color-mix-preview'),colorOverlay=document.getElementById('pf-color-brush-overlay');
+   if(effect)effect.style.display='none';if(colorPreview)colorPreview.style.display='none';overlay.style.display='none';if(colorOverlay)colorOverlay.style.display='none';
+   imageEl.style.opacity='1';imageEl.style.filter='none';
+   try{holdButton.setPointerCapture(event.pointerId)}catch(error){}
+  };
+  const restoreEdited=()=>{scheduleColorMixPreview(ph);refreshLightBrushPreviews(ph).catch(error=>console.warn(error));getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error))};
+  holdButton.addEventListener('pointerdown',showOriginal);
+  ['pointerup','pointercancel','pointerleave'].forEach(type=>holdButton.addEventListener(type,restoreEdited));
+ }
  updateModeButtons();scheduleLightBrushPreview(ph);
 }
 
