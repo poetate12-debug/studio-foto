@@ -1099,9 +1099,15 @@ async function init(){
  render();
  if('serviceWorker'in navigator&&location.protocol.startsWith('http')){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
-   if(window.__reangCacheReloaded)return;
-   window.__reangCacheReloaded=true;
-   location.reload();
+   if(window.__reangControllerReloadCheck)return;
+   window.__reangControllerReloadCheck=true;
+   setTimeout(()=>{
+    const main=document.getElementById('main');
+    const recoveryScreen=main&&main.querySelector('#boot-reload, #render-error-retry');
+    if(!recoveryScreen||window.__reangCacheReloaded)return;
+    window.__reangCacheReloaded=true;
+    location.reload();
+   },1200);
   },{once:true});
   navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(error=>console.warn('Service worker tidak diperbarui.',error));
  }
