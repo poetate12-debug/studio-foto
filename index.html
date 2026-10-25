@@ -782,6 +782,8 @@ async function refreshLightBrushPreviews(ph){
  if(brushOverlay.width!==overlayWidth)brushOverlay.width=overlayWidth;if(brushOverlay.height!==overlayHeight)brushOverlay.height=overlayHeight;
  const brush=ensureLightBrushState(ph),drawing=lightBrushDrawing&&lightBrushDrawing.photoId===ph.id?lightBrushDrawing:null;
  const hasBright=!!brush.masks.brighten||(drawing&&drawing.mode==='brighten'&&!drawing.erase),hasDark=!!brush.masks.darken||(drawing&&drawing.mode==='darken'&&!drawing.erase),effectCtx=effect.getContext('2d');
+ /* Keep the base image untouched: local brightness is composited only through the
+    saved alpha mask. A transparent mask must never turn into a full-frame layer. */
  effectCtx.clearRect(0,0,effect.width,effect.height);
  if(hasBright||hasDark){
   const base=document.createElement('canvas');base.width=brightMask.width;base.height=brightMask.height;
@@ -790,7 +792,9 @@ async function refreshLightBrushPreviews(ph){
   const addLayer=(mask,mode)=>{
    if(!mask)return;
    const layer=document.createElement('canvas');layer.width=base.width;layer.height=base.height;
-   const layerCtx=layer.getContext('2d');layerCtx.filter=mode==='brighten'?'brightness(1.65)':'brightness(0.38)';layerCtx.drawImage(base,0,0);layerCtx.filter='none';layerCtx.globalCompositeOperation='destination-in';layerCtx.drawImage(mask,0,0,layer.width,layer.height);layerCtx.globalCompositeOperation='source-over';effectCtx.drawImage(layer,0,0);layer.width=1;layer.height=1;
+   const layerCtx=layer.getContext('2d');layerCtx.filter=mode==='brighten'?'brightness(1.65)':'brightness(0.38)';layerCtx.drawImage(base,0,0);layerCtx.filter='none';
+   layerCtx.globalCompositeOperation='destination-in';layerCtx.drawImage(mask,0,0,layer.width,layer.height);layerCtx.globalCompositeOperation='source-over';
+   effectCtx.drawImage(layer,0,0);layer.width=1;layer.height=1;
   };
   if(hasBright)addLayer(brightMask,'brighten');if(hasDark)addLayer(darkMask,'darken');base.width=1;base.height=1;effect.style.display='block';
  }else effect.style.display='none';
@@ -1224,7 +1228,13 @@ function renderPhotoEditor(){
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
   $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
-  $$('[data-pf-color]').forEach(b=>b.onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;dbPut('projects',p);renderPhotoEditor()});
+  $('[data-pf-color]').forEach(b=>b.onclick=()=>{
+   const scrollTop=window.scrollY||document.documentElement.scrollTop||0;
+   ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;
+   dbPut('projects',p);
+   renderPhotoEditor();
+   requestAnimationFrame(()=>window.scrollTo({top:scrollTop,left:0,behavior:'instant'}));
+  });
   $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
   $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
   $('#pf-color-brush').onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.colorMixMode='brush';colorBrushEnabledPhotoId=ph.id;lightBrushEnabledPhotoId=null;renderPhotoEditor()};
