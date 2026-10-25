@@ -241,7 +241,12 @@ function activeProject(){return projects.find(p=>p.id===activeProjectId)||null}
 function activeTemplate(){return templates.find(t=>t.id===activeTemplateId)||null}
 function currentPhoto(){const p=activeProject();return p&&p.photos&&p.photos[activePhotoIndex]||null}
 function currentLayer(){const t=activeTemplate();return t&&t.layers.find(l=>l.id===activeLayerId)||null}
-function navTo(next){page=next;$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===next));render()}
+function navTo(next){
+ const allowed=new Set(['projects','tools','templates','settings']);
+ page=allowed.has(next)?next:'projects';
+ document.querySelectorAll('[data-page]').forEach(button=>button.classList.toggle('active',button.dataset.page===page));
+ render();
+}
 function head(eyebrow,title,desc,action){return '<div class="page-head"><div><div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p>'+desc+'</p></div>'+(action||'')+'</div>'}
 function projectPreview(p){const image=(p.photos||[]).find(x=>x.finalThumb)?.finalThumb;return image?'<img src="'+image+'" alt="Pratinjau foto akhir">':'<div class="preview-empty"><div style="font-size:30px">▧</div><b>Siap untuk foto Anda</b><span>Tambahkan foto untuk memulai</span></div>'}
 function renderProjects(){
@@ -1078,7 +1083,17 @@ function renderToolRunner(){
 }
 function confirmModal(title,text,action){showModal(title,'<p style="font-size:13px;line-height:1.6;color:#666b7f">'+esc(text)+'</p>','<button class="btn" id="confirm-cancel">Batal</button><button class="btn danger" id="confirm-yes">Ya, lanjutkan</button>');$('#confirm-cancel').onclick=closeModal;$('#confirm-yes').onclick=async()=>{closeModal();await action()}}
 function wireNav(){$$('[data-page]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)))}
-async function init(){try{db=await dbOpen()}catch(e){db=null;console.warn(e)}try{projects=await dbGetAll('projects');templates=await dbGetAll('templates')}catch(e){projects=[];templates=[]}wireNav();render();window.__reangAppBooted=true;if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+async function init(){
+ try{db=await dbOpen()}catch(error){db=null;console.warn('IndexedDB tidak tersedia; mencoba penyimpanan cadangan.',error)}
+ const [projectResult,templateResult]=await Promise.allSettled([dbGetAll('projects'),dbGetAll('templates')]);
+ projects=projectResult.status==='fulfilled'&&Array.isArray(projectResult.value)?projectResult.value:[];
+ templates=templateResult.status==='fulfilled'&&Array.isArray(templateResult.value)?templateResult.value:[];
+ if(projectResult.status==='rejected')console.error('Daftar proyek gagal dibaca.',projectResult.reason);
+ if(templateResult.status==='rejected')console.error('Daftar template gagal dibaca.',templateResult.reason);
+ try{wireNav()}catch(error){console.error('Navigasi utama gagal dipasang.',error)}
+ render();
+ if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(error=>console.warn('Service worker tidak diperbarui.',error));
+}
 init();
 })();
 </script>
