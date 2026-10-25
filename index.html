@@ -533,6 +533,175 @@ function photoAdjustmentFilter(ph,original=false){
  return 'brightness('+brightness+') contrast('+contrast+') saturate('+saturation+') sepia('+sepia+') hue-rotate('+hue+'deg)';
 }
 
+function ensureColorMixBrushState(ph){
+ ph.adjust=ph.adjust||{};
+ const old=ph.adjust.colorMixBrush||{};
+ const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
+ ph.adjust.colorMixBrush={size:number(old.size,8,2,24),softness:number(old.softness,65,0,100),mask:typeof old.mask==="string"&&old.mask?old.mask:null};
+ return ph.adjust.colorMixBrush;
+}
+function colorMixHasAdjustments(ph){
+ const a=adjustmentValues(ph),mix=a.colorMix||{};
+ const any=Object.values(mix).some(v=>Math.abs(Number(v?.sat)||0)>0||Math.abs(Number(v?.bright)||0)>0);
+ return any&&(a.colorMixMode!=="brush"||!!ensureColorMixBrushState(ph).mask);
+}
+function colorMixKeyForHue(hue,saturation){
+ if(saturation<.035)return null;
+ if(hue<15||hue>=345)return "red";
+ if(hue<43)return "orange";
+ if(hue<70)return "yellow";
+ if(hue>=70&&hue<165)return "green";
+ if(hue>=190&&hue<255)return "blue";
+ if(hue>=255&&hue<295)return "purple";
+ if(hue>=295&&hue<345)return "pink";
+ return null;
+}
+function hsvToRgb(h,s,v){
+ const chroma=v*s,x=chroma*(1-Math.abs((h/60)%2-1)),m=v-chroma;
+ let r=0,g=0,b=0;
+ if(h<60){r=chroma;g=x}
+ else if(h<120){r=x;g=chroma}
+ else if(h<180){g=chroma;b=x}
+ else if(h<240){g=x;b=chroma}
+ else if(h<300){r=x;b=chroma}
+ else{r=chroma;b=x}
+ return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];
+}
+async function getColorMixBrushCanvas(ph){
+ const brush=ensureColorMixBrushState(ph),key="color-mix:"+String(ph.id);
+ let canvas=colorMixBrushCanvases.get(key);
+ if(!canvas){
+  const dims=lightBrushMaskDimensions(ph);
+  canvas=document.createElement("canvas");canvas.width=dims.w;canvas.height=dims.h;
+  if(brush.mask){const image=await loadLightBrushImage(brush.mask);canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height)}
+  colorMixBrushCanvases.set(key,canvas);
+ }
+ return canvas;
+}
+async function applyColorMixToCanvas(canvas,ph){
+ const adj=adjustmentValues(ph),mix=adj.colorMix||{};
+ if(!Object.values(mix).some(v=>Math.abs(Number(v?.sat)||0)>0||Math.abs(Number(v?.bright)||0)>0))return;
+ let maskData=null;
+ if(adj.colorMixMode==="brush"){
+  const state=ensureColorMixBrushState(ph);if(!state.mask)return;
+  const sourceMask=await getColorMixBrushCanvas(ph),mask=document.createElement("canvas");
+  mask.width=canvas.width;mask.height=canvas.height;
+  const maskCtx=mask.getContext("2d");maskCtx.drawImage(sourceMask,0,0,mask.width,mask.height);
+  maskData=maskCtx.getImageData(0,0,mask.width,mask.height).data;
+ }
+ const ctx=canvas.getContext("2d"),frame=ctx.getImageData(0,0,canvas.width,canvas.height),d=frame.data;
+ for(let i=0,p=0;i<d.length;i+=4,p++){
+  if(d[i+3]===0)continue;
+  const strength=maskData?(maskData[i+3]/255):1;if(strength<=.005)continue;
+  const r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255,max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+  let hue=0;
+  if(delta>0){
+   if(max===r)hue=60*(((g-b)/delta)%6);
+   else if(max===g)hue=60*((b-r)/delta+2);
+   else hue=60*((r-g)/delta+4);
+   if(hue<0)hue+=360;
+  }
+  const sat=max===0?0:delta/max,key=colorMixKeyForHue(hue,sat),tune=key?mix[key]:null;
+  if(!tune)continue;
+  const satChange=(Number(tune.sat)||0)/100,brightChange=(Number(tune.bright)||0)/100;
+  if(Math.abs(satChange)<.0001&&Math.abs(brightChange)<.0001)continue;
+  const newSat=Math.max(0,Math.min(1,sat*(1+satChange*strength)));
+  const newVal=Math.max(0,Math.min(1,max*(1+brightChange*strength)));
+  const rgb=hsvToRgb(hue,newSat,newVal);
+  d[i]=rgb[0];d[i+1]=rgb[1];d[i+2]=rgb[2];
+ }
+ ctx.putImageData(frame,0,0);
+}
+async function refreshColorMixPreview(ph){
+ const token=++colorMixPreviewToken,imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo"),canvas=document.getElementById("pf-color-mix-preview");
+ if(!imageEl||!main||!canvas||page!=="photo-editor")return;
+ const source=ph.originalSrc||ph.src;if(!source)return;
+ if(!colorMixHasAdjustments(ph)){
+  canvas.style.display="none";imageEl.style.opacity="1";imageEl.style.filter=photoAdjustmentFilter(ph);return;
+ }
+ const rect=imageEl.getBoundingClientRect(),parent=main.getBoundingClientRect();
+ if(rect.width<1||rect.height<1)return;
+ canvas.style.left=(rect.left-parent.left)+"px";canvas.style.top=(rect.top-parent.top)+"px";
+ canvas.style.width=rect.width+"px";canvas.style.height=rect.height+"px";
+ const dims=lightBrushMaskDimensions(ph);canvas.width=dims.w;canvas.height=dims.h;
+ try{
+  const image=await loadLightBrushImage(source);
+  if(token!==colorMixPreviewToken||page!=="photo-editor"||!document.getElementById("pf-color-mix-preview"))return;
+  const ctx=canvas.getContext("2d");ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.filter=photoAdjustmentFilter(ph);ctx.drawImage(image,0,0,canvas.width,canvas.height);ctx.filter="none";
+  await applyColorMixToCanvas(canvas,ph);
+  if(token!==colorMixPreviewToken||page!=="photo-editor")return;
+  canvas.style.display="block";imageEl.style.opacity="0";imageEl.style.filter="none";
+ }catch(error){console.warn("Pratinjau campur warna gagal",error);canvas.style.display="none";imageEl.style.opacity="1";imageEl.style.filter=photoAdjustmentFilter(ph)}
+}
+function scheduleColorMixPreview(ph){
+ if(colorMixPreviewTimer)clearTimeout(colorMixPreviewTimer);
+ colorMixPreviewTimer=setTimeout(()=>refreshColorMixPreview(ph).catch(error=>console.warn("Gagal memperbarui warna",error)),80);
+}
+function scheduleColorMixSave(p,ph){
+ ensurePhotoWorkflow(ph);ph.workflow.light=false;delete ph.workflowResults.light;
+ ["cutout","face","export"].forEach(k=>{ph.workflow[k]=false;delete ph.workflowResults[k]});
+ p.updatedAt=Date.now();
+ if(colorMixSaveTimer)clearTimeout(colorMixSaveTimer);
+ colorMixSaveTimer=setTimeout(()=>dbPut("projects",p).catch(error=>console.warn("Penyesuaian warna belum tersimpan",error)),180);
+ scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
+}
+function renderColorMixBrushSelection(ph,maskCanvas){
+ const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo");
+ if(!overlay||!imageEl||!main)return;
+ const active=page==="photo-editor"&&ph.adjust?.colorMixMode==="brush"&&colorBrushEnabledPhotoId===ph.id&&lightBrushEnabledPhotoId!==ph.id;
+ main.classList.toggle("color-brush-active",active);overlay.style.display=active?"block":"none";if(!active)return;
+ const rect=imageEl.getBoundingClientRect(),parent=main.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
+ overlay.style.left=(rect.left-parent.left)+"px";overlay.style.top=(rect.top-parent.top)+"px";
+ overlay.style.width=rect.width+"px";overlay.style.height=rect.height+"px";
+ const w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));
+ if(overlay.width!==w)overlay.width=w;if(overlay.height!==h)overlay.height=h;
+ const ctx=overlay.getContext("2d");ctx.clearRect(0,0,w,h);
+ if(maskCanvas){ctx.drawImage(maskCanvas,0,0,w,h);ctx.globalCompositeOperation="source-in";ctx.fillStyle="rgba(57,125,255,.38)";ctx.fillRect(0,0,w,h);ctx.globalCompositeOperation="source-over"}
+ if(colorBrushDrawing&&colorBrushDrawing.photoId===ph.id){
+  const brush=ensureColorMixBrushState(ph),radius=Math.max(3,rect.width*brush.size/200);
+  ctx.beginPath();ctx.arc(colorBrushDrawing.x,colorBrushDrawing.y,radius,0,Math.PI*2);ctx.lineWidth=1.5;ctx.strokeStyle="#2678ff";ctx.stroke();
+ }
+}
+async function bindColorMixBrushControls(ph,p){
+ const brush=ensureColorMixBrushState(ph),mask=await getColorMixBrushCanvas(ph);
+ const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo");
+ if(!overlay||!imageEl||!main)return;
+ const point=event=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(rect.width,event.clientX-rect.left)),y:Math.max(0,Math.min(rect.height,event.clientY-rect.top)),displayWidth:rect.width}};
+ const finish=async()=>{
+  const stroke=colorBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;
+  colorBrushDrawing=null;brush.mask=lightBrushCanvasHasPaint(mask)?mask.toDataURL("image/png"):null;
+  colorMixBrushCanvases.set("color-mix:"+String(ph.id),mask);
+  await invalidatePhotoStages(p,ph,"light");await dbPut("projects",p);
+  scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);renderColorMixBrushSelection(ph,mask);
+ };
+ overlay.addEventListener("pointerdown",event=>{
+  if(colorBrushEnabledPhotoId!==ph.id||ph.adjust?.colorMixMode!=="brush")return;
+  event.preventDefault();const pt=point(event);colorBrushDrawing={photoId:ph.id,x:pt.x,y:pt.y,last:pt};
+  try{overlay.setPointerCapture(event.pointerId)}catch(error){}
+  paintLightBrushSegment(mask,pt,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);
+  renderColorMixBrushSelection(ph,mask);
+ });
+ overlay.addEventListener("pointermove",event=>{
+  const pt=point(event),stroke=colorBrushDrawing;
+  if(stroke&&stroke.photoId===ph.id){
+   event.preventDefault();paintLightBrushSegment(mask,stroke.last,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);stroke.last=pt;
+  }
+  colorBrushDrawing=stroke?{...stroke,x:pt.x,y:pt.y}:null;
+  renderColorMixBrushSelection(ph,mask);
+ });
+ overlay.addEventListener("pointerup",()=>{finish().catch(error=>{console.error(error);toast("Seleksi warna gagal disimpan")})});
+ overlay.addEventListener("pointercancel",()=>{finish().catch(error=>console.error(error))});
+ const size=document.getElementById("pf-color-brush-size");
+ if(size)size.oninput=event=>{brush.size=Number(event.target.value);const label=document.getElementById("pf-color-brush-size-value");if(label)label.textContent=brush.size+"%";scheduleColorMixSave(p,ph)};
+ const clear=document.getElementById("pf-color-brush-clear");
+ if(clear)clear.onclick=async()=>{
+  mask.getContext("2d").clearRect(0,0,mask.width,mask.height);brush.mask=null;colorMixBrushCanvases.set("color-mix:"+String(ph.id),mask);
+  await invalidatePhotoStages(p,ph,"light");await dbPut("projects",p);scheduleColorMixPreview(ph);renderColorMixBrushSelection(ph,mask);toast("Seleksi kuas warna dihapus.");
+ };
+ renderColorMixBrushSelection(ph,mask);
+}
+
 function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
  const old=ph.adjust.lightBrush||{};
