@@ -71,9 +71,12 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-main-photo img{display:block;max-width:100%;width:auto;height:100%;max-height:100%;object-fit:contain;transition:filter .08s linear}
 
 .pf-local-canvas{position:absolute;display:none;left:0;top:0;pointer-events:none;max-width:none;max-height:none;object-fit:fill}
+#pf-color-mix-preview{z-index:1}
 #pf-light-effect-preview{z-index:2}
 #pf-light-brush-overlay{z-index:3;touch-action:none}
+#pf-color-brush-overlay{z-index:4;touch-action:none}
 .pf-main-photo.brush-active #pf-light-brush-overlay{pointer-events:auto;cursor:crosshair}
+.pf-main-photo.color-brush-active #pf-color-brush-overlay{pointer-events:auto;cursor:crosshair;touch-action:none}
 .pf-light-brush-panel{margin:14px 0 16px;padding:14px;border:1px solid #ead9c8;border-radius:15px;background:linear-gradient(160deg,#fffaf4,#fff);box-shadow:0 4px 15px #4a321008}
 .pf-light-brush-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .pf-light-brush-head strong{display:block;font-size:13px;color:#3b3540}
@@ -462,6 +465,12 @@ const workflowStages=[
 let gallerySelectMode=false;
 const selectedPhotoIds=new Set();
 const lightBrushMaskCanvases=new Map();
+const colorMixBrushCanvases=new Map();
+let colorMixPreviewToken=0;
+let colorMixPreviewTimer=null;
+let colorMixSaveTimer=null;
+let colorBrushEnabledPhotoId=null;
+let colorBrushDrawing=null;
 let lightBrushEnabledPhotoId=null;
 let lightBrushDrawing=null;
 let lightBrushPointer=null;
@@ -509,7 +518,8 @@ function adjustmentValues(ph){
   glow:a.glow??0,
   vignette:a.vignette??0,
   denoise:a.denoise??0,
-  colorMix:a.colorMix||{red:{sat:0,bright:0},orange:{sat:0,bright:0},yellow:{sat:0,bright:0},green:{sat:0,bright:0},blue:{sat:0,bright:0},purple:{sat:0,bright:0},pink:{sat:0,bright:0}}
+  colorMix:a.colorMix||{red:{sat:0,bright:0},orange:{sat:0,bright:0},yellow:{sat:0,bright:0},green:{sat:0,bright:0},blue:{sat:0,bright:0},purple:{sat:0,bright:0},pink:{sat:0,bright:0}},
+  selectedColor:a.selectedColor||"red",colorMixMode:a.colorMixMode==="brush"?"brush":"all",colorMixBrush:a.colorMixBrush||{size:8,softness:65,mask:null}
  };
 }
 function photoAdjustmentFilter(ph,original=false){
@@ -908,15 +918,16 @@ function renderPhotoEditor(){
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
  let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
- html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas>':'')+'<button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'<button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
+  const colorMode=adj.colorMixMode||'all';
   html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-reset-light" type="button" aria-label="Reset semua pengaturan cahaya" title="Reset cahaya">↺</button><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
   const sliders=[['exposure','Exposure',-100,100,adj.exposure],['contrast','Kontras',-100,100,adj.contrast],['highlight','Highlight',-100,100,adj.highlight],['shadows','Bayangan',-100,100,adj.shadows],['saturation','Saturasi',-100,100,adj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,adj.warmth],['glow','Glow (cahaya lembut)',0,100,adj.glow],['vignette','Vignette (gelap pinggir)',0,100,adj.vignette],['denoise','Denoise (kurangi noise)',0,100,adj.denoise]];
-  html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
   html+=lightBrushPanelMarkup(ph);
-  html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="active" id="pf-color-all">Seluruh subjek</button><button id="pf-color-brush">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Preset dan penyesuaian disimpan pada foto ini.</p></div>';
+  html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
+  html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
  }else if(stageIndex===1){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Pisahkan subjek dari latar. Hasil transparan disimpan terpisah dari foto asli.</p><button class="btn primary workflow-primary" id="pf-run-cutout">✂ Proses Cutout dengan AI</button><p class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Foto ini sudah memiliki hasil Cutout. Anda bisa memproses ulang.':'Selesaikan semua foto pada tahap Cutout untuk melanjutkan ke Template.')+'</p></div>';
  }else if(stageIndex===2){
