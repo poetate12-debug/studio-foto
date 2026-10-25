@@ -34,7 +34,7 @@ requireSource(html.includes("function setActivePageNav(nextPage)") && html.inclu
 requireSource(html.includes("function invalidatePhotoStages("), "editing an earlier stage invalidates dependent results");
 requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes("input.dataset.pfIgnoredTrackTap='1'"), "range sliders ignore track taps away from the thumb");
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
-requireSource(html.includes("id=" + "'pf-reset-light'") && html.includes("Cahaya direset ke Original."), "light stage includes a reset-to-original control");
+requireSource(html.includes('id="pf-reset-light"') && html.includes("Cahaya direset ke Original."), "light stage includes a reset-to-original control");
 requireSource(html.includes("touch-action:pan-y") && html.includes("--pf-range-fill"), "range sliders support vertical scrolling and visible progress fill");
 requireSource(html.includes("function stageCanBeOpened(p,targetIndex)") && html.includes("Selesaikan minimal satu foto pada tahap"), "next stage can open after at least one eligible photo");
 requireSource(html.includes("pf-finish-button.next") && html.includes("pf-finish-button.complete"), "continue and completed status use different colors");
