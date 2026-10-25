@@ -69,6 +69,28 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-editor-media{flex-shrink:0;background:#fff;box-shadow:0 3px 12px #25283b10;z-index:6}
 .pf-main-photo{height:min(29vh,250px);min-height:180px;background:#161820;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .pf-main-photo img{display:block;max-width:100%;width:auto;height:100%;max-height:100%;object-fit:contain;transition:filter .08s linear}
+
+.pf-local-canvas{position:absolute;display:none;left:0;top:0;pointer-events:none;max-width:none;max-height:none;object-fit:fill}
+#pf-light-effect-preview{z-index:2}
+#pf-light-brush-overlay{z-index:3;touch-action:none}
+.pf-main-photo.brush-active #pf-light-brush-overlay{pointer-events:auto;cursor:crosshair}
+.pf-light-brush-panel{margin:14px 0 16px;padding:14px;border:1px solid #ead9c8;border-radius:15px;background:linear-gradient(160deg,#fffaf4,#fff);box-shadow:0 4px 15px #4a321008}
+.pf-light-brush-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pf-light-brush-head strong{display:block;font-size:13px;color:#3b3540}
+.pf-light-brush-head p{margin:4px 0 0;color:#85808b;font-size:11px;line-height:1.45}
+.pf-brush-toggle{flex-shrink:0;border:1px solid #e4bd99;border-radius:10px;padding:9px 11px;background:#fff3e7;color:#a75418;font-size:11px;font-weight:800}
+.pf-brush-toggle.active{background:#df7e2c;border-color:#df7e2c;color:#fff}
+.pf-light-brush-options{margin-top:13px}
+.pf-brush-mode-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0 13px}
+.pf-brush-mode{border:1px solid #e9e5e1;border-radius:10px;padding:10px 5px;background:#fff;color:#69636e;font-size:11px;font-weight:800}
+.pf-brush-mode.active{border-color:#e18437;background:#fff0e2;color:#a95418;box-shadow:inset 0 0 0 1px #e1843722}
+.pf-brush-range{margin:13px 0}
+.pf-brush-range label{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;color:#5b5661;font-size:11px;font-weight:750}
+.pf-brush-range input{width:100%;accent-color:#df7e2c}
+.pf-brush-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.pf-brush-hint{font-size:10px;color:#85808b;line-height:1.5}
+.pf-brush-clear{border:1px solid #ece1d9;background:#fff;border-radius:9px;padding:8px 10px;color:#9a5630;font-weight:750;font-size:11px}
+
 .pf-original-toggle{position:absolute;right:10px;bottom:10px;border:0;border-radius:99px;background:#14161cbf;color:#fff;padding:9px 13px;font-size:12px;font-weight:700}
 .pf-photo-switch{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;color:#79818e;font-weight:750;font-size:14px;background:white}
 .pf-round-btn{height:35px;width:42px;border:1px solid #e4e7ee;border-radius:12px;background:#fff;color:#202536;font-size:25px;line-height:1}
@@ -439,6 +461,10 @@ const workflowStages=[
 ];
 let gallerySelectMode=false;
 const selectedPhotoIds=new Set();
+const lightBrushMaskCanvases=new Map();
+let lightBrushEnabledPhotoId=null;
+let lightBrushDrawing=null;
+let lightBrushPointer=null;
 function ensurePhotoWorkflow(ph){
  ph.workflow=ph.workflow||{};
  ph.workflowResults=ph.workflowResults||{};
@@ -496,14 +522,170 @@ function photoAdjustmentFilter(ph,original=false){
  const hue=a.warmth<0?Math.abs(a.warmth)*-.16:0;
  return 'brightness('+brightness+') contrast('+contrast+') saturate('+saturation+') sepia('+sepia+') hue-rotate('+hue+'deg)';
 }
+
+function ensureLightBrushState(ph){
+ ph.adjust=ph.adjust||{};
+ const old=ph.adjust.lightBrush||{};
+ const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
+ ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':'brighten',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null}};
+ return ph.adjust.lightBrush;
+}
+function lightBrushMaskKey(ph,mode){return String(ph.id)+':'+mode}
+function lightBrushMaskDimensions(ph){
+ const w=Math.max(1,Number(ph.width)||1200),h=Math.max(1,Number(ph.height)||1600),scale=Math.min(1,1200/Math.max(w,h));
+ return {w:Math.max(1,Math.round(w*scale)),h:Math.max(1,Math.round(h*scale))};
+}
+function loadLightBrushImage(src){
+ return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('Mask kuas tidak dapat dibaca.'));image.src=src});
+}
+async function getLightBrushMaskCanvas(ph,mode){
+ const key=lightBrushMaskKey(ph,mode),cached=lightBrushMaskCanvases.get(key);
+ if(cached)return await cached;
+ const promise=(async()=>{
+  const dims=lightBrushMaskDimensions(ph),canvas=document.createElement('canvas');canvas.width=dims.w;canvas.height=dims.h;
+  const source=ensureLightBrushState(ph).masks[mode];
+  if(source){const image=await loadLightBrushImage(source);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height)}
+  return canvas;
+ })();
+ lightBrushMaskCanvases.set(key,promise);
+ try{const canvas=await promise;lightBrushMaskCanvases.set(key,canvas);return canvas}catch(error){lightBrushMaskCanvases.delete(key);throw error}
+}
+function lightBrushCanvasHasPaint(canvas){
+ if(!canvas)return false;
+ try{const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;for(let i=3;i<data.length;i+=4)if(data[i]>2)return true}catch(error){console.warn('Tidak bisa membaca mask kuas',error)}
+ return false;
+}
+function lightBrushPanelMarkup(ph){
+ const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id,mode=brush.mode;
+ return '<section class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Kuas cahaya lokal</strong><p>Terangkan atau gelapkan bagian foto saja, tanpa mengubah seluruh gambar.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
+ '<div id="pf-light-brush-options" class="pf-light-brush-options '+(active?'':'hidden')+'"><div class="pf-brush-mode-row"><button type="button" data-pf-brush-mode="brighten" class="pf-brush-mode '+(mode==='brighten'&&!brush.erase?'active':'')+'">☀ Terangkan</button><button type="button" data-pf-brush-mode="darken" class="pf-brush-mode '+(mode==='darken'&&!brush.erase?'active':'')+'">◐ Gelapkan</button><button type="button" id="pf-light-brush-erase" class="pf-brush-mode '+(brush.erase?'active':'')+'">⌫ Penghapus</button></div>'+
+ '<div class="pf-brush-range"><label for="pf-light-brush-size">Ukuran kuas <span id="pf-light-brush-size-value">'+brush.size+'%</span></label><input id="pf-light-brush-size" type="range" min="2" max="24" step="1" value="'+brush.size+'"></div>'+
+ '<div class="pf-brush-range"><label for="pf-light-brush-intensity">Kekuatan sapuan <span id="pf-light-brush-intensity-value">'+brush.intensity+'%</span></label><input id="pf-light-brush-intensity" type="range" min="10" max="100" step="5" value="'+brush.intensity+'"></div>'+
+ '<div class="pf-brush-range"><label for="pf-light-brush-softness">Kelembutan tepi <span id="pf-light-brush-softness-value">'+brush.softness+'%</span></label><input id="pf-light-brush-softness" type="range" min="0" max="100" step="5" value="'+brush.softness+'"></div>'+
+ '<div class="pf-brush-footer"><span class="pf-brush-hint">Sapukan langsung pada foto. Mask tersimpan bersama foto ini.</span><button type="button" id="pf-light-brush-clear" class="pf-brush-clear">Hapus semua sapuan</button></div></div></section>';
+}
+function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
+ const ctx=maskCanvas.getContext('2d'),scale=maskCanvas.width/Math.max(1,displayWidth);
+ const x0=from.x*scale,y0=from.y*scale,x1=to.x*scale,y1=to.y*scale,dx=x1-x0,dy=y1-y0,distance=Math.sqrt(dx*dx+dy*dy);
+ const radius=Math.max(1,maskCanvas.width*brush.size/200),steps=Math.max(1,Math.ceil(distance/Math.max(1,radius*.22))),innerStop=Math.max(0,Math.min(.98,1-brush.softness/100)),alpha=erase?1:brush.intensity/100;
+ ctx.save();ctx.globalCompositeOperation=erase?'destination-out':'source-over';
+ for(let i=0;i<=steps;i++){
+  const t=i/steps,x=x0+dx*t,y=y0+dy*t,gradient=ctx.createRadialGradient(x,y,0,x,y,radius),color='rgba(255,255,255,'+alpha+')';
+  gradient.addColorStop(0,color);gradient.addColorStop(innerStop,color);gradient.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=gradient;ctx.fillRect(x-radius,y-radius,radius*2,radius*2);
+ }
+ ctx.restore();
+}
+function renderLightBrushSelection(ph,brightMask,darkMask){
+ const brushCanvas=document.getElementById('pf-light-brush-overlay'),main=document.querySelector('.pf-main-photo');
+ if(!brushCanvas||!main)return;
+ const active=lightBrushEnabledPhotoId===ph.id;main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
+ const rect=brushCanvas.getBoundingClientRect(),width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph),mask=brush.mode==='darken'?darkMask:brightMask;
+ ctx.clearRect(0,0,width,height);
+ if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle='rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
+ if(lightBrushPointer&&lightBrushPointer.photoId===ph.id){
+  const radius=Math.max(2,rect.width*brush.size/200);ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,radius,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,Math.max(1,radius-1),0,Math.PI*2);ctx.stroke();ctx.restore();
+ }
+}
+async function refreshLightBrushPreviews(ph){
+ const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),effect=document.getElementById('pf-light-effect-preview'),brushOverlay=document.getElementById('pf-light-brush-overlay');
+ if(!imageEl||!main||!effect||!brushOverlay||page!=='photo-editor')return;
+ const source=ph.originalSrc||ph.src;if(!source)return;
+ const [brightMask,darkMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]),image=await loadLightBrushImage(source);
+ if(!document.getElementById('pf-photo-preview')||page!=='photo-editor')return;
+ const rect=imageEl.getBoundingClientRect(),parentRect=main.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
+ [effect,brushOverlay].forEach(canvas=>{canvas.style.left=(rect.left-parentRect.left)+'px';canvas.style.top=(rect.top-parentRect.top)+'px';canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px'});
+ if(effect.width!==brightMask.width)effect.width=brightMask.width;if(effect.height!==brightMask.height)effect.height=brightMask.height;
+ const overlayWidth=Math.max(1,Math.round(rect.width)),overlayHeight=Math.max(1,Math.round(rect.height));
+ if(brushOverlay.width!==overlayWidth)brushOverlay.width=overlayWidth;if(brushOverlay.height!==overlayHeight)brushOverlay.height=overlayHeight;
+ const brush=ensureLightBrushState(ph),drawing=lightBrushDrawing&&lightBrushDrawing.photoId===ph.id?lightBrushDrawing:null;
+ const hasBright=!!brush.masks.brighten||(drawing&&drawing.mode==='brighten'&&!drawing.erase),hasDark=!!brush.masks.darken||(drawing&&drawing.mode==='darken'&&!drawing.erase),effectCtx=effect.getContext('2d');
+ effectCtx.clearRect(0,0,effect.width,effect.height);
+ if(hasBright||hasDark){
+  const base=document.createElement('canvas');base.width=brightMask.width;base.height=brightMask.height;
+  const baseCtx=base.getContext('2d');baseCtx.filter=photoAdjustmentFilter(ph);baseCtx.drawImage(image,0,0,base.width,base.height);baseCtx.filter='none';
+  const addLayer=(mask,mode)=>{
+   if(!mask)return;
+   const layer=document.createElement('canvas');layer.width=base.width;layer.height=base.height;
+   const layerCtx=layer.getContext('2d');layerCtx.filter=mode==='brighten'?'brightness(1.65)':'brightness(0.38)';layerCtx.drawImage(base,0,0);layerCtx.filter='none';layerCtx.globalCompositeOperation='destination-in';layerCtx.drawImage(mask,0,0,layer.width,layer.height);layerCtx.globalCompositeOperation='source-over';effectCtx.drawImage(layer,0,0);layer.width=1;layer.height=1;
+  };
+  if(hasBright)addLayer(brightMask,'brighten');if(hasDark)addLayer(darkMask,'darken');base.width=1;base.height=1;effect.style.display='block';
+ }else effect.style.display='none';
+ renderLightBrushSelection(ph,brightMask,darkMask);
+}
+let lightBrushPreviewTimer=null;
+function scheduleLightBrushPreview(ph){
+ if(lightBrushPreviewTimer)clearTimeout(lightBrushPreviewTimer);
+ lightBrushPreviewTimer=setTimeout(()=>{refreshLightBrushPreviews(ph).catch(error=>console.warn('Pratinjau kuas cahaya gagal diperbarui',error))},80);
+}
+function clearPhotoLightBrushMasks(ph){
+ const brush=ensureLightBrushState(ph);brush.masks={brighten:null,darken:null};
+ ['brighten','darken'].forEach(mode=>{const cached=lightBrushMaskCanvases.get(lightBrushMaskKey(ph,mode));if(cached&&typeof cached.getContext==='function')cached.getContext('2d').clearRect(0,0,cached.width,cached.height)});
+ lightBrushDrawing=null;lightBrushPointer=null;scheduleLightBrushPreview(ph);
+}
+async function applyLocalLightBrushToCanvas(canvas,ph){
+ const brush=ensureLightBrushState(ph);if(!brush.masks.brighten&&!brush.masks.darken)return;
+ const targetCtx=canvas.getContext('2d');
+ for(const mode of ['brighten','darken']){
+  const maskSource=brush.masks[mode];if(!maskSource)continue;
+  const maskImage=await loadLightBrushImage(maskSource),layer=document.createElement('canvas');layer.width=canvas.width;layer.height=canvas.height;
+  const layerCtx=layer.getContext('2d');layerCtx.filter=mode==='brighten'?'brightness(1.65)':'brightness(0.38)';layerCtx.drawImage(canvas,0,0);layerCtx.filter='none';layerCtx.globalCompositeOperation='destination-in';layerCtx.drawImage(maskImage,0,0,layer.width,layer.height);layerCtx.globalCompositeOperation='source-over';targetCtx.drawImage(layer,0,0);layer.width=1;layer.height=1;
+ }
+}
+async function bindLightBrushControls(ph,p){
+ const brush=ensureLightBrushState(ph),[brightMask,darkMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]);
+ const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),overlay=document.getElementById('pf-light-brush-overlay');if(!imageEl||!main||!overlay)return;
+ await refreshLightBrushPreviews(ph);
+ const toggle=document.getElementById('pf-light-brush-toggle'),options=document.getElementById('pf-light-brush-options');
+ const updateModeButtons=()=>{document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.classList.toggle('active',button.dataset.pfBrushMode===brush.mode&&!brush.erase));document.getElementById('pf-light-brush-erase')?.classList.toggle('active',brush.erase)};
+ const saveSettings=()=>{p.updatedAt=Date.now();dbPut('projects',p).catch(error=>console.warn('Pengaturan kuas tidak tersimpan',error))};
+ const updateBrushRange=(key,value)=>{brush[key]=Number(value);const label=document.getElementById('pf-light-brush-'+key+'-value');if(label)label.textContent=String(brush[key])+'%';renderLightBrushSelection(ph,brightMask,darkMask);if(key==='size')scheduleLightBrushPreview(ph);saveSettings()};
+ toggle.onclick=()=>{
+  lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
+  const active=lightBrushEnabledPhotoId===ph.id;if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
+  if(!active)lightBrushDrawing=null;refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+ };
+ document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{brush.mode=button.dataset.pfBrushMode;brush.erase=false;updateModeButtons();saveSettings();scheduleLightBrushPreview(ph)});
+ document.getElementById('pf-light-brush-erase').onclick=()=>{brush.erase=!brush.erase;updateModeButtons();saveSettings()};
+ ['size','intensity','softness'].forEach(key=>{const input=document.getElementById('pf-light-brush-'+key);if(input)input.oninput=event=>updateBrushRange(key,event.target.value)});
+ document.getElementById('pf-light-brush-clear').onclick=()=>confirmModal('Hapus semua sapuan kuas?','Sapuan terangkan dan gelapkan pada foto ini akan dihapus.',async()=>{
+  clearPhotoLightBrushMasks(ph);await invalidatePhotoStages(p,ph,'light');await dbPut('projects',p);refreshLightBrushPreviews(ph).catch(error=>console.warn(error));toast('Sapuan kuas cahaya dihapus.');
+ });
+ const pointerPoint=event=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(rect.width,event.clientX-rect.left)),y:Math.max(0,Math.min(rect.height,event.clientY-rect.top)),displayWidth:rect.width}};
+ const finishStroke=async()=>{
+  const stroke=lightBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;lightBrushDrawing=null;
+  const canvas=stroke.mode==='darken'?darkMask:brightMask;brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null;
+  await invalidatePhotoStages(p,ph,'light');await dbPut('projects',p);scheduleLightBrushPreview(ph);
+ };
+ overlay.addEventListener('pointerdown',event=>{
+  if(lightBrushEnabledPhotoId!==ph.id)return;event.preventDefault();const point=pointerPoint(event),mode=brush.mode;
+  lightBrushDrawing={photoId:ph.id,mode,erase:brush.erase,last:point};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
+  try{overlay.setPointerCapture(event.pointerId)}catch(error){}
+  paintLightBrushSegment(mode==='darken'?darkMask:brightMask,point,point,point.displayWidth,brush,brush.erase);renderLightBrushSelection(ph,brightMask,darkMask);scheduleLightBrushPreview(ph);
+ });
+ overlay.addEventListener('pointermove',event=>{
+  const point=pointerPoint(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};const stroke=lightBrushDrawing;
+  if(stroke&&stroke.photoId===ph.id){event.preventDefault();const canvas=stroke.mode==='darken'?darkMask:brightMask;paintLightBrushSegment(canvas,stroke.last,point,point.displayWidth,brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph)}
+  renderLightBrushSelection(ph,brightMask,darkMask);
+ });
+ overlay.addEventListener('pointerup',()=>{finishStroke().catch(error=>{console.error(error);toast('Sapuan kuas gagal disimpan.')})});
+ overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
+ overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null});
+ const holdButton=document.getElementById('pf-hold-original');
+ if(holdButton)holdButton.addEventListener('pointerdown',()=>{const effect=document.getElementById('pf-light-effect-preview');if(effect)effect.style.display='none';overlay.style.display='none'});
+ updateModeButtons();scheduleLightBrushPreview(ph);
+}
+
 async function photoDataWithLight(ph){
  const source=ph.originalSrc||ph.src;
  const a=adjustmentValues(ph);
  const any=(Math.abs(a.exposure)+Math.abs(a.contrast)+Math.abs(a.highlight)+Math.abs(a.shadows)+Math.abs(a.saturation)+Math.abs(a.warmth)+a.glow+a.vignette+a.denoise)>0;
- if(!any)return source;
+ const brush=ensureLightBrushState(ph);
+ const hasLocalBrush=!!(brush.masks.brighten||brush.masks.darken);
+ if(!any&&!hasLocalBrush)return source;
  return new Promise((resolve,reject)=>{
   const image=new Image();
-  image.onload=()=>{
+  image.onload=async()=>{
    try{
     const canvas=document.createElement('canvas');
     canvas.width=image.naturalWidth||image.width;canvas.height=image.naturalHeight||image.height;
@@ -529,6 +711,7 @@ async function photoDataWithLight(ph){
      g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+Math.min(.48,a.vignette/210)+')');
      ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
     }
+    await applyLocalLightBrushToCanvas(canvas,ph);
     resolve(canvas.toDataURL('image/jpeg',.94));
    }catch(error){reject(error)}
   };
@@ -701,13 +884,14 @@ function renderPhotoEditor(){
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
  let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
- html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'"><button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas>':'')+'<button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
   html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-reset-light" type="button" aria-label="Reset semua pengaturan cahaya" title="Reset cahaya">↺</button><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
   const sliders=[['exposure','Exposure',-100,100,adj.exposure],['contrast','Kontras',-100,100,adj.contrast],['highlight','Highlight',-100,100,adj.highlight],['shadows','Bayangan',-100,100,adj.shadows],['saturation','Saturasi',-100,100,adj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,adj.warmth],['glow','Glow (cahaya lembut)',0,100,adj.glow],['vignette','Vignette (gelap pinggir)',0,100,adj.vignette],['denoise','Denoise (kurangi noise)',0,100,adj.denoise]];
   html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
+  html+=lightBrushPanelMarkup(ph);
   html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="active" id="pf-color-all">Seluruh subjek</button><button id="pf-color-brush">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Preset dan penyesuaian disimpan pada foto ini.</p></div>';
  }else if(stageIndex===1){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Pisahkan subjek dari latar. Hasil transparan disimpan terpisah dari foto asli.</p><button class="btn primary workflow-primary" id="pf-run-cutout">✂ Proses Cutout dengan AI</button><p class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Foto ini sudah memiliki hasil Cutout. Anda bisa memproses ulang.':'Selesaikan semua foto pada tahap Cutout untuk melanjutkan ke Template.')+'</p></div>';
@@ -777,6 +961,7 @@ function renderPhotoEditor(){
    const label=$('#pf-value-'+key);
    if(label)label.textContent=(Number(value)>0?'+':'')+value;
    refreshImage();
+   scheduleLightBrushPreview(ph);
    ensurePhotoWorkflow(ph);
    ph.workflow.light=false;
    delete ph.workflowResults.light;
@@ -789,6 +974,7 @@ function renderPhotoEditor(){
   $('#pf-reset-light')?.addEventListener('click',()=>{
    const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0};
    ph.adjust={...(ph.adjust||{}),...defaults};
+   clearPhotoLightBrushMasks(ph);
    lightSliderKeys.forEach(key=>{
     const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
     const input=$('#pf-slider-'+key);
@@ -818,8 +1004,9 @@ function renderPhotoEditor(){
   $$('[data-pf-color]').forEach(b=>b.onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;dbPut('projects',p);renderPhotoEditor()});
   $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
   $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
-  $('#pf-color-brush').onclick=()=>toast('Mode kuas akan membatasi penyesuaian warna ke area yang disapukan; fitur kuas belum tersedia pada versi ini.');
+  $('#pf-color-brush').onclick=()=>toast('Kuas warna belum aktif. Gunakan panel Kuas cahaya lokal untuk menerangkan atau menggelapkan area foto.');
   $('#pf-color-all').onclick=()=>toast('Penyesuaian warna saat ini diterapkan ke seluruh subjek.');
+  bindLightBrushControls(ph,p).catch(error=>{console.warn('Kuas cahaya tidak dapat diinisialisasi',error);toast('Kuas cahaya belum siap. Coba muat ulang foto.')});
  }
  if(stageIndex===1)$('#pf-run-cutout').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
