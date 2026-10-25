@@ -843,34 +843,58 @@ async function useWorkflowResult(localSource){
  await advanceWorkflowPhoto(p,ph,context.stageKey);
 }
 function bindThumbOnlyRanges(){
- const inputs=Array.from(document.querySelectorAll('.pf-editor-controls input[type="range"]'));
+ const inputs=Array.from(document.querySelectorAll(".pf-editor-controls input[type=range]"));
+ const setFill=input=>{
+  const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
+  const fraction=max===min?0:Math.max(0,Math.min(1,(value-min)/(max-min)));
+  input.style.setProperty("--pf-range-fill",(fraction*100)+"%");
+ };
  inputs.forEach(input=>{
-  const setFill=()=>{
-   const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
-   const fraction=max===min?0:Math.max(0,Math.min(1,(value-min)/(max-min)));
-   input.style.setProperty('--pf-range-fill',(fraction*100)+'%');
-  };
-  setFill();
-  input.style.touchAction='none';
-  input.addEventListener('pointerdown',event=>{
-   const rect=input.getBoundingClientRect();
-   const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
-   if(rect.width<=0||max<=min)return;
-   const thumbSize=24;
-   const center=rect.left+thumbSize/2+((value-min)/(max-min))*(rect.width-thumbSize);
-   const nearThumb=Math.abs(event.clientX-center)<=26;
-   if(!nearThumb){
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    input.dataset.pfIgnoredTrackTap='1';
-   }else{
-    input.dataset.pfIgnoredTrackTap='0';
-   }
-  },true);
-  input.addEventListener('input',()=>{
-   setFill();
-  });
+  setFill(input);
+  /* Prevent the native slider from jumping when the track is tapped.
+     Dragging is handled manually and can only start on the thumb. */
+  input.style.pointerEvents="none";
+  input.style.touchAction="none";
+  input.addEventListener("input",()=>setFill(input));
  });
+ if(window.__pfThumbOnlyRangesInstalled)return;
+ window.__pfThumbOnlyRangesInstalled=true;
+ let active=null;
+ const thumbSize=24,hitRadius=13;
+ const findSlider=event=>{
+  for(const input of Array.from(document.querySelectorAll(".pf-editor-controls input[type=range]"))){
+   const r=input.getBoundingClientRect();
+   if(r.width<1||event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)continue;
+   return {input,rect:r};
+  }
+  return null;
+ };
+ document.addEventListener("pointerdown",event=>{
+  if(event.button!==undefined&&event.button!==0)return;
+  const found=findSlider(event);if(!found)return;
+  const input=found.input,rect=found.rect,min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
+  if(max<=min)return;
+  const fraction=Math.max(0,Math.min(1,(value-min)/(max-min)));
+  const center=rect.left+thumbSize/2+fraction*Math.max(0,rect.width-thumbSize);
+  if(Math.abs(event.clientX-center)>hitRadius)return;
+  active={input,pointerId:event.pointerId,rect,min,max,thumbSize};
+  event.preventDefault();
+ },{capture:true,passive:false});
+ document.addEventListener("pointermove",event=>{
+  if(!active||event.pointerId!==active.pointerId)return;
+  event.preventDefault();
+  const left=active.rect.left+active.thumbSize/2,right=active.rect.right-active.thumbSize/2;
+  const fraction=right<=left?0:Math.max(0,Math.min(1,(event.clientX-left)/(right-left)));
+  const raw=active.min+fraction*(active.max-active.min),step=Math.max(.0001,Number(active.input.step||1));
+  active.input.value=String(Math.max(active.min,Math.min(active.max,Math.round(raw/step)*step)));
+  active.input.dispatchEvent(new Event("input",{bubbles:true}));
+ },{capture:true,passive:false});
+ const release=event=>{
+  if(!active||event.pointerId!==active.pointerId)return;
+  const input=active.input;active=null;input.dispatchEvent(new Event("change",{bubbles:true}));
+ };
+ document.addEventListener("pointerup",release,true);
+ document.addEventListener("pointercancel",release,true);
 }
 function renderPhotoEditor(){
  const p=activeProject();if(!p){page='projects';render();return}
