@@ -81,6 +81,7 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-preset-row{display:flex;gap:8px}
 .pf-preset-row select{flex:1;min-width:0;height:46px;border:1px solid #e5e7ed;border-radius:14px;padding:0 12px;background:#fff;color:#353b49}
 .pf-save-preset{width:48px;border:1px solid #e5e7ed;border-radius:14px;background:#fff;color:#68717d;font-size:22px}
+#pf-reset-light{color:#d77b2c;font-size:26px;flex:0 0 44px;width:44px}
 .pf-slider-row{padding:11px 0 16px}
 .pf-slider-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#606a79;font-size:13px;margin-bottom:13px}
 .pf-slider-row label span{color:#929baa;font-size:12px;font-variant-numeric:tabular-nums}
@@ -151,6 +152,10 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-step.locked{opacity:.55}
 .pf-finish-button.next{background:#ffedc4;color:#92570f;border:1px solid #f6d68d}
 .pf-finish-button.complete{background:#d9f9e4;color:#218452;border:1px solid #b8ebcd}
+
+.pf-slider-row input[type=range]{touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pf-slider-row input[type=range]::-webkit-slider-thumb{transition:box-shadow .08s ease,transform .08s ease}
+.pf-slider-row input[type=range]:active::-webkit-slider-thumb{transform:scale(1.08)}
 </style>
 </head>
 <body>
@@ -663,14 +668,14 @@ function bindThumbOnlyRanges(){
    input.style.setProperty('--pf-range-fill',(fraction*100)+'%');
   };
   setFill();
-  input.style.touchAction='pan-y';
+  input.style.touchAction='none';
   input.addEventListener('pointerdown',event=>{
    const rect=input.getBoundingClientRect();
    const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
    if(rect.width<=0||max<=min)return;
    const thumbSize=24;
    const center=rect.left+thumbSize/2+((value-min)/(max-min))*(rect.width-thumbSize);
-   const nearThumb=Math.abs(event.clientX-center)<=22;
+   const nearThumb=Math.abs(event.clientX-center)<=26;
    if(!nearThumb){
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -700,7 +705,7 @@ function renderPhotoEditor(){
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
-  html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
+  html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-reset-light" type="button" aria-label="Reset semua pengaturan cahaya" title="Reset cahaya">↺</button><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
   const sliders=[['exposure','Exposure',-100,100,adj.exposure],['contrast','Kontras',-100,100,adj.contrast],['highlight','Highlight',-100,100,adj.highlight],['shadows','Bayangan',-100,100,adj.shadows],['saturation','Saturasi',-100,100,adj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,adj.warmth],['glow','Glow (cahaya lembut)',0,100,adj.glow],['vignette','Vignette (gelap pinggir)',0,100,adj.vignette],['denoise','Denoise (kurangi noise)',0,100,adj.denoise]];
   html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
   html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="active" id="pf-color-all">Seluruh subjek</button><button id="pf-color-brush">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===adj.selectedColor?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Preset dan penyesuaian disimpan pada foto ini.</p></div>';
@@ -759,9 +764,49 @@ function renderPhotoEditor(){
   await advanceWorkflowPhoto(p,ph,stage.key);
  };
  if(stageIndex===0){
-  const refreshImage=()=>{const im=$('#pf-photo-preview');if(im)im.style.filter=photoAdjustmentFilter(ph)};
-  const update=async(key,value)=>{ph.adjust=ph.adjust||{};const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;ph.adjust[prop]=Number(value);const label=$('#pf-value-'+key);if(label)label.textContent=(Number(value)>0?'+':'')+value;refreshImage();await invalidatePhotoStages(p,ph,'light')};
-  for(const [key] of [['exposure'],['contrast'],['highlight'],['shadows'],['saturation'],['warmth'],['glow'],['vignette'],['denoise']])$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value));
+  const lightSliderKeys=['exposure','contrast','highlight','shadows','saturation','warmth','glow','vignette','denoise'];
+  let lightSaveTimer=null;
+  const refreshImage=()=>{
+   const im=$('#pf-photo-preview');
+   if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter'}
+  };
+  const update=(key,value)=>{
+   ph.adjust=ph.adjust||{};
+   const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
+   ph.adjust[prop]=Number(value);
+   const label=$('#pf-value-'+key);
+   if(label)label.textContent=(Number(value)>0?'+':'')+value;
+   refreshImage();
+   ensurePhotoWorkflow(ph);
+   ph.workflow.light=false;
+   delete ph.workflowResults.light;
+   ['cutout','face','export'].forEach(k=>{ph.workflow[k]=false;delete ph.workflowResults[k]});
+   p.updatedAt=Date.now();
+   if(lightSaveTimer)clearTimeout(lightSaveTimer);
+   lightSaveTimer=setTimeout(()=>{dbPut('projects',p).catch(err=>console.warn('Simpan perubahan cahaya tertunda',err))},180);
+  };
+  lightSliderKeys.forEach(key=>$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value)));
+  $('#pf-reset-light')?.addEventListener('click',()=>{
+   const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0};
+   ph.adjust={...(ph.adjust||{}),...defaults};
+   lightSliderKeys.forEach(key=>{
+    const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
+    const input=$('#pf-slider-'+key);
+    if(input)input.value=defaults[prop]??0;
+    const label=$('#pf-value-'+key);
+    if(label)label.textContent='0';
+   });
+   if($('#pf-preset'))$('#pf-preset').value='original';
+   refreshImage();
+   ensurePhotoWorkflow(ph);
+   ph.workflow.light=false;
+   delete ph.workflowResults.light;
+   ['cutout','face','export'].forEach(k=>{ph.workflow[k]=false;delete ph.workflowResults[k]});
+   p.updatedAt=Date.now();
+   if(lightSaveTimer)clearTimeout(lightSaveTimer);
+   lightSaveTimer=setTimeout(()=>{dbPut('projects',p).catch(err=>console.warn('Simpan reset cahaya tertunda',err))},50);
+   toast('Cahaya direset ke Original.');
+  });
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
    ph.adjust={...(ph.adjust||{}),...presets[e.target.value]};await invalidatePhotoStages(p,ph,'light');renderPhotoEditor();
