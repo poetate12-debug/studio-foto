@@ -783,6 +783,7 @@ async function refreshLightBrushPreviews(ph){
  if(hasBright||hasDark){
   const base=document.createElement('canvas');base.width=brightMask.width;base.height=brightMask.height;
   const baseCtx=base.getContext('2d');baseCtx.filter=photoAdjustmentFilter(ph);baseCtx.drawImage(image,0,0,base.width,base.height);baseCtx.filter='none';
+  await applyColorMixToCanvas(base,ph);
   const addLayer=(mask,mode)=>{
    if(!mask)return;
    const layer=document.createElement('canvas');layer.width=base.width;layer.height=base.height;
@@ -860,8 +861,8 @@ async function photoDataWithLight(ph){
  const a=adjustmentValues(ph);
  const any=(Math.abs(a.exposure)+Math.abs(a.contrast)+Math.abs(a.highlight)+Math.abs(a.shadows)+Math.abs(a.saturation)+Math.abs(a.warmth)+a.glow+a.vignette+a.denoise)>0;
  const brush=ensureLightBrushState(ph);
- const hasLocalBrush=!!(brush.masks.brighten||brush.masks.darken);
- if(!any&&!hasLocalBrush)return source;
+ const hasLocalBrush=!!(brush.masks.brighten||brush.masks.darken),hasColorMix=colorMixHasAdjustments(ph);
+ if(!any&&!hasLocalBrush&&!hasColorMix)return source;
  return new Promise((resolve,reject)=>{
   const image=new Image();
   image.onload=async()=>{
@@ -890,6 +891,7 @@ async function photoDataWithLight(ph){
      g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+Math.min(.48,a.vignette/210)+')');
      ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
     }
+    await applyColorMixToCanvas(canvas,ph);
     await applyLocalLightBrushToCanvas(canvas,ph);
     resolve(canvas.toDataURL('image/jpeg',.94));
    }catch(error){reject(error)}
@@ -1110,6 +1112,7 @@ function renderPhotoEditor(){
  html+=workflowProgressMarkup(stageIndex,p)+'</section>';
  $('#main').innerHTML=html;
  bindThumbOnlyRanges();
+ scheduleColorMixPreview(ph);
  document.body.classList.add('photo-flow-active','photo-editor-active');
  $('#pf-editor-back').onclick=goToProjectGallery;$('#pf-editor-gallery').onclick=goToProjectGallery;
  $('#pf-editor-add').onclick=()=>$('#pf-editor-files').click();
@@ -1156,7 +1159,7 @@ function renderPhotoEditor(){
   let lightSaveTimer=null;
   const refreshImage=()=>{
    const im=$('#pf-photo-preview');
-   if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter'}
+   if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter';scheduleColorMixPreview(ph)}
   };
   const update=(key,value)=>{
    ph.adjust=ph.adjust||{};
@@ -1204,13 +1207,14 @@ function renderPhotoEditor(){
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
   $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
-  const colorState=()=>{const a=adjustmentValues(ph);return a.colorMix[ph.adjust?.selectedColor||'red']||{sat:0,bright:0}};
   $$('[data-pf-color]').forEach(b=>b.onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;dbPut('projects',p);renderPhotoEditor()});
-  $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
-  $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;dbPut('projects',p)};
-  $('#pf-color-brush').onclick=()=>toast('Kuas warna belum aktif. Gunakan panel Kuas cahaya lokal untuk menerangkan atau menggelapkan area foto.');
-  $('#pf-color-all').onclick=()=>toast('Penyesuaian warna saat ini diterapkan ke seluruh subjek.');
+  $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
+  $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
+  $('#pf-color-brush').onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.colorMixMode='brush';colorBrushEnabledPhotoId=ph.id;lightBrushEnabledPhotoId=null;renderPhotoEditor()};
+  $('#pf-color-all').onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.colorMixMode='all';colorBrushEnabledPhotoId=null;renderPhotoEditor()};
   bindLightBrushControls(ph,p).catch(error=>{console.warn('Kuas cahaya tidak dapat diinisialisasi',error);toast('Kuas cahaya belum siap. Coba muat ulang foto.')});
+  bindColorMixBrushControls(ph,p).catch(error=>{console.warn('Kuas seleksi warna tidak dapat diinisialisasi',error);toast('Kuas seleksi warna belum siap. Coba muat ulang foto.')});
+  scheduleColorMixPreview(ph);
  }
  if(stageIndex===1)$('#pf-run-cutout').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
