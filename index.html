@@ -733,7 +733,7 @@ function renderPhotoEditor(){
  $('#pf-prev-photo').onclick=()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderPhotoEditor()};
  $('#pf-next-photo').onclick=()=>{activePhotoIndex=Math.min(p.photos.length-1,activePhotoIndex+1);renderPhotoEditor()};
  $$('[data-pf-thumb]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.pfThumb);renderPhotoEditor()});
- $('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
+ $$('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
   const target=Number(b.dataset.pfStage);
   if(target===stageIndex){const currentEligible=firstEligiblePhotoIndex(p,target);if(currentEligible>=0){activePhotoIndex=currentEligible;renderPhotoEditor()}return}
   if(!stageCanBeOpened(p,target)){
