@@ -909,10 +909,13 @@ async function bindLightBrushControls(ph,p){
  toggle.onclick=()=>{
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
   const active=lightBrushEnabledPhotoId===ph.id;
-  if(active)colorBrushEnabledPhotoId=null;else if(ph.adjust?.colorMixMode==='brush')colorBrushEnabledPhotoId=ph.id;
+  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null}
+  else if(ph.adjust?.colorMixMode==='brush')colorBrushEnabledPhotoId=ph.id;
   if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
   if(!active)lightBrushDrawing=null;
+  syncLightAdjustmentControls(ph,active);
   getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
+  refreshColorMixPreview(ph).catch(error=>console.warn(error));
   refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
  };
  document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{brush.mode=button.dataset.pfBrushMode;brush.erase=false;updateModeButtons();saveSettings();scheduleLightBrushPreview(ph)});
@@ -992,6 +995,7 @@ async function photoDataWithLight(ph){
      ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
     }
     await applyColorMixToCanvas(canvas,ph);
+    await applyMaskedLocalLightAdjustmentsToCanvas(canvas,ph);
     await applyLocalLightBrushToCanvas(canvas,ph);
     resolve(canvas.toDataURL('image/jpeg',.94));
    }catch(error){reject(error)}
