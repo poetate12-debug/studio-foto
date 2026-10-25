@@ -19,7 +19,7 @@ const navSource = navStart >= 0 && navEnd > navStart ? html.slice(navStart, navE
 
 requireSource(renderSource.length > 0, "render() route handler exists");
 requireSource(!/\$\s*\([^)]*\)\s*\.\s*forEach\s*\(/.test(renderSource), "render() does not call forEach on a single-element selector");
-requireSource(!/\$\s*\([^)]*\)\s*\.\s*(forEach|map|filter)\s*\(/.test(html), "no collection methods are called on a single-element selector anywhere in the app");
+requireSource(!/(?<!\$)\$\s*\([^)]*\)\s*\.\s*(forEach|map|filter)\s*\(/.test(html), "no collection methods are called on a single-element selector anywhere in the app");
 requireSource(renderSource.includes("document.querySelectorAll('[data-page]').forEach"), "render() uses querySelectorAll for navigation states");
 requireSource(navSource.includes("document.querySelectorAll('[data-page]').forEach"), "navTo() uses querySelectorAll for navigation states");
 requireSource(html.includes("function renderErrorScreen("), "render errors have an in-app recovery screen");
