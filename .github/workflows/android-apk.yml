@@ -8,6 +8,7 @@ on:
       - 'index.html'
       - 'native-download.js'
       - 'android-native/**'
+      - 'scripts/**'
       - 'manifest.json'
       - 'sw.js'
       - 'capacitor.config.json'
@@ -83,6 +84,7 @@ jobs:
           print(f"Found {len(blocks)} inline script blocks")
           PY
           node --check /tmp/reang-index-inline.js
+          node scripts/smoke-check.mjs
 
       - name: Generate Android project
         run: |
