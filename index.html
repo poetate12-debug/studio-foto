@@ -1266,19 +1266,21 @@ function renderPhotoEditor(){
   let lightSaveTimer=null;
   const refreshImage=()=>{
    const im=$('#pf-photo-preview');
-   if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter';scheduleColorMixPreview(ph)}
+   if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter'}
+   scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
   };
   const update=(key,value)=>{
    ph.adjust=ph.adjust||{};
+   const localMode=lightBrushEnabledPhotoId===ph.id;
    const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
-   ph.adjust[prop]=Number(value);
+   if(localMode)ensureLightBrushState(ph).adjustments[key]=Number(value);
+   else ph.adjust[prop]=Number(value);
    const label=$('#pf-value-'+key);
    if(label)label.textContent=(Number(value)>0?'+':'')+value;
+   syncLightAdjustmentControls(ph,localMode);
    refreshImage();
-   scheduleLightBrushPreview(ph);
    ensurePhotoWorkflow(ph);
-   ph.workflow.light=false;
-   delete ph.workflowResults.light;
+   ph.workflow.light=false;delete ph.workflowResults.light;
    ['cutout','face','export'].forEach(k=>{ph.workflow[k]=false;delete ph.workflowResults[k]});
    p.updatedAt=Date.now();
    if(lightSaveTimer)clearTimeout(lightSaveTimer);
@@ -1288,6 +1290,7 @@ function renderPhotoEditor(){
   $('#pf-reset-light')?.addEventListener('click',()=>{
    const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0};
    ph.adjust={...(ph.adjust||{}),...defaults};
+   ensureLightBrushState(ph).adjustments={exposure:0,contrast:0,highlight:0,shadows:0,saturation:0,warmth:0,glow:0,vignette:0,denoise:0};
    clearPhotoLightBrushMasks(ph);
    lightSliderKeys.forEach(key=>{
     const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
@@ -1297,6 +1300,7 @@ function renderPhotoEditor(){
     if(label)label.textContent='0';
    });
    if($('#pf-preset'))$('#pf-preset').value='original';
+   syncLightAdjustmentControls(ph,lightBrushEnabledPhotoId===ph.id);
    refreshImage();
    ensurePhotoWorkflow(ph);
    ph.workflow.light=false;
@@ -1309,22 +1313,50 @@ function renderPhotoEditor(){
   });
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
-   ph.adjust={...(ph.adjust||{}),...presets[e.target.value]};await invalidatePhotoStages(p,ph,'light');renderPhotoEditor();
+   const chosen=presets[e.target.value],localMode=lightBrushEnabledPhotoId===ph.id;
+   if(localMode){
+    const brush=ensureLightBrushState(ph);
+    brush.adjustments={exposure:chosen.exposure,contrast:chosen.contrastValue,highlight:chosen.highlight,shadows:chosen.shadows,saturation:chosen.saturationValue,warmth:chosen.warmth,glow:chosen.glow,vignette:chosen.vignette,denoise:chosen.denoise};
+   }else ph.adjust={...(ph.adjust||{}),...chosen};
+   const editorScroll=document.querySelector('.pf-editor-scroll')?.scrollTop||0;
+   await invalidatePhotoStages(p,ph,'light');renderPhotoEditor();
+   requestAnimationFrame(()=>{const el=document.querySelector('.pf-editor-scroll');if(el)el.scrollTop=editorScroll});
   };
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
   $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
   $('[data-pf-color]').forEach(b=>b.onclick=()=>{
-   const scrollTop=window.scrollY||document.documentElement.scrollTop||0;
    ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;
-   dbPut('projects',p);
-   renderPhotoEditor();
-   requestAnimationFrame(()=>window.scrollTo({top:scrollTop,left:0,behavior:'instant'}));
+   $('[data-pf-color]').forEach(dot=>dot.classList.toggle('active',dot.dataset.pfColor===ph.adjust.selectedColor));
+   const tune=(adjustmentValues(ph).colorMix[ph.adjust.selectedColor]||{sat:0,bright:0});
+   const sat=$('#pf-slider-color-sat'),bright=$('#pf-slider-color-bright');
+   if(sat){sat.value=String(tune.sat||0);sat.style.setProperty('--pf-range-fill',((Number(sat.value)-Number(sat.min))/(Number(sat.max)-Number(sat.min))*100)+'%')}
+   if(bright){bright.value=String(tune.bright||0);bright.style.setProperty('--pf-range-fill',((Number(bright.value)-Number(bright.min))/(Number(bright.max)-Number(bright.min))*100)+'%')}
+   const satLabel=$('#pf-value-color-sat'),brightLabel=$('#pf-value-color-bright');
+   if(satLabel)satLabel.textContent=(Number(tune.sat)>0?'+':'')+(tune.sat||0);
+   if(brightLabel)brightLabel.textContent=(Number(tune.bright)>0?'+':'')+(tune.bright||0);
+   dbPut('projects',p).catch(error=>console.warn('Pilihan warna belum tersimpan',error));
   });
   $('#pf-slider-color-sat').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].sat=Number(e.target.value);const el=$('#pf-value-color-sat');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
   $('#pf-slider-color-bright').oninput=e=>{const key=ph.adjust?.selectedColor||'red';ph.adjust=ph.adjust||{};ph.adjust.colorMix=ph.adjust.colorMix||{};ph.adjust.colorMix[key]=ph.adjust.colorMix[key]||{sat:0,bright:0};ph.adjust.colorMix[key].bright=Number(e.target.value);const el=$('#pf-value-color-bright');if(el)el.textContent=(Number(e.target.value)>0?'+':'')+e.target.value;scheduleColorMixSave(p,ph)};
-  $('#pf-color-brush').onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.colorMixMode='brush';colorBrushEnabledPhotoId=ph.id;lightBrushEnabledPhotoId=null;renderPhotoEditor()};
-  $('#pf-color-all').onclick=()=>{ph.adjust=ph.adjust||{};ph.adjust.colorMixMode='all';colorBrushEnabledPhotoId=null;renderPhotoEditor()};
+  const setColorMode=async mode=>{
+   ph.adjust=ph.adjust||{};ph.adjust.colorMixMode=mode;
+   const brushMode=mode==='brush';
+   colorBrushEnabledPhotoId=brushMode?ph.id:null;
+   if(brushMode){lightBrushEnabledPhotoId=null;lightBrushDrawing=null;lightBrushPointer=null}
+   $('#pf-color-brush')?.classList.toggle('active',brushMode);
+   $('#pf-color-all')?.classList.toggle('active',!brushMode);
+   $('#pf-color-brush-tools')?.classList.toggle('hidden',!brushMode);
+   const lightToggle=$('#pf-light-brush-toggle'),lightOptions=$('#pf-light-brush-options');
+   if(brushMode){lightToggle?.classList.remove('active');lightToggle?.setAttribute('aria-pressed','false');if(lightToggle)lightToggle.textContent='Aktifkan kuas';lightOptions?.classList.add('hidden')}
+   syncLightAdjustmentControls(ph,false);
+   await dbPut('projects',p);
+   const mask=await getColorMixBrushCanvas(ph);renderColorMixBrushSelection(ph,mask);
+   refreshColorMixPreview(ph).catch(error=>console.warn(error));
+   refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+  };
+  $('#pf-color-brush').onclick=()=>setColorMode('brush');
+  $('#pf-color-all').onclick=()=>setColorMode('all');
   bindLightBrushControls(ph,p).catch(error=>{console.warn('Kuas cahaya tidak dapat diinisialisasi',error);toast('Kuas cahaya belum siap. Coba muat ulang foto.')});
   bindColorMixBrushControls(ph,p).catch(error=>{console.warn('Kuas seleksi warna tidak dapat diinisialisasi',error);toast('Kuas seleksi warna belum siap. Coba muat ulang foto.')});
   scheduleColorMixPreview(ph);
