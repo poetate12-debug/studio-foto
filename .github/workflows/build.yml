@@ -8,6 +8,7 @@ on:
       - 'index.html'
       - 'native-download.js'
       - 'android-native/**'
+      - 'scripts/**'
       - 'manifest.json'
       - 'sw.js'
       - 'server.js'
@@ -35,10 +36,13 @@ jobs:
       - name: Validate backend syntax
         run: npm test
 
+      - name: Validate app routing and workflow
+        run: node scripts/smoke-check.mjs
+
       - name: Prepare distributable source
         run: |
           mkdir -p dist
-          zip -r dist/reang-studio-foto-source.zip             index.html manifest.json sw.js server.js package.json native-download.js android-native/NativeDownloaderPlugin.java README.md .env.example .gitignore             -x '*/node_modules/*' '*/.git/*' '*/.env'
+          zip -r dist/reang-studio-foto-source.zip             index.html manifest.json sw.js server.js package.json native-download.js android-native/NativeDownloaderPlugin.java scripts/smoke-check.mjs README.md .env.example .gitignore             -x '*/node_modules/*' '*/.git/*' '*/.env'
           cp index.html dist/reang-studio-foto-web.html
           cp manifest.json dist/ 2>/dev/null || true
           cp sw.js dist/ 2>/dev/null || true
