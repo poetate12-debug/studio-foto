@@ -1325,9 +1325,9 @@ function renderPhotoEditor(){
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
   $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
-  $('[data-pf-color]').forEach(b=>b.onclick=()=>{
+  $$('[data-pf-color]').forEach(b=>b.onclick=()=>{
    ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;
-   $('[data-pf-color]').forEach(dot=>dot.classList.toggle('active',dot.dataset.pfColor===ph.adjust.selectedColor));
+   $$('[data-pf-color]').forEach(dot=>dot.classList.toggle('active',dot.dataset.pfColor===ph.adjust.selectedColor));
    const tune=(adjustmentValues(ph).colorMix[ph.adjust.selectedColor]||{sat:0,bright:0});
    const sat=$('#pf-slider-color-sat'),bright=$('#pf-slider-color-bright');
    if(sat){sat.value=String(tune.sat||0);sat.style.setProperty('--pf-range-fill',((Number(sat.value)-Number(sat.min))/(Number(sat.max)-Number(sat.min))*100)+'%')}
