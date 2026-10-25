@@ -523,15 +523,47 @@ function adjustmentValues(ph){
   selectedColor:a.selectedColor||"red",colorMixMode:a.colorMixMode==="brush"?"brush":"all",colorMixBrush:a.colorMixBrush||{size:8,softness:65,mask:null}
  };
 }
-function photoAdjustmentFilter(ph,original=false){
+function photoAdjustmentFilter(ph,original=false,overrideAdjustments=null){
  if(original)return 'none';
- const a=adjustmentValues(ph);
- const brightness=Math.max(.08,1+a.exposure/100);
- const contrast=Math.max(.1,1+a.contrast/100);
- const saturation=Math.max(0,1+a.saturation/100);
- const sepia=Math.min(.42,Math.abs(a.warmth)/240);
- const hue=a.warmth<0?Math.abs(a.warmth)*-.16:0;
+ const a=overrideAdjustments||adjustmentValues(ph);
+ const brightness=Math.max(.08,1+(Number(a.exposure)||0)/100);
+ const contrast=Math.max(.1,1+(Number(a.contrast)||0)/100);
+ const saturation=Math.max(0,1+(Number(a.saturation)||0)/100);
+ const warmth=Number(a.warmth)||0;
+ const sepia=Math.min(.42,Math.abs(warmth)/240);
+ const hue=warmth<0?Math.abs(warmth)*-.16:0;
  return 'brightness('+brightness+') contrast('+contrast+') saturate('+saturation+') sepia('+sepia+') hue-rotate('+hue+'deg)';
+}
+function localLightAdjustmentValues(ph){
+ const brush=ensureLightBrushState(ph),a=brush.adjustments||{};
+ return {
+  exposure:Number(a.exposure)||0,contrast:Number(a.contrast)||0,highlight:Number(a.highlight)||0,
+  shadows:Number(a.shadows)||0,saturation:Number(a.saturation)||0,warmth:Number(a.warmth)||0,
+  glow:Number(a.glow)||0,vignette:Number(a.vignette)||0,denoise:Number(a.denoise)||0
+ };
+}
+function lightAdjustmentValuesHaveChanges(a){
+ return ['exposure','contrast','highlight','shadows','saturation','warmth','glow','vignette','denoise'].some(k=>Math.abs(Number(a?.[k])||0)>.001);
+}
+function photoHasLightBrushPaint(ph){
+ const brush=ensureLightBrushState(ph);
+ return !!(brush.masks.brighten||brush.masks.darken);
+}
+function syncLightAdjustmentControls(ph,localMode){
+ const values=localMode?localLightAdjustmentValues(ph):adjustmentValues(ph);
+ const props={exposure:'exposure',contrast:'contrast',highlight:'highlight',shadows:'shadows',saturation:'saturation',warmth:'warmth',glow:'glow',vignette:'vignette',denoise:'denoise'};
+ for(const key of Object.keys(props)){
+  const input=document.getElementById('pf-slider-'+key),label=document.getElementById('pf-value-'+key),value=Number(values[props[key]])||0;
+  if(input){input.value=String(value);const min=Number(input.min||0),max=Number(input.max||100);input.style.setProperty('--pf-range-fill',(Math.max(0,Math.min(1,(value-min)/(max-min)))*100)+'%')}
+  if(label)label.textContent=(value>0?'+':'')+value;
+ }
+ const scope=document.getElementById('pf-light-adjustment-scope');
+ if(scope){
+  scope.classList.toggle('local',!!localMode);
+  scope.textContent=localMode
+   ?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA KUAS · Slider hanya mengubah bagian yang disapukan. Matikan Kuas untuk mengedit seluruh foto.':'🖌 MODE AREA KUAS · Sapukan kuas pada foto terlebih dahulu; slider tidak akan mengubah area di luar sapuan.')
+   :'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.';
+ }
 }
 
 function ensureColorMixBrushState(ph){
@@ -709,7 +741,9 @@ function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
  const old=ph.adjust.lightBrush||{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
- ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':'brighten',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null}};
+ ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':'brighten',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null},adjustments:{
+  exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100)
+ }};
  return ph.adjust.lightBrush;
 }
 function lightBrushMaskKey(ph,mode){return String(ph.id)+':'+mode}
