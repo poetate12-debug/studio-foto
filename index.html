@@ -1097,7 +1097,14 @@ async function init(){
  if(templateResult.status==='rejected')console.error('Daftar template gagal dibaca.',templateResult.reason);
  try{wireNav()}catch(error){console.error('Navigasi utama gagal dipasang.',error)}
  render();
- if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(error=>console.warn('Service worker tidak diperbarui.',error));
+ if('serviceWorker'in navigator&&location.protocol.startsWith('http')){
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+   if(window.__reangCacheReloaded)return;
+   window.__reangCacheReloaded=true;
+   location.reload();
+  },{once:true});
+  navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(error=>console.warn('Service worker tidak diperbarui.',error));
+ }
 }
 init();
 })();
