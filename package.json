@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js",
-    "test": "npm run check",
-    "build:android": "npx cap sync android"
+    "test": "npm run check && npm run smoke",
+    "build:android": "npx cap sync android",
+    "smoke": "node scripts/smoke-check.mjs"
   },
   "engines": {
     "node": ">=20"
