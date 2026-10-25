@@ -817,23 +817,28 @@ async function refreshLightBrushPreviews(ph){
  const overlayWidth=Math.max(1,Math.round(rect.width)),overlayHeight=Math.max(1,Math.round(rect.height));
  if(brushOverlay.width!==overlayWidth)brushOverlay.width=overlayWidth;if(brushOverlay.height!==overlayHeight)brushOverlay.height=overlayHeight;
  const brush=ensureLightBrushState(ph),drawing=lightBrushDrawing&&lightBrushDrawing.photoId===ph.id?lightBrushDrawing:null;
- const hasBright=!!brush.masks.brighten||(drawing&&drawing.mode==='brighten'&&!drawing.erase),hasDark=!!brush.masks.darken||(drawing&&drawing.mode==='darken'&&!drawing.erase),effectCtx=effect.getContext('2d');
- /* Keep the base image untouched: local brightness is composited only through the
-    saved alpha mask. A transparent mask must never turn into a full-frame layer. */
- effectCtx.clearRect(0,0,effect.width,effect.height);
- if(hasBright||hasDark){
-  const base=document.createElement('canvas');base.width=brightMask.width;base.height=brightMask.height;
-  const baseCtx=base.getContext('2d');baseCtx.filter=photoAdjustmentFilter(ph);baseCtx.drawImage(image,0,0,base.width,base.height);baseCtx.filter='none';
-  await applyColorMixToCanvas(base,ph);
-  const addLayer=(mask,mode)=>{
-   if(!mask)return;
-   const layer=document.createElement('canvas');layer.width=base.width;layer.height=base.height;
-   const layerCtx=layer.getContext('2d');layerCtx.filter=mode==='brighten'?'brightness(1.65)':'brightness(0.38)';layerCtx.drawImage(base,0,0);layerCtx.filter='none';
-   layerCtx.globalCompositeOperation='destination-in';layerCtx.drawImage(mask,0,0,layer.width,layer.height);layerCtx.globalCompositeOperation='source-over';
-   effectCtx.drawImage(layer,0,0);layer.width=1;layer.height=1;
-  };
-  if(hasBright)addLayer(brightMask,'brighten');if(hasDark)addLayer(darkMask,'darken');base.width=1;base.height=1;effect.style.display='block';
- }else effect.style.display='none';
+ const hasBright=!!brush.masks.brighten||(drawing&&drawing.mode==='brighten'&&!drawing.erase),hasDark=!!brush.masks.darken||(drawing&&drawing.mode==='darken'&&!drawing.erase);
+ const hasMask=photoHasLightBrushPaint(ph)||!!drawing;
+ const global=adjustmentValues(ph),localValues=localLightAdjustmentValues(ph);
+ const hasGlobalExtras=Math.abs(global.highlight)+Math.abs(global.shadows)+global.glow+global.vignette>0;
+ const localActive=hasMask&&lightAdjustmentValuesHaveChanges(localValues);
+ const needsComposite=hasMask||hasGlobalExtras;
+ const effectCtx=effect.getContext('2d');effectCtx.clearRect(0,0,effect.width,effect.height);
+ if(needsComposite){
+  const result=document.createElement('canvas');result.width=brightMask.width;result.height=brightMask.height;
+  const resultCtx=result.getContext('2d');resultCtx.filter=photoAdjustmentFilter(ph);resultCtx.drawImage(image,0,0,result.width,result.height);resultCtx.filter='none';
+  await applyAdditionalLightAdjustmentsToCanvas(result,global);
+  await applyColorMixToCanvas(result,ph);
+  if(localActive)await applyMaskedLocalLightAdjustmentsToCanvas(result,ph);
+  if(hasBright||hasDark)await applyLocalLightBrushToCanvas(result,ph);
+  if(page!=='photo-editor'||!document.getElementById('pf-light-effect-preview'))return;
+  effectCtx.drawImage(result,0,0,effect.width,effect.height);effect.style.display='block';
+  imageEl.style.filter='none';
+  result.width=1;result.height=1;
+ }else{
+  effect.style.display='none';
+  imageEl.style.filter=photoAdjustmentFilter(ph);
+ }
  renderLightBrushSelection(ph,brightMask,darkMask);
 }
 let lightBrushPreviewTimer=null;
@@ -845,6 +850,44 @@ function clearPhotoLightBrushMasks(ph){
  const brush=ensureLightBrushState(ph);brush.masks={brighten:null,darken:null};
  ['brighten','darken'].forEach(mode=>{const cached=lightBrushMaskCanvases.get(lightBrushMaskKey(ph,mode));if(cached&&typeof cached.getContext==='function')cached.getContext('2d').clearRect(0,0,cached.width,cached.height)});
  lightBrushDrawing=null;lightBrushPointer=null;scheduleLightBrushPreview(ph);
+}
+async function getCombinedLightBrushMask(ph,width,height){
+ const [bright,dark]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]);
+ const mask=document.createElement('canvas');mask.width=Math.max(1,width);mask.height=Math.max(1,height);
+ const ctx=mask.getContext('2d');ctx.drawImage(bright,0,0,mask.width,mask.height);ctx.drawImage(dark,0,0,mask.width,mask.height);
+ return mask;
+}
+async function applyAdditionalLightAdjustmentsToCanvas(canvas,a){
+ const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+ if(a.highlight!==0||a.shadows!==0){
+  ctx.save();
+  if(a.highlight>0){ctx.globalAlpha=Math.min(.18,Number(a.highlight)/600);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h)}
+  else if(a.highlight<0){ctx.globalAlpha=Math.min(.15,Math.abs(Number(a.highlight))/700);ctx.fillStyle='#241c18';ctx.fillRect(0,0,w,h)}
+  if(a.shadows>0){ctx.globalAlpha=Math.min(.10,Number(a.shadows)/900);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h)}
+  else if(a.shadows<0){ctx.globalAlpha=Math.min(.14,Math.abs(Number(a.shadows))/700);ctx.fillStyle='#211b24';ctx.fillRect(0,0,w,h)}
+  ctx.restore();
+ }
+ if(Number(a.glow)>0){
+  ctx.save();ctx.globalAlpha=Math.min(.16,Number(a.glow)/550);
+  const g=ctx.createRadialGradient(w*.5,h*.42,0,w*.5,h*.42,Math.max(w,h)*.65);
+  g.addColorStop(0,'#fff');g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,w,h);ctx.restore();
+ }
+ if(Number(a.vignette)>0){
+  ctx.save();const g=ctx.createRadialGradient(w*.5,h*.5,Math.min(w,h)*.2,w*.5,h*.5,Math.max(w,h)*.68);
+  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+Math.min(.48,Number(a.vignette)/210)+')');
+  ctx.fillStyle=g;ctx.fillRect(0,0,w,h);ctx.restore();
+ }
+}
+async function applyMaskedLocalLightAdjustmentsToCanvas(canvas,ph){
+ const brush=ensureLightBrushState(ph),values=localLightAdjustmentValues(ph);
+ if(!photoHasLightBrushPaint(ph)||!lightAdjustmentValuesHaveChanges(values))return;
+ const layer=document.createElement('canvas');layer.width=canvas.width;layer.height=canvas.height;
+ const lctx=layer.getContext('2d');lctx.filter=photoAdjustmentFilter(ph,false,values);lctx.drawImage(canvas,0,0);lctx.filter='none';
+ await applyAdditionalLightAdjustmentsToCanvas(layer,values);
+ const mask=await getCombinedLightBrushMask(ph,canvas.width,canvas.height);
+ lctx.globalCompositeOperation='destination-in';lctx.drawImage(mask,0,0,layer.width,layer.height);lctx.globalCompositeOperation='source-over';
+ canvas.getContext('2d').drawImage(layer,0,0);layer.width=1;layer.height=1;mask.width=1;mask.height=1;
 }
 async function applyLocalLightBrushToCanvas(canvas,ph){
  const brush=ensureLightBrushState(ph);if(!brush.masks.brighten&&!brush.masks.darken)return;
