@@ -19,6 +19,7 @@ const navSource = navStart >= 0 && navEnd > navStart ? html.slice(navStart, navE
 
 requireSource(renderSource.length > 0, "render() route handler exists");
 requireSource(!/\$\s*\([^)]*\)\s*\.\s*forEach\s*\(/.test(renderSource), "render() does not call forEach on a single-element selector");
+requireSource(!/\$\s*\([^)]*\)\s*\.\s*(forEach|map|filter)\s*\(/.test(html), "no collection methods are called on a single-element selector anywhere in the app");
 requireSource(renderSource.includes("document.querySelectorAll('[data-page]').forEach"), "render() uses querySelectorAll for navigation states");
 requireSource(navSource.includes("document.querySelectorAll('[data-page]').forEach"), "navTo() uses querySelectorAll for navigation states");
 requireSource(html.includes("function renderErrorScreen("), "render errors have an in-app recovery screen");
@@ -26,6 +27,9 @@ requireSource(renderSource.includes("catch(error)") && renderSource.includes("re
 requireSource(html.includes("Promise.allSettled([dbGetAll('projects'),dbGetAll('templates')])"), "project/template storage loading fails independently");
 requireSource(html.includes("function renderProjects()") && html.includes("function renderProjectGallery()") && html.includes("function renderPhotoEditor()"), "main list, project photo gallery and editor are separate pages");
 requireSource(html.includes("key:'light'") && html.includes("key:'cutout'") && html.includes("key:'template'") && html.includes("key:'face'") && html.includes("key:'export'"), "five editing stages are present in order");
+const orderedStageKeys = ["key:'light'", "key:'cutout'", "key:'template'", "key:'face'", "key:'export'"].map((key) => html.indexOf(key));
+requireSource(orderedStageKeys.every((index, i) => index >= 0 && (i === 0 || index > orderedStageKeys[i - 1])), "stages appear in the required order");
+requireSource(html.includes("function wireNav()") && html.includes("function navTo(next)"), "navigation is wired and has a route guard");
 requireSource(html.includes("function invalidatePhotoStages("), "editing an earlier stage invalidates dependent results");
 requireSource(html.includes("async function saveCanvasToDevice("), "export has a device-save path");
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
