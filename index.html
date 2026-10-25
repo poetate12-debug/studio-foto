@@ -126,6 +126,31 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
  .pf-step{font-size:9px}
  .pf-main-photo{min-height:160px}
 }
+
+/* Touch-safe controls and partial-workflow status colors */
+.pf-slider-row input[type=range]{
+ -webkit-appearance:none;appearance:none;width:100%;margin:0;height:32px;padding:0;background:transparent;
+ accent-color:#e9822f;touch-action:pan-y;user-select:none;-webkit-user-select:none;
+}
+.pf-slider-row input[type=range]::-webkit-slider-runnable-track{
+ height:7px;border-radius:99px;
+ background:linear-gradient(to right,#ed842f 0 var(--pf-range-fill,50%),#dfe4ed var(--pf-range-fill,50%) 100%);
+}
+.pf-slider-row input[type=range]::-webkit-slider-thumb{
+ -webkit-appearance:none;width:24px;height:24px;margin-top:-8.5px;border-radius:50%;
+ background:#ed842f;border:3px solid #fff;box-shadow:0 1px 5px #20253630,0 0 0 1px #ed842f;
+}
+.pf-slider-row input[type=range]::-moz-range-track{height:7px;border-radius:99px;background:#dfe4ed}
+.pf-slider-row input[type=range]::-moz-range-progress{height:7px;border-radius:99px;background:#ed842f}
+.pf-slider-row input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#ed842f;border:3px solid #fff;box-shadow:0 1px 5px #20253630}
+.pf-step.available .pf-step-num{background:#fff0d8;color:#bb6a12;border:1px solid #f4c47b}
+.pf-step.available:not(.current){color:#b56b1d}
+.pf-step.current .pf-step-num{background:#ef9b28;color:#fff}
+.pf-step.complete{color:#218452;font-weight:800}
+.pf-step.complete .pf-step-num{background:#d9f9e4;color:#218452;border:1px solid #b8ebcd}
+.pf-step.locked{opacity:.55}
+.pf-finish-button.next{background:#ffedc4;color:#92570f;border:1px solid #f6d68d}
+.pf-finish-button.complete{background:#d9f9e4;color:#218452;border:1px solid #b8ebcd}
 </style>
 </head>
 <body>
@@ -506,8 +531,47 @@ async function photoDataWithLight(ph){
   image.src=source;
  });
 }
-function workflowProgressMarkup(stageIndex){
- return '<div class="pf-step-nav">'+workflowStages.map((st,i)=>'<button class="pf-step '+(i===stageIndex?'current':(i<stageIndex?'past':''))+'" data-pf-stage="'+i+'"><span class="pf-step-num">'+(i<stageIndex?'✓':i+1)+'</span><span>'+esc(st.title)+'</span></button>').join('')+'</div>';
+function firstEligiblePhotoIndex(p,targetIndex){
+ const photos=p.photos||[];
+ const eligible={
+  0: ph=>!workflowDone(ph,'light'),
+  1: ph=>workflowDone(ph,'light')&&!workflowDone(ph,'cutout'),
+  2: ph=>workflowDone(ph,'cutout')&&!workflowDone(ph,'template'),
+  3: ph=>workflowDone(ph,'cutout')&&workflowDone(ph,'template')&&!workflowDone(ph,'face'),
+  4: ph=>workflowDone(ph,'face')&&!workflowDone(ph,'export')
+ };
+ const fn=eligible[targetIndex];
+ if(!fn)return -1;
+ let found=photos.findIndex(fn);
+ if(found<0){
+  const fallback={
+   0: ph=>true,
+   1: ph=>workflowDone(ph,'light'),
+   2: ph=>workflowDone(ph,'cutout'),
+   3: ph=>workflowDone(ph,'cutout')&&workflowDone(ph,'template'),
+   4: ph=>workflowDone(ph,'face')
+  }[targetIndex];
+  found=fallback?photos.findIndex(fallback):-1;
+ }
+ return found;
+}
+function stageCanBeOpened(p,targetIndex){
+ if(targetIndex===0)return true;
+ const prereq={
+  1: ph=>workflowDone(ph,'light'),
+  2: ph=>workflowDone(ph,'cutout'),
+  3: ph=>workflowDone(ph,'cutout')&&workflowDone(ph,'template'),
+  4: ph=>workflowDone(ph,'face')
+ }[targetIndex];
+ return !!prereq&&(p.photos||[]).some(prereq);
+}
+function workflowProgressMarkup(stageIndex,p){
+ return '<div class="pf-step-nav">'+workflowStages.map((st,i)=>{
+  const complete=projectStageComplete(p,st.key);
+  const available=stageCanBeOpened(p,i);
+  const state=complete?'complete':i===stageIndex?'current':available?'available':'locked';
+  return '<button class="pf-step '+state+'" data-pf-stage="'+i+'" '+(!available&&!complete?'disabled':'')+' aria-label="'+esc(st.title)+(complete?' selesai':available?' bisa dilanjutkan':' terkunci')+'"><span class="pf-step-num">'+(complete?'✓':i+1)+'</span><span>'+esc(st.title)+'</span></button>';
+ }).join('')+'</div>';
 }
 function goToProjectGallery(){page='project-gallery';gallerySelectMode=false;selectedPhotoIds.clear();render()}
 function renderProjectGallery(){
@@ -590,6 +654,36 @@ async function useWorkflowResult(localSource){
  activeProjectId=p.id;activePhotoIndex=index;page='photo-editor';workflowReturn=null;
  await advanceWorkflowPhoto(p,ph,context.stageKey);
 }
+function bindThumbOnlyRanges(){
+ const inputs=Array.from(document.querySelectorAll('.pf-editor-controls input[type="range"]'));
+ inputs.forEach(input=>{
+  const setFill=()=>{
+   const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
+   const fraction=max===min?0:Math.max(0,Math.min(1,(value-min)/(max-min)));
+   input.style.setProperty('--pf-range-fill',(fraction*100)+'%');
+  };
+  setFill();
+  input.style.touchAction='pan-y';
+  input.addEventListener('pointerdown',event=>{
+   const rect=input.getBoundingClientRect();
+   const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
+   if(rect.width<=0||max<=min)return;
+   const thumbSize=24;
+   const center=rect.left+thumbSize/2+((value-min)/(max-min))*(rect.width-thumbSize);
+   const nearThumb=Math.abs(event.clientX-center)<=22;
+   if(!nearThumb){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    input.dataset.pfIgnoredTrackTap='1';
+   }else{
+    input.dataset.pfIgnoredTrackTap='0';
+   }
+  },true);
+  input.addEventListener('input',()=>{
+   setFill();
+  });
+ });
+}
 function renderPhotoEditor(){
  const p=activeProject();if(!p){page='projects';render();return}
  if(!p.photos?.length){page='project-gallery';renderProjectGallery();return}
@@ -602,7 +696,7 @@ function renderPhotoEditor(){
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
  let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
- html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'"><button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button" id="pf-finish-photo">✓ &nbsp;'+(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto')+'</button></div>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'"><button id="pf-hold-original" class="pf-original-toggle">◉ Tahan lihat asli</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
@@ -620,8 +714,9 @@ function renderPhotoEditor(){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 5 DARI 5</span><h2>Ekspor foto</h2><p>Ekspor foto ini dengan seluruh penyesuaian dan template yang dipilih.</p><button class="btn primary workflow-primary" id="pf-export-this">⇩ Ekspor foto ini</button><button class="btn workflow-primary" id="pf-export-all">Ekspor semua foto</button></div>';
  }
  html+='</div></div><div class="pf-thumbnails">'+p.photos.map((photo,i)=>'<button class="pf-thumb '+(i===activePhotoIndex?'active':'')+'" data-pf-thumb="'+i+'"><img loading="lazy" src="'+esc(photo.finalThumb||photo.workflowResults?.face||photo.workflowResults?.cutout||photo.src)+'"><span class="'+(photoStageCount(photo)===5?'complete':'')+'"></span></button>').join('')+'</div>';
- html+=workflowProgressMarkup(stageIndex)+'</section>';
+ html+=workflowProgressMarkup(stageIndex,p)+'</section>';
  $('#main').innerHTML=html;
+ bindThumbOnlyRanges();
  document.body.classList.add('photo-flow-active','photo-editor-active');
  $('#pf-editor-back').onclick=goToProjectGallery;$('#pf-editor-gallery').onclick=goToProjectGallery;
  $('#pf-editor-add').onclick=()=>$('#pf-editor-files').click();
@@ -638,14 +733,19 @@ function renderPhotoEditor(){
  $('#pf-prev-photo').onclick=()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderPhotoEditor()};
  $('#pf-next-photo').onclick=()=>{activePhotoIndex=Math.min(p.photos.length-1,activePhotoIndex+1);renderPhotoEditor()};
  $$('[data-pf-thumb]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.pfThumb);renderPhotoEditor()});
- $$('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
-  const target=Number(b.dataset.pfStage);if(target===stageIndex)return;
-  for(let i=0;i<target;i++){
-   const prevKey=workflowStages[i].key;
-   if(prevKey==='template'&&p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}}
-   if(!projectStageComplete(p,prevKey)){toast('Selesaikan tahap '+workflowStages[i].title+' untuk semua foto dahulu.');return}
+ $('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
+  const target=Number(b.dataset.pfStage);
+  if(target===stageIndex){const currentEligible=firstEligiblePhotoIndex(p,target);if(currentEligible>=0){activePhotoIndex=currentEligible;renderPhotoEditor()}return}
+  if(!stageCanBeOpened(p,target)){
+   const prerequisite={1:'Cahaya',2:'Cutout',3:'Template',4:'Wajah'}[target]||'tahap sebelumnya';
+   toast('Selesaikan minimal satu foto pada tahap '+prerequisite+' terlebih dahulu.');
+   return;
   }
-  p.workflowStage=target;const targetKey=workflowStages[target].key;const pending=p.photos.findIndex(photo=>!workflowDone(photo,targetKey));if(pending>=0)activePhotoIndex=pending;await dbPut('projects',p);renderPhotoEditor();
+  p.workflowStage=target;
+  const eligible=firstEligiblePhotoIndex(p,target);
+  if(eligible>=0)activePhotoIndex=eligible;
+  await dbPut('projects',p);
+  renderPhotoEditor();
  });
  $('#pf-hold-original').addEventListener('pointerdown',()=>{const im=$('#pf-photo-preview');if(im){im.style.filter='none';im.src=ph.originalSrc||ph.src}});
  const restoreOriginal=()=>{const im=$('#pf-photo-preview');if(im){im.src=source;im.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}};
