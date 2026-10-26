@@ -575,10 +575,13 @@ function syncLightAdjustmentControls(ph,localMode){
   if(label)label.textContent=(value>0?'+':'')+value;
  }
  const scope=document.getElementById('pf-light-adjustment-scope');
+ const localButton=document.getElementById('pf-light-scope-local'),globalButton=document.getElementById('pf-light-scope-global');
+ if(localButton){localButton.classList.toggle('active',!!localMode);localButton.classList.toggle('local',!!localMode)}
+ if(globalButton)globalButton.classList.toggle('active',!localMode);
  if(scope){
   scope.classList.toggle('local',!!localMode);
   scope.textContent=localMode
-   ?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA KUAS · Slider hanya mengubah bagian yang disapukan. Matikan Kuas untuk mengedit seluruh foto.':'🖌 MODE AREA KUAS · Sapukan kuas pada foto terlebih dahulu; slider tidak akan mengubah area di luar sapuan.')
+   ?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA PILIHAN · Slider cahaya hanya mengubah area yang diseleksi. Matikan kuas untuk menggeser/zoom foto tanpa melukis.':'🖌 MODE AREA PILIHAN · Pilih area dengan mode Seleksi area sebelum mengubah slider.')
    :'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.';
  }
 }
@@ -768,6 +771,8 @@ function lightBrushMaskDimensions(ph){
  const w=Math.max(1,Number(ph.width)||1200),h=Math.max(1,Number(ph.height)||1600),scale=Math.min(1,1200/Math.max(w,h));
  return {w:Math.max(1,Math.round(w*scale)),h:Math.max(1,Math.round(h*scale))};
 }
+function isLocalLightScope(ph){return ensureLightBrushState(ph).scope==='local'}
+
 function loadLightBrushImage(src){
  return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('Mask kuas tidak dapat dibaca.'));image.src=src});
 }
@@ -1216,11 +1221,13 @@ function renderPhotoEditor(){
   const color=ph.adjust?.selectedColor||'red';
   const colorMode=adj.colorMixMode||'all';
   const lightBrushActive=lightBrushEnabledPhotoId===ph.id;
-  const sliderAdj=lightBrushActive?localLightAdjustmentValues(ph):adj;
+  const localScope=isLocalLightScope(ph);
+  const sliderAdj=localScope?localLightAdjustmentValues(ph):adj;
   html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-reset-light" type="button" aria-label="Reset semua pengaturan cahaya" title="Reset cahaya">↺</button><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
   const sliders=[['exposure','Exposure',-100,100,sliderAdj.exposure],['contrast','Kontras',-100,100,sliderAdj.contrast],['highlight','Highlight',-100,100,sliderAdj.highlight],['shadows','Bayangan',-100,100,sliderAdj.shadows],['saturation','Saturasi',-100,100,sliderAdj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,sliderAdj.warmth],['glow','Glow (cahaya lembut)',0,100,sliderAdj.glow],['vignette','Vignette (gelap pinggir)',0,100,sliderAdj.vignette],['denoise','Denoise (kurangi noise)',0,100,sliderAdj.denoise]];
   html+=lightBrushPanelMarkup(ph);
-  html+='<div id="pf-light-adjustment-scope" class="pf-light-scope '+(lightBrushActive?'local':'')+'">'+(lightBrushActive?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA KUAS · Slider hanya mengubah bagian yang disapukan. Matikan Kuas untuk mengedit seluruh foto.':'🖌 MODE AREA KUAS · Sapukan kuas pada foto terlebih dahulu; slider tidak akan mengubah area di luar sapuan.'):'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.')+'</div>';
+  html+='<div id="pf-light-adjustment-scope" class="pf-light-scope '+(localScope?'local':'')+'">'+(localScope?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA PILIHAN · Slider cahaya hanya mengubah area yang diseleksi.':'🖌 MODE AREA PILIHAN · Pilih area dengan mode Seleksi area sebelum mengubah slider.'):'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.')+'</div>';
+  html+='<div class="pf-light-scope-toggle"><button type="button" id="pf-light-scope-global" class="'+(!localScope?'active':'')+'">Seluruh foto</button><button type="button" id="pf-light-scope-local" class="'+(localScope?'active local':'')+'">Area pilihan</button></div>';
   html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
   html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===(adj.selectedColor||'red')?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
  }else if(stageIndex===1){
