@@ -680,11 +680,11 @@ async function refreshColorMixPreview(ph){
  const dims=lightBrushMaskDimensions(ph);canvas.width=dims.w;canvas.height=dims.h;
  try{
   const image=await loadLightBrushImage(source);
-  if(token!==colorMixPreviewToken||page!=="photo-editor"||!document.getElementById("pf-color-mix-preview"))return;
+  if(token!==colorMixPreviewToken||page!=="photo-editor"||originalPreviewHeldPhotoId===ph.id||!document.getElementById("pf-color-mix-preview"))return;
   const ctx=canvas.getContext("2d");ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.filter=photoAdjustmentFilter(ph);ctx.drawImage(image,0,0,canvas.width,canvas.height);ctx.filter="none";
   await applyColorMixToCanvas(canvas,ph);
-  if(token!==colorMixPreviewToken||page!=="photo-editor")return;
+  if(token!==colorMixPreviewToken||page!=="photo-editor"||originalPreviewHeldPhotoId===ph.id)return;
   canvas.style.display="block";imageEl.style.opacity="0";imageEl.style.filter="none";
  }catch(error){console.warn("Pratinjau campur warna gagal",error);canvas.style.display="none";imageEl.style.opacity="1";imageEl.style.filter=photoAdjustmentFilter(ph)}
 }
@@ -840,7 +840,7 @@ async function refreshLightBrushPreviews(ph){
  if(!imageEl||!main||!effect||!brushOverlay||page!=='photo-editor'||originalPreviewHeldPhotoId===ph.id)return;
  const source=ph.originalSrc||ph.src;if(!source)return;
  const [brightMask,darkMask,selectMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]),image=await loadLightBrushImage(source);
- if(!document.getElementById('pf-photo-preview')||page!=='photo-editor')return;
+ if(!document.getElementById('pf-photo-preview')||page!=='photo-editor'||originalPreviewHeldPhotoId===ph.id)return;
  const baseWidth=Math.max(1,imageEl.offsetWidth),baseHeight=Math.max(1,imageEl.offsetHeight);
  [effect,brushOverlay].forEach(canvas=>{canvas.style.left='0px';canvas.style.top='0px';canvas.style.width='100%';canvas.style.height='100%'});
  if(effect.width!==brightMask.width)effect.width=brightMask.width;if(effect.height!==brightMask.height)effect.height=brightMask.height;
@@ -861,7 +861,7 @@ async function refreshLightBrushPreviews(ph){
   await applyBlacksAndDehazeToCanvas(result,global);
   if(localActive)await applyMaskedLocalLightAdjustmentsToCanvas(result,ph);
   if(hasBright||hasDark)await applyLocalLightBrushToCanvas(result,ph);
-  if(page!=='photo-editor'||!document.getElementById('pf-light-effect-preview'))return;
+  if(page!=='photo-editor'||originalPreviewHeldPhotoId===ph.id||!document.getElementById('pf-light-effect-preview'))return;
   effectCtx.drawImage(result,0,0,effect.width,effect.height);effect.style.display='block';
   imageEl.style.filter='none';
   result.width=1;result.height=1;
