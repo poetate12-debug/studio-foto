@@ -839,12 +839,12 @@ function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  if(!brushCanvas||!main)return;
  const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id&&originalPreviewHeldPhotoId!==ph.id;
  main.classList.toggle('brush-active',active);main.classList.toggle('brush-painting-active',active&&!brush.selectionDone&&!photoZoomSuppressBrushForGesture);brushCanvas.style.display=active?'block':'none';if(!active)return;
- const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph);
+ const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d');
  const hasSelection=brush.scope==='local'&&lightBrushCanvasHasPaint(selectMask);
  const mask=hasSelection?selectMask:(brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask));
  ctx.clearRect(0,0,width,height);
  if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle=(hasSelection||brush.mode==='select')?'rgba(54,125,235,.40)':'rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
- if(lightBrushPointer&&lightBrushPointer.photoId===ph.id){
+ if(lightBrushPointer&&lightBrushPointer.photoId===ph.id&&!brush.selectionDone&&!photoZoomSuppressBrushForGesture){
   const radius=Math.max(2,width*brush.size/200);ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,radius,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,Math.max(1,radius-1),0,Math.PI*2);ctx.stroke();ctx.restore();
  }
 }
@@ -994,7 +994,7 @@ async function bindLightBrushControls(ph,p){
   const previousScope=brush.scope;
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
   const active=lightBrushEnabledPhotoId===ph.id;
-  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';brush.selectionDone=hasExplicitLightSelection(ph);}
+  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';brush.selectionDone=hasExplicitLightSelection(ph)&&lightBrushCanvasHasPaint(selectMask);}
   if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
   if(!active)lightBrushDrawing=null;
   syncLightAdjustmentControls(ph,isLocalLightScope(ph));
@@ -1443,7 +1443,6 @@ function bindHoldOriginalPreview(ph,stageSource,stageIndex){
    }
   }else{imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}
   if(stageIndex===0){
-   scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
    if(ph.adjust?.colorMixMode==='brush')getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
    if(lightBrushEnabledPhotoId===ph.id)Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]).then(masks=>renderLightBrushSelection(ph,masks[0],masks[1],masks[2])).catch(error=>console.warn(error));
   }
@@ -1554,7 +1553,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
    if(im){im.style.filter=photoAdjustmentFilter(ph);im.style.willChange='filter'}
    scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
   };
-  const update=(key,value,forceLocal=false)=>{
+  const updateAdjustment=(key,value,forceLocal=false)=>{
    ph.adjust=ph.adjust||{};
    const localMode=forceLocal||isLocalLightScope(ph);
    const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
@@ -1571,9 +1570,11 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
    if(lightSaveTimer)clearTimeout(lightSaveTimer);
    lightSaveTimer=setTimeout(()=>{dbPut('projects',p).catch(err=>console.warn('Simpan perubahan cahaya tertunda',err))},180);
   };
+  const update=(key,value)=>updateAdjustment(key,value,false);
+  const updateWithScope=(key,value,forceLocal)=>updateAdjustment(key,value,forceLocal);
   lightSliderKeys.forEach(key=>{
-    $('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value,false));
-    $('#pf-local-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value,true));
+    $('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value));
+    $('#pf-local-slider-'+key)?.addEventListener('input',e=>updateWithScope(key,e.target.value,true));
    });
   $('#pf-reset-light')?.addEventListener('click',()=>{
    const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,blacks:0,saturationValue:0,warmth:0,dehaze:0,glow:0,vignette:0,denoise:0};
