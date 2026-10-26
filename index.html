@@ -86,7 +86,7 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-brush-toggle{flex-shrink:0;border:1px solid #e4bd99;border-radius:10px;padding:9px 11px;background:#fff3e7;color:#a75418;font-size:11px;font-weight:800}
 .pf-brush-toggle.active{background:#df7e2c;border-color:#df7e2c;color:#fff}
 .pf-light-brush-options{margin-top:13px}
-.pf-brush-mode-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0 13px}
+.pf-brush-mode-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0 13px}
 .pf-brush-mode{border:1px solid #e9e5e1;border-radius:10px;padding:10px 5px;background:#fff;color:#69636e;font-size:11px;font-weight:800}
 .pf-brush-mode.active{border-color:#e18437;background:#fff0e2;color:#a95418;box-shadow:inset 0 0 0 1px #e1843722}
 .pf-brush-range{margin:13px 0}
@@ -96,7 +96,19 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-brush-hint{font-size:10px;color:#85808b;line-height:1.5}
 .pf-brush-clear{border:1px solid #ece1d9;background:#fff;border-radius:9px;padding:8px 10px;color:#9a5630;font-weight:750;font-size:11px}
 
-.pf-original-toggle{position:absolute;right:10px;bottom:10px;border:0;border-radius:99px;background:#14161cbf;color:#fff;padding:9px 13px;font-size:12px;font-weight:700}
+.pf-original-toggle{position:absolute;right:10px;bottom:10px;z-index:30;border:0;border-radius:99px;background:#14161ce8;color:#fff;padding:9px 13px;font-size:12px;font-weight:700;touch-action:none;user-select:none;-webkit-user-select:none}
+.pf-image-viewport{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;z-index:1}
+.pf-image-stage{position:relative;display:block;flex:none;width:fit-content;height:100%;max-width:100%;transform:translate3d(var(--pf-pan-x,0px),var(--pf-pan-y,0px),0) scale(var(--pf-zoom,1));transform-origin:center center;touch-action:none;will-change:transform}
+.pf-image-stage #pf-photo-preview{display:block;width:auto;height:100%;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;transition:none}
+.pf-image-stage .pf-local-canvas{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;pointer-events:none}
+.pf-zoom-controls{position:absolute;left:10px;top:10px;z-index:31;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:#111827ce;backdrop-filter:blur(5px);color:white}
+.pf-zoom-controls button{height:30px;min-width:30px;padding:0 7px;border:0;border-radius:8px;background:#ffffff1c;color:#fff;font-size:17px;font-weight:800}
+.pf-zoom-controls span{min-width:43px;text-align:center;font-size:11px;font-variant-numeric:tabular-nums}
+.pf-zoom-controls button[data-zoom-reset]{font-size:10px;min-width:39px}
+.pf-light-scope-toggle{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0 8px;padding:4px;background:#edf0f6;border-radius:12px}
+.pf-light-scope-toggle button{border:0;border-radius:9px;background:transparent;padding:9px 4px;color:#778090;font-size:11px;font-weight:750}
+.pf-light-scope-toggle button.active{background:#fff;color:#4a4f5b;box-shadow:0 2px 5px #20233318}
+.pf-light-scope-toggle button.active.local{background:#fff0df;color:#98511a}
 .pf-photo-switch{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;color:#79818e;font-weight:750;font-size:14px;background:white}
 .pf-round-btn{height:35px;width:42px;border:1px solid #e4e7ee;border-radius:12px;background:#fff;color:#202536;font-size:25px;line-height:1}
 .pf-round-btn:disabled{opacity:.28}
@@ -474,6 +486,9 @@ let colorMixSaveTimer=null;
 let colorBrushEnabledPhotoId=null;
 let colorBrushDrawing=null;
 let colorBrushPointer=null;
+let photoZoomState={photoId:null,scale:1,x:0,y:0};
+let photoZoomPointers=new Map();
+let photoZoomGesture=null;
 let lightBrushEnabledPhotoId=null;
 let lightBrushDrawing=null;
 let lightBrushPointer=null;
@@ -549,7 +564,7 @@ function lightAdjustmentValuesHaveChanges(a){
 }
 function photoHasLightBrushPaint(ph){
  const brush=ensureLightBrushState(ph);
- return !!(brush.masks.brighten||brush.masks.darken);
+ return !!(brush.masks.brighten||brush.masks.darken||brush.masks.select);
 }
 function syncLightAdjustmentControls(ph,localMode){
  const values=localMode?localLightAdjustmentValues(ph):adjustmentValues(ph);
@@ -743,7 +758,7 @@ function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
  const old=ph.adjust.lightBrush||{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
- ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':'brighten',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null},adjustments:{
+ ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='select'?'select':'brighten',scope:old.scope==='local'?'local':'global',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
   exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100)
  }};
  return ph.adjust.lightBrush;
@@ -847,14 +862,16 @@ function scheduleLightBrushPreview(ph){
  lightBrushPreviewTimer=setTimeout(()=>{refreshLightBrushPreviews(ph).catch(error=>console.warn('Pratinjau kuas cahaya gagal diperbarui',error))},80);
 }
 function clearPhotoLightBrushMasks(ph){
- const brush=ensureLightBrushState(ph);brush.masks={brighten:null,darken:null};
- ['brighten','darken'].forEach(mode=>{const cached=lightBrushMaskCanvases.get(lightBrushMaskKey(ph,mode));if(cached&&typeof cached.getContext==='function')cached.getContext('2d').clearRect(0,0,cached.width,cached.height)});
+ const brush=ensureLightBrushState(ph);brush.masks={brighten:null,darken:null,select:null};
+ ['brighten','darken','select'].forEach(mode=>{const cached=lightBrushMaskCanvases.get(lightBrushMaskKey(ph,mode));if(cached&&typeof cached.getContext==='function')cached.getContext('2d').clearRect(0,0,cached.width,cached.height)});
  lightBrushDrawing=null;lightBrushPointer=null;scheduleLightBrushPreview(ph);
 }
 async function getCombinedLightBrushMask(ph,width,height){
- const [bright,dark]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]);
+ const [bright,dark,select]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]);
  const mask=document.createElement('canvas');mask.width=Math.max(1,width);mask.height=Math.max(1,height);
- const ctx=mask.getContext('2d');ctx.drawImage(bright,0,0,mask.width,mask.height);ctx.drawImage(dark,0,0,mask.width,mask.height);
+ const ctx=mask.getContext('2d');
+ if(lightBrushCanvasHasPaint(select))ctx.drawImage(select,0,0,mask.width,mask.height);
+ else{ctx.drawImage(bright,0,0,mask.width,mask.height);ctx.drawImage(dark,0,0,mask.width,mask.height)}
  return mask;
 }
 async function applyAdditionalLightAdjustmentsToCanvas(canvas,a){
