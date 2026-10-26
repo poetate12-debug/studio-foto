@@ -817,9 +817,10 @@ function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  const active=lightBrushEnabledPhotoId===ph.id;
  main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
  const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph);
- const mask=brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask);
+ const hasSelection=brush.scope==='local'&&lightBrushCanvasHasPaint(selectMask);
+ const mask=hasSelection?selectMask:(brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask));
  ctx.clearRect(0,0,width,height);
- if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle=brush.mode==='select'?'rgba(54,125,235,.40)':'rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
+ if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle=(hasSelection||brush.mode==='select')?'rgba(54,125,235,.40)':'rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
  if(lightBrushPointer&&lightBrushPointer.photoId===ph.id){
   const radius=Math.max(2,width*brush.size/200);ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,radius,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,Math.max(1,radius-1),0,Math.PI*2);ctx.stroke();ctx.restore();
  }
@@ -1230,7 +1231,7 @@ function applyPhotoZoom(ph){
 function bindPhotoZoomControls(ph){
  const stage=document.getElementById('pf-image-stage'),main=document.querySelector('.pf-main-photo');
  if(!stage||!main)return;
- if(photoZoomState.photoId!==ph.id)photoZoomState={photoId:ph.id,scale:1,x:0,y:0};
+ if(photoZoomState.photoId!==ph.id){photoZoomState={photoId:ph.id,scale:1,x:0,y:0};photoZoomPointers.clear();photoZoomGesture=null}
  const clampZoom=value=>Math.max(1,Math.min(4,value));
  const setZoom=value=>{
   photoZoomState.scale=clampZoom(value);
