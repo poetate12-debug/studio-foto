@@ -537,6 +537,8 @@ function adjustmentValues(ph){
   glow:a.glow??0,
   vignette:a.vignette??0,
   denoise:a.denoise??0,
+  blacks:a.blacks??0,
+  dehaze:a.dehaze??0,
   colorMix:a.colorMix||{red:{sat:0,bright:0},orange:{sat:0,bright:0},yellow:{sat:0,bright:0},green:{sat:0,bright:0},blue:{sat:0,bright:0},purple:{sat:0,bright:0},pink:{sat:0,bright:0}},
   selectedColor:a.selectedColor||"red",colorMixMode:a.colorMixMode==="brush"?"brush":"all",colorMixBrush:a.colorMixBrush||{size:8,softness:65,mask:null}
  };
@@ -557,11 +559,11 @@ function localLightAdjustmentValues(ph){
  return {
   exposure:Number(a.exposure)||0,contrast:Number(a.contrast)||0,highlight:Number(a.highlight)||0,
   shadows:Number(a.shadows)||0,saturation:Number(a.saturation)||0,warmth:Number(a.warmth)||0,
-  glow:Number(a.glow)||0,vignette:Number(a.vignette)||0,denoise:Number(a.denoise)||0
+  glow:Number(a.glow)||0,vignette:Number(a.vignette)||0,denoise:Number(a.denoise)||0,blacks:Number(a.blacks)||0,dehaze:Number(a.dehaze)||0
  };
 }
 function lightAdjustmentValuesHaveChanges(a){
- return ['exposure','contrast','highlight','shadows','saturation','warmth','glow','vignette','denoise'].some(k=>Math.abs(Number(a?.[k])||0)>.001);
+ return ['exposure','contrast','highlight','shadows','saturation','warmth','glow','vignette','denoise','blacks','dehaze'].some(k=>Math.abs(Number(a?.[k])||0)>.001);
 }
 function photoHasLightBrushPaint(ph){
  const brush=ensureLightBrushState(ph);
@@ -569,7 +571,7 @@ function photoHasLightBrushPaint(ph){
 }
 function syncLightAdjustmentControls(ph,localMode){
  const values=localMode?localLightAdjustmentValues(ph):adjustmentValues(ph);
- const props={exposure:'exposure',contrast:'contrast',highlight:'highlight',shadows:'shadows',saturation:'saturation',warmth:'warmth',glow:'glow',vignette:'vignette',denoise:'denoise'};
+ const props={exposure:'exposure',contrast:'contrast',highlight:'highlight',shadows:'shadows',saturation:'saturation',warmth:'warmth',glow:'glow',vignette:'vignette',denoise:'denoise',blacks:'blacks',dehaze:'dehaze'};
  for(const key of Object.keys(props)){
   const input=document.getElementById('pf-slider-'+key),label=document.getElementById('pf-value-'+key),value=Number(values[props[key]])||0;
   if(input){input.value=String(value);const min=Number(input.min||0),max=Number(input.max||100);input.style.setProperty('--pf-range-fill',(Math.max(0,Math.min(1,(value-min)/(max-min)))*100)+'%')}
@@ -668,7 +670,7 @@ async function applyColorMixToCanvas(canvas,ph){
 }
 async function refreshColorMixPreview(ph){
  const token=++colorMixPreviewToken,imageEl=document.getElementById("pf-photo-preview"),canvas=document.getElementById("pf-color-mix-preview"),stage=document.getElementById("pf-image-stage");
- if(!imageEl||!stage||!canvas||page!=="photo-editor")return;
+ if(!imageEl||!stage||!canvas||page!=="photo-editor"||originalPreviewHeldPhotoId===ph.id)return;
  const source=ph.originalSrc||ph.src;if(!source)return;
  canvas.style.left='0px';canvas.style.top='0px';canvas.style.width='100%';canvas.style.height='100%';
  if(!colorMixHasAdjustments(ph)){
@@ -701,7 +703,7 @@ function scheduleColorMixSave(p,ph){
 function renderColorMixBrushSelection(ph,maskCanvas){
  const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo"),stage=document.getElementById("pf-image-stage");
  if(!overlay||!imageEl||!main||!stage)return;
- const active=page==="photo-editor"&&ph.adjust?.colorMixMode==="brush"&&colorBrushEnabledPhotoId===ph.id&&lightBrushEnabledPhotoId!==ph.id;
+ const active=originalPreviewHeldPhotoId!==ph.id&&page==="photo-editor"&&ph.adjust?.colorMixMode==="brush"&&colorBrushEnabledPhotoId===ph.id&&lightBrushEnabledPhotoId!==ph.id;
  main.classList.toggle("color-brush-active",active);overlay.style.display=active?"block":"none";if(!active)return;
  overlay.style.left='0px';overlay.style.top='0px';overlay.style.width='100%';overlay.style.height='100%';
  const w=Math.max(1,imageEl.offsetWidth),h=Math.max(1,imageEl.offsetHeight);
@@ -760,7 +762,7 @@ function ensureLightBrushState(ph){
  const old=ph.adjust.lightBrush||{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
  ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='brighten'?'brighten':'select',scope:old.scope==='local'?'local':'global',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
-  exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100)
+  exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100),blacks:number(old.adjustments?.blacks,0,-100,100),dehaze:number(old.adjustments?.dehaze,0,-100,100)
  }};
  return ph.adjust.lightBrush;
 }
@@ -770,6 +772,8 @@ function lightBrushMaskDimensions(ph){
  return {w:Math.max(1,Math.round(w*scale)),h:Math.max(1,Math.round(h*scale))};
 }
 function isLocalLightScope(ph){return ensureLightBrushState(ph).scope==='local'}
+function hasExplicitLightSelection(ph){return !!ensureLightBrushState(ph).masks.select}
+let originalPreviewHeldPhotoId=null;
 
 function loadLightBrushImage(src){
  return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('Mask kuas tidak dapat dibaca.'));image.src=src});
@@ -815,7 +819,7 @@ function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
 function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  const brushCanvas=document.getElementById('pf-light-brush-overlay'),main=document.querySelector('.pf-main-photo');
  if(!brushCanvas||!main)return;
- const active=lightBrushEnabledPhotoId===ph.id;
+ const active=lightBrushEnabledPhotoId===ph.id&&originalPreviewHeldPhotoId!==ph.id;
  main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
  const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph);
  const hasSelection=brush.scope==='local'&&lightBrushCanvasHasPaint(selectMask);
@@ -829,7 +833,7 @@ function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
 
 async function refreshLightBrushPreviews(ph){
  const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),effect=document.getElementById('pf-light-effect-preview'),brushOverlay=document.getElementById('pf-light-brush-overlay'),stage=document.getElementById('pf-image-stage');
- if(!imageEl||!main||!effect||!brushOverlay||page!=='photo-editor')return;
+ if(!imageEl||!main||!effect||!brushOverlay||page!=='photo-editor'||originalPreviewHeldPhotoId===ph.id)return;
  const source=ph.originalSrc||ph.src;if(!source)return;
  const [brightMask,darkMask,selectMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]),image=await loadLightBrushImage(source);
  if(!document.getElementById('pf-photo-preview')||page!=='photo-editor')return;
@@ -842,7 +846,7 @@ async function refreshLightBrushPreviews(ph){
  const hasMask=photoHasLightBrushPaint(ph)||!!drawing;
  const global=adjustmentValues(ph),localValues=localLightAdjustmentValues(ph);
  const hasGlobalExtras=Math.abs(global.highlight)+Math.abs(global.shadows)+global.glow+global.vignette>0;
- const localActive=isLocalLightScope(ph)&&hasMask&&lightAdjustmentValuesHaveChanges(localValues);
+ const localActive=isLocalLightScope(ph)&&hasExplicitLightSelection(ph)&&lightAdjustmentValuesHaveChanges(localValues);
  const needsComposite=hasMask||hasGlobalExtras;
  const effectCtx=effect.getContext('2d');effectCtx.clearRect(0,0,effect.width,effect.height);
  if(needsComposite){
@@ -874,13 +878,13 @@ function clearPhotoLightBrushMasks(ph){
  lightBrushDrawing=null;lightBrushPointer=null;scheduleLightBrushPreview(ph);
 }
 async function getCombinedLightBrushMask(ph,width,height){
- const [bright,dark,select]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]);
+ const select=await getLightBrushMaskCanvas(ph,'select');
  const mask=document.createElement('canvas');mask.width=Math.max(1,width);mask.height=Math.max(1,height);
- const ctx=mask.getContext('2d');
- if(lightBrushCanvasHasPaint(select))ctx.drawImage(select,0,0,mask.width,mask.height);
- else{ctx.drawImage(bright,0,0,mask.width,mask.height);ctx.drawImage(dark,0,0,mask.width,mask.height)}
+ if(!hasExplicitLightSelection(ph))return mask;
+ mask.getContext('2d').drawImage(select,0,0,mask.width,mask.height);
  return mask;
 }
+
 async function applyAdditionalLightAdjustmentsToCanvas(canvas,a){
  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
  if(a.highlight!==0||a.shadows!==0){
@@ -905,7 +909,7 @@ async function applyAdditionalLightAdjustmentsToCanvas(canvas,a){
 }
 async function applyMaskedLocalLightAdjustmentsToCanvas(canvas,ph){
  const brush=ensureLightBrushState(ph),values=localLightAdjustmentValues(ph);
- if(!isLocalLightScope(ph)||!photoHasLightBrushPaint(ph)||!lightAdjustmentValuesHaveChanges(values))return;
+ if(!isLocalLightScope(ph)||!hasExplicitLightSelection(ph)||!lightAdjustmentValuesHaveChanges(values))return;
  const layer=document.createElement('canvas');layer.width=canvas.width;layer.height=canvas.height;
  const lctx=layer.getContext('2d');lctx.filter=photoAdjustmentFilter(ph,false,values);lctx.drawImage(canvas,0,0);lctx.filter='none';
  await applyAdditionalLightAdjustmentsToCanvas(layer,values);
