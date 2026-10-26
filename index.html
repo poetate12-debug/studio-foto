@@ -837,8 +837,8 @@ function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
 function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  const brushCanvas=document.getElementById('pf-light-brush-overlay'),main=document.querySelector('.pf-main-photo');
  if(!brushCanvas||!main)return;
- const active=lightBrushEnabledPhotoId===ph.id&&originalPreviewHeldPhotoId!==ph.id;
- main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
+ const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id&&originalPreviewHeldPhotoId!==ph.id;
+ main.classList.toggle('brush-active',active);main.classList.toggle('brush-painting-active',active&&!brush.selectionDone&&!photoZoomSuppressBrushForGesture);brushCanvas.style.display=active?'block':'none';if(!active)return;
  const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph);
  const hasSelection=brush.scope==='local'&&lightBrushCanvasHasPaint(selectMask);
  const mask=hasSelection?selectMask:(brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask));
@@ -994,7 +994,7 @@ async function bindLightBrushControls(ph,p){
   const previousScope=brush.scope;
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
   const active=lightBrushEnabledPhotoId===ph.id;
-  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';}
+  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';brush.selectionDone=hasExplicitLightSelection(ph);}
   if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
   if(!active)lightBrushDrawing=null;
   syncLightAdjustmentControls(ph,isLocalLightScope(ph));
@@ -1004,16 +1004,40 @@ async function bindLightBrushControls(ph,p){
  };
  document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{
   const previousScope=brush.scope;
-  brush.mode=button.dataset.pfBrushMode;brush.erase=false;brush.scope='local';updateModeButtons();syncLightAdjustmentControls(ph,true);
+  brush.mode=button.dataset.pfBrushMode;brush.erase=false;brush.selectionDone=false;brush.scope='local';ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';updateModeButtons();refreshBrushSelectionUi();syncLightAdjustmentControls(ph,true);
   if(previousScope!==brush.scope)invalidateLight().catch(error=>console.warn('Gagal memperbarui tahap cahaya',error));else saveSettings();
   scheduleLightBrushPreview(ph);getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
  });
  const eraseButton=document.getElementById('pf-light-brush-erase');
  if(eraseButton)eraseButton.onclick=()=>{brush.erase=!brush.erase;updateModeButtons();saveSettings()};
  ['size','intensity','softness'].forEach(key=>{const input=document.getElementById('pf-light-brush-'+key);if(input)input.oninput=event=>updateBrushRange(key,event.target.value)});
- const clearButton=document.getElementById('pf-light-brush-clear');
+ const refreshBrushSelectionUi=()=>{
+   const selected=hasExplicitLightSelection(ph)&&lightBrushCanvasHasPaint(selectMask),done=brush.scope==='local'&&brush.selectionDone&&selected;
+   document.getElementById('pf-light-selection-finish')?.classList.toggle('hidden',done);
+   document.getElementById('pf-light-selection-edit')?.classList.toggle('hidden',!done);
+   document.getElementById('pf-brush-selection-actions')?.classList.toggle('hidden',brush.scope!=='local');
+   document.getElementById('pf-brush-light-controls')?.classList.toggle('hidden',!done);
+   renderLightBrushSelection(ph,brightMask,darkMask,selectMask);
+  };
+  const finishSelectionButton=document.getElementById('pf-light-selection-finish');
+  if(finishSelectionButton)finishSelectionButton.onclick=()=>{
+   if(!hasExplicitLightSelection(ph)||!lightBrushCanvasHasPaint(selectMask)){toast('Sapukan kuas biru pada foto terlebih dahulu.');return}
+   brush.scope='local';brush.selectionDone=true;brush.mode='select';ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';lightBrushEnabledPhotoId=ph.id;lightBrushPointer=null;lightBrushDrawing=null;
+   if(toggle){toggle.classList.add('active');toggle.setAttribute('aria-pressed','true');toggle.textContent='Kuas aktif'}
+   if(options)options.classList.remove('hidden');
+   updateModeButtons();refreshBrushSelectionUi();syncLightAdjustmentControls(ph,true);scheduleLightBrushPreview(ph);saveSettings();
+   toast('Seleksi selesai. Atur cahaya pada kartu yang sama.');
+  };
+  const editSelectionButton=document.getElementById('pf-light-selection-edit');
+  if(editSelectionButton)editSelectionButton.onclick=()=>{
+   brush.scope='local';brush.selectionDone=false;brush.mode='select';brush.erase=false;ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';lightBrushEnabledPhotoId=ph.id;
+   if(toggle){toggle.classList.add('active');toggle.setAttribute('aria-pressed','true');toggle.textContent='Kuas aktif'}
+   if(options)options.classList.remove('hidden');
+   updateModeButtons();refreshBrushSelectionUi();syncLightAdjustmentControls(ph,true);saveSettings();
+  };
+  const clearButton=document.getElementById('pf-light-brush-clear');
  if(clearButton)clearButton.onclick=()=>confirmModal('Hapus semua sapuan kuas?','Area seleksi serta sapuan terangkan/gelapkan pada foto ini akan dihapus.',async()=>{
-  clearPhotoLightBrushMasks(ph);await invalidateLight();refreshLightBrushPreviews(ph).catch(error=>console.warn(error));syncLightAdjustmentControls(ph,isLocalLightScope(ph));toast('Semua sapuan kuas dihapus.');
+  clearPhotoLightBrushMasks(ph);brush.selectionDone=false;document.getElementById('pf-brush-light-controls')?.classList.add('hidden');document.getElementById('pf-light-selection-finish')?.classList.remove('hidden');document.getElementById('pf-light-selection-edit')?.classList.add('hidden');await invalidateLight();refreshLightBrushPreviews(ph).catch(error=>console.warn(error));syncLightAdjustmentControls(ph,isLocalLightScope(ph));toast('Semua sapuan kuas dihapus.');
  });
  const finishStroke=async()=>{
   const stroke=lightBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;lightBrushDrawing=null;
@@ -1046,18 +1070,18 @@ async function bindLightBrushControls(ph,p){
  overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
  overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null;renderLightBrushSelection(ph,brightMask,darkMask,selectMask)});
  if(document.getElementById('pf-light-scope-local'))document.getElementById('pf-light-scope-local').onclick=async()=>{
-  ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';brush.scope='local';brush.mode='select';brush.erase=false;lightBrushEnabledPhotoId=ph.id;colorBrushEnabledPhotoId=null;colorBrushDrawing=null;
+  ph.adjust=ph.adjust||{};ph.adjust.lightScope='local';brush.scope='local';brush.mode='select';brush.erase=false;brush.selectionDone=hasExplicitLightSelection(ph)&&lightBrushCanvasHasPaint(selectMask);lightBrushEnabledPhotoId=ph.id;colorBrushEnabledPhotoId=null;colorBrushDrawing=null;
   if(toggle){toggle.classList.add('active');toggle.setAttribute('aria-pressed','true');toggle.textContent='Kuas aktif'}
-  if(options)options.classList.remove('hidden');updateModeButtons();syncLightAdjustmentControls(ph,true);
-  renderLightBrushSelection(ph,brightMask,darkMask,selectMask);await invalidateLight();scheduleLightBrushPreview(ph);
+  if(options)options.classList.remove('hidden');updateModeButtons();refreshBrushSelectionUi();syncLightAdjustmentControls(ph,true);
+  await invalidateLight();scheduleLightBrushPreview(ph);
  };
  if(document.getElementById('pf-light-scope-global'))document.getElementById('pf-light-scope-global').onclick=async()=>{
   ph.adjust=ph.adjust||{};ph.adjust.lightScope='global';brush.scope='global';lightBrushEnabledPhotoId=null;lightBrushDrawing=null;lightBrushPointer=null;
   if(toggle){toggle.classList.remove('active');toggle.setAttribute('aria-pressed','false');toggle.textContent='Aktifkan kuas'}
-  if(options)options.classList.add('hidden');main.classList.remove('brush-active');syncLightAdjustmentControls(ph,false);
+  if(options)options.classList.add('hidden');main.classList.remove('brush-active','brush-painting-active');document.getElementById('pf-brush-light-controls')?.classList.add('hidden');syncLightAdjustmentControls(ph,false);
   await invalidateLight();scheduleLightBrushPreview(ph);
  };
- updateModeButtons();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
+ updateModeButtons();refreshBrushSelectionUi();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
 }
 
 async function photoDataWithLight(ph){
@@ -1564,7 +1588,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
     if(label)label.textContent='0';
    });
    if($('#pf-preset'))$('#pf-preset').value='original';
-   syncLightAdjustmentControls(ph,lightBrushEnabledPhotoId===ph.id);
+   ensureLightBrushState(ph).selectionDone=false;document.getElementById('pf-brush-light-controls')?.classList.add('hidden');document.getElementById('pf-light-selection-finish')?.classList.remove('hidden');document.getElementById('pf-light-selection-edit')?.classList.add('hidden');syncLightAdjustmentControls(ph,isLocalLightScope(ph));
    refreshImage();
    ensurePhotoWorkflow(ph);
    ph.workflow.light=false;
