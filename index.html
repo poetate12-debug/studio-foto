@@ -75,7 +75,8 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 #pf-light-effect-preview{z-index:2}
 #pf-light-brush-overlay{z-index:3;touch-action:none}
 #pf-color-brush-overlay{z-index:4;touch-action:none}
-.pf-main-photo.brush-active #pf-light-brush-overlay{pointer-events:auto;cursor:crosshair}
+.pf-main-photo.brush-active #pf-light-brush-overlay{pointer-events:none;cursor:default}
+.pf-main-photo.brush-painting-active #pf-light-brush-overlay{pointer-events:auto;cursor:crosshair;touch-action:none}
 .pf-main-photo.color-brush-active #pf-color-brush-overlay{pointer-events:auto;cursor:crosshair;touch-action:none}
 .pf-light-scope{margin:4px 0 8px;padding:10px 12px;border-radius:10px;background:#f0f2f7;color:#5f6879;font-size:11px;line-height:1.5}
 .pf-light-scope.local{background:#fff0df;color:#98511a;border:1px solid #f0d0ad}
@@ -733,8 +734,8 @@ async function bindColorMixBrushControls(ph,p){
  };
  overlay.addEventListener("pointerdown",event=>{
   if(colorBrushEnabledPhotoId!==ph.id||ph.adjust?.colorMixMode!=="brush")return;
-  if(photoZoomSuppressBrushForGesture||photoZoomPointers.size>=2){event.preventDefault();if(colorBrushDrawing)finish().catch(error=>console.warn(error));return}
-  event.preventDefault();const pt=point(event);colorBrushDrawing={photoId:ph.id,x:pt.x,y:pt.y,last:pt};
+  if(photoZoomSuppressBrushForGesture||photoZoomPointers.size>=2){event.preventDefault();return}
+  event.preventDefault();const pt=point(event),beforeImageData=mask.getContext("2d").getImageData(0,0,mask.width,mask.height);colorBrushDrawing={photoId:ph.id,pointerId:event.pointerId,x:pt.x,y:pt.y,last:pt,beforeImageData};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
   paintLightBrushSegment(mask,pt,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);
   renderColorMixBrushSelection(ph,mask);
@@ -766,7 +767,7 @@ function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
  const old=ph.adjust.lightBrush||{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
- ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='brighten'?'brighten':'select',scope:(ph.adjust.lightScope==='local'||(ph.adjust.lightScope!=='global'&&old.scope==='local'))?'local':'global',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
+ ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='brighten'?'brighten':'select',scope:(ph.adjust.lightScope==='local'||(ph.adjust.lightScope!=='global'&&old.scope==='local'))?'local':'global',erase:old.erase===true,selectionDone:old.selectionDone===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
   exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100),blacks:number(old.adjustments?.blacks,0,-100,100),dehaze:number(old.adjustments?.dehaze,0,-100,100)
  }};
  return ph.adjust.lightBrush;
@@ -1010,11 +1011,12 @@ async function bindLightBrushControls(ph,p){
  };
  overlay.addEventListener('pointerdown',event=>{
   if(lightBrushEnabledPhotoId!==ph.id)return;
-  if(photoZoomSuppressBrushForGesture||photoZoomPointers.size>=2){event.preventDefault();if(lightBrushDrawing)finishStroke().catch(error=>console.warn(error));return}
+  if(photoZoomSuppressBrushForGesture||photoZoomPointers.size>=2){event.preventDefault();return}
+  if(brush.selectionDone){event.preventDefault();return}
   event.preventDefault();const point=pointForEvent(event),mode=brush.mode;
-  lightBrushDrawing={photoId:ph.id,mode,erase:brush.erase,last:point};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
+  const target=mode==='darken'?darkMask:(mode==='select'?selectMask:brightMask),beforeImageData=target.getContext('2d').getImageData(0,0,target.width,target.height);
+  lightBrushDrawing={photoId:ph.id,pointerId:event.pointerId,mode,erase:brush.erase,last:point,beforeImageData};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
-  const target=mode==='darken'?darkMask:(mode==='select'?selectMask:brightMask);
   paintLightBrushSegment(target,point,point,point.displayWidth,mode==='select'?{...brush,intensity:100}:brush,brush.erase);
   renderLightBrushSelection(ph,brightMask,darkMask,selectMask);scheduleLightBrushPreview(ph);
  });
@@ -1293,6 +1295,13 @@ function applyPhotoZoom(ph){
  if(out)out.disabled=photoZoomState.scale<=1;
  if(inButton)inButton.disabled=photoZoomState.scale>=4;
 }
+function cancelBrushStrokesForPinch(){
+ const p=activeProject(),ph=p?.photos?.[activePhotoIndex];if(!p||!ph)return;
+ const lightStroke=lightBrushDrawing&&lightBrushDrawing.photoId===ph.id?lightBrushDrawing:null;
+ if(lightStroke){const target=lightBrushMaskCanvases.get(lightBrushMaskKey(ph,lightStroke.mode));if(target&&typeof target.getContext==='function'&&lightStroke.beforeImageData){try{target.getContext('2d').putImageData(lightStroke.beforeImageData,0,0)}catch(error){console.warn('Gagal membatalkan sapuan saat zoom',error)}}lightBrushDrawing=null;lightBrushPointer=null;const masks=['brighten','darken','select'].map(mode=>lightBrushMaskCanvases.get(lightBrushMaskKey(ph,mode)));renderLightBrushSelection(ph,masks[0],masks[1],masks[2]);scheduleLightBrushPreview(ph)}
+ const colorStroke=colorBrushDrawing&&colorBrushDrawing.photoId===ph.id?colorBrushDrawing:null;
+ if(colorStroke){const mask=colorMixBrushCanvases.get('color-mix:'+String(ph.id));if(mask&&typeof mask.getContext==='function'&&colorStroke.beforeImageData){try{mask.getContext('2d').putImageData(colorStroke.beforeImageData,0,0)}catch(error){console.warn('Gagal membatalkan sapuan warna saat zoom',error)}}colorBrushDrawing=null;colorBrushPointer=null;if(mask)renderColorMixBrushSelection(ph,mask);scheduleColorMixPreview(ph)}
+}
 function bindPhotoZoomControls(ph){
  const stage=document.getElementById('pf-image-stage'),viewport=document.getElementById('pf-image-viewport'),imageEl=document.getElementById('pf-photo-preview');
  if(!stage||!viewport||!imageEl)return;
@@ -1319,7 +1328,7 @@ function bindPhotoZoomControls(ph){
  document.getElementById('pf-zoom-in')?.addEventListener('click',()=>setZoom(photoZoomState.scale+.25));
  document.getElementById('pf-zoom-out')?.addEventListener('click',()=>setZoom(photoZoomState.scale-.25));
  document.getElementById('pf-zoom-reset')?.addEventListener('click',()=>{photoZoomState={photoId:ph.id,scale:1,x:0,y:0};applyPhotoZoom(ph)});
- const toolActive=()=>lightBrushEnabledPhotoId===ph.id||(ph.adjust?.colorMixMode==='brush'&&colorBrushEnabledPhotoId===ph.id);
+ const toolActive=()=>(lightBrushEnabledPhotoId===ph.id&&!ensureLightBrushState(ph).selectionDone)||(ph.adjust?.colorMixMode==='brush'&&colorBrushEnabledPhotoId===ph.id);
  const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
  const startGesture=()=>{
   const pts=Array.from(photoZoomPointers.values());
@@ -1334,6 +1343,7 @@ function bindPhotoZoomControls(ph){
   photoZoomPointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
   if(photoZoomPointers.size>=2){
    photoZoomSuppressBrushForGesture=true;
+   cancelBrushStrokesForPinch();
    event.preventDefault();
    startGesture();
    try{viewport.setPointerCapture(event.pointerId)}catch(error){}
@@ -1386,38 +1396,37 @@ function bindHoldOriginalPreview(ph,stageSource,stageIndex){
  const restore=()=>{
   if(!showingOriginal)return;
   showingOriginal=false;originalPreviewHeldPhotoId=null;
-  if(savedEditedView){
-   imageEl.src=savedEditedView.src;imageEl.style.filter=savedEditedView.filter;imageEl.style.opacity=savedEditedView.opacity;savedEditedView=null;
-  }else{
-   imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0);
-  }
-  button.textContent='◉ Before / After';button.classList.remove('holding-original');
-  canvases.forEach(canvas=>canvas.style.display='none');
+  const state=savedEditedView;savedEditedView=null;
+  button.textContent='◉ Before';button.classList.remove('holding-original');
+  if(state){
+   imageEl.style.filter=state.filter;imageEl.style.opacity=state.opacity;
+   canvases.forEach((canvas,index)=>{const saved=state.canvases[index];if(!saved)return;canvas.style.display=saved.display;canvas.style.opacity=saved.opacity;canvas.style.visibility=saved.visibility});
+   if(stageIndex!==0&&imageEl.src!==state.src){
+    const editedImage=new Image();const applyEdited=()=>{imageEl.src=state.src;imageEl.style.filter=state.filter;imageEl.style.opacity=state.opacity};
+    editedImage.onload=applyEdited;editedImage.onerror=applyEdited;editedImage.src=state.src;
+   }
+  }else{imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}
   if(stageIndex===0){
    scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
    if(ph.adjust?.colorMixMode==='brush')getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
+   if(lightBrushEnabledPhotoId===ph.id)Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]).then(masks=>renderLightBrushSelection(ph,masks[0],masks[1],masks[2])).catch(error=>console.warn(error));
   }
  };
  const show=event=>{
-  if(event.button!==undefined&&event.button!==0)return;
-  if(showingOriginal)return;
+  if(event.button!==undefined&&event.button!==0)return;if(showingOriginal)return;
   event.preventDefault();showingOriginal=true;originalPreviewHeldPhotoId=ph.id;
-  savedEditedView={src:imageEl.src,filter:imageEl.style.filter,opacity:imageEl.style.opacity};
+  savedEditedView={src:imageEl.src,filter:imageEl.style.filter,opacity:imageEl.style.opacity,canvases:canvases.map(canvas=>({display:canvas.style.display,opacity:canvas.style.opacity,visibility:canvas.style.visibility}))};
   if(stageIndex!==0)imageEl.src=ph.originalSrc||ph.src;
   imageEl.style.opacity='1';imageEl.style.filter='none';
-  button.textContent='◉ BEFORE · lepaskan untuk AFTER';button.classList.add('holding-original');
+  button.textContent='◉ After';button.classList.add('holding-original');
   canvases.forEach(canvas=>canvas.style.display='none');
   try{button.setPointerCapture(event.pointerId)}catch(error){}
  };
- button.addEventListener('pointerdown',show);
- button.addEventListener('pointerup',restore);
- button.addEventListener('pointercancel',restore);
+ button.addEventListener('pointerdown',show);button.addEventListener('pointerup',restore);button.addEventListener('pointercancel',restore);
  button.addEventListener('contextmenu',event=>event.preventDefault());
  button.addEventListener('touchstart',event=>{if(!showingOriginal){const touch=event.changedTouches?.[0];show({button:0,preventDefault:()=>event.preventDefault(),pointerId:touch?.identifier??0})}},{passive:false});
- button.addEventListener('touchend',restore,{passive:true});
- button.addEventListener('touchcancel',restore,{passive:true});
+ button.addEventListener('touchend',restore,{passive:true});button.addEventListener('touchcancel',restore,{passive:true});
 }
-
 function renderPhotoEditor(){
  const p=activeProject();if(!p){page='projects';render();return}
  if(!p.photos?.length){page='project-gallery';renderProjectGallery();return}
@@ -1430,7 +1439,7 @@ function renderPhotoEditor(){
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
  let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto</p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
- html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before / After</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
