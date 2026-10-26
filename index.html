@@ -924,64 +924,74 @@ async function applyLocalLightBrushToCanvas(canvas,ph){
  }
 }
 async function bindLightBrushControls(ph,p){
- const brush=ensureLightBrushState(ph),[brightMask,darkMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]);
- const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),overlay=document.getElementById('pf-light-brush-overlay');if(!imageEl||!main||!overlay)return;
- await refreshLightBrushPreviews(ph);
+ const brush=ensureLightBrushState(ph);
+ const [brightMask,darkMask,selectMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]);
+ const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),overlay=document.getElementById('pf-light-brush-overlay');
+ if(!imageEl||!main||!overlay)return;
  const toggle=document.getElementById('pf-light-brush-toggle'),options=document.getElementById('pf-light-brush-options');
  const updateModeButtons=()=>{document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.classList.toggle('active',button.dataset.pfBrushMode===brush.mode&&!brush.erase));document.getElementById('pf-light-brush-erase')?.classList.toggle('active',brush.erase)};
  const saveSettings=()=>{p.updatedAt=Date.now();dbPut('projects',p).catch(error=>console.warn('Pengaturan kuas tidak tersimpan',error))};
- const updateBrushRange=(key,value)=>{brush[key]=Number(value);const label=document.getElementById('pf-light-brush-'+key+'-value');if(label)label.textContent=String(brush[key])+'%';renderLightBrushSelection(ph,brightMask,darkMask);if(key==='size')scheduleLightBrushPreview(ph);saveSettings()};
- toggle.onclick=()=>{
+ const invalidateLight=async()=>{await invalidatePhotoStages(p,ph,'light');p.updatedAt=Date.now();await dbPut('projects',p)};
+ const updateBrushRange=(key,value)=>{brush[key]=Number(value);const label=document.getElementById('pf-light-brush-'+key+'-value');if(label)label.textContent=String(brush[key])+'%';renderLightBrushSelection(ph,brightMask,darkMask,selectMask);if(key==='size')scheduleLightBrushPreview(ph);saveSettings()};
+ const pointForEvent=event=>{
+  const rect=overlay.getBoundingClientRect(),zoom=photoZoomState.photoId===ph.id?photoZoomState.scale:1;
+  return {x:Math.max(0,Math.min(overlay.offsetWidth,(event.clientX-rect.left)/zoom)),y:Math.max(0,Math.min(overlay.offsetHeight,(event.clientY-rect.top)/zoom)),displayWidth:Math.max(1,overlay.offsetWidth)};
+ };
+ if(toggle)toggle.onclick=()=>{
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
   const active=lightBrushEnabledPhotoId===ph.id;
-  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null}
-  else if(ph.adjust?.colorMixMode==='brush')colorBrushEnabledPhotoId=ph.id;
+  if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';}
   if(options)options.classList.toggle('hidden',!active);toggle.classList.toggle('active',active);toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'Kuas aktif':'Aktifkan kuas';
   if(!active)lightBrushDrawing=null;
-  syncLightAdjustmentControls(ph,active);
+  syncLightAdjustmentControls(ph,isLocalLightScope(ph));
   getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
-  refreshColorMixPreview(ph).catch(error=>console.warn(error));
-  refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+  refreshColorMixPreview(ph).catch(error=>console.warn(error));refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+  saveSettings();
  };
- document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{brush.mode=button.dataset.pfBrushMode;brush.erase=false;updateModeButtons();saveSettings();scheduleLightBrushPreview(ph)});
- document.getElementById('pf-light-brush-erase').onclick=()=>{brush.erase=!brush.erase;updateModeButtons();saveSettings()};
- ['size','intensity','softness'].forEach(key=>{const input=document.getElementById('pf-light-brush-'+key);if(input)input.oninput=event=>updateBrushRange(key,event.target.value)});
- document.getElementById('pf-light-brush-clear').onclick=()=>confirmModal('Hapus semua sapuan kuas?','Sapuan terangkan dan gelapkan pada foto ini akan dihapus.',async()=>{
-  clearPhotoLightBrushMasks(ph);await invalidatePhotoStages(p,ph,'light');await dbPut('projects',p);refreshLightBrushPreviews(ph).catch(error=>console.warn(error));toast('Sapuan kuas cahaya dihapus.');
+ document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{
+  brush.mode=button.dataset.pfBrushMode;brush.erase=false;brush.scope='local';updateModeButtons();syncLightAdjustmentControls(ph,true);saveSettings();
+  scheduleLightBrushPreview(ph);getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
  });
- const pointerPoint=event=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(rect.width,event.clientX-rect.left)),y:Math.max(0,Math.min(rect.height,event.clientY-rect.top)),displayWidth:rect.width}};
+ const eraseButton=document.getElementById('pf-light-brush-erase');
+ if(eraseButton)eraseButton.onclick=()=>{brush.erase=!brush.erase;updateModeButtons();saveSettings()};
+ ['size','intensity','softness'].forEach(key=>{const input=document.getElementById('pf-light-brush-'+key);if(input)input.oninput=event=>updateBrushRange(key,event.target.value)});
+ const clearButton=document.getElementById('pf-light-brush-clear');
+ if(clearButton)clearButton.onclick=()=>confirmModal('Hapus semua sapuan kuas?','Area seleksi serta sapuan terangkan/gelapkan pada foto ini akan dihapus.',async()=>{
+  clearPhotoLightBrushMasks(ph);await invalidateLight();refreshLightBrushPreviews(ph).catch(error=>console.warn(error));syncLightAdjustmentControls(ph,isLocalLightScope(ph));toast('Semua sapuan kuas dihapus.');
+ });
  const finishStroke=async()=>{
   const stroke=lightBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;lightBrushDrawing=null;
-  const canvas=stroke.mode==='darken'?darkMask:brightMask;brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null;
-  await invalidatePhotoStages(p,ph,'light');await dbPut('projects',p);scheduleLightBrushPreview(ph);
+  const canvas=stroke.mode==='darken'?darkMask:(stroke.mode==='select'?selectMask:brightMask);
+  brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null;
+  await invalidateLight();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
  };
  overlay.addEventListener('pointerdown',event=>{
-  if(lightBrushEnabledPhotoId!==ph.id)return;event.preventDefault();const point=pointerPoint(event),mode=brush.mode;
+  if(lightBrushEnabledPhotoId!==ph.id)return;
+  event.preventDefault();const point=pointForEvent(event),mode=brush.mode;
   lightBrushDrawing={photoId:ph.id,mode,erase:brush.erase,last:point};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
-  paintLightBrushSegment(mode==='darken'?darkMask:brightMask,point,point,point.displayWidth,brush,brush.erase);renderLightBrushSelection(ph,brightMask,darkMask);scheduleLightBrushPreview(ph);
+  const target=mode==='darken'?darkMask:(mode==='select'?selectMask:brightMask);
+  paintLightBrushSegment(target,point,point,point.displayWidth,brush,brush.erase);
+  renderLightBrushSelection(ph,brightMask,darkMask,selectMask);scheduleLightBrushPreview(ph);
  });
  overlay.addEventListener('pointermove',event=>{
-  const point=pointerPoint(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};const stroke=lightBrushDrawing;
-  if(stroke&&stroke.photoId===ph.id){event.preventDefault();const canvas=stroke.mode==='darken'?darkMask:brightMask;paintLightBrushSegment(canvas,stroke.last,point,point.displayWidth,brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph)}
-  renderLightBrushSelection(ph,brightMask,darkMask);
+  const point=pointForEvent(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};const stroke=lightBrushDrawing;
+  if(stroke&&stroke.photoId===ph.id){
+   event.preventDefault();const target=stroke.mode==='darken'?darkMask:(stroke.mode==='select'?selectMask:brightMask);
+   paintLightBrushSegment(target,stroke.last,point,point.displayWidth,brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph);
+  }
+  renderLightBrushSelection(ph,brightMask,darkMask,selectMask);
  });
  overlay.addEventListener('pointerup',()=>{finishStroke().catch(error=>{console.error(error);toast('Sapuan kuas gagal disimpan.')})});
  overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
- overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null});
- const holdButton=document.getElementById('pf-hold-original');
- if(holdButton){
-  const showOriginal=event=>{
-   const effect=document.getElementById('pf-light-effect-preview'),colorPreview=document.getElementById('pf-color-mix-preview'),colorOverlay=document.getElementById('pf-color-brush-overlay');
-   if(effect)effect.style.display='none';if(colorPreview)colorPreview.style.display='none';overlay.style.display='none';if(colorOverlay)colorOverlay.style.display='none';
-   imageEl.style.opacity='1';imageEl.style.filter='none';
-   try{holdButton.setPointerCapture(event.pointerId)}catch(error){}
-  };
-  const restoreEdited=()=>{scheduleColorMixPreview(ph);refreshLightBrushPreviews(ph).catch(error=>console.warn(error));getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error))};
-  holdButton.addEventListener('pointerdown',showOriginal);
-  ['pointerup','pointercancel','pointerleave'].forEach(type=>holdButton.addEventListener(type,restoreEdited));
- }
- updateModeButtons();scheduleLightBrushPreview(ph);
+ overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null;renderLightBrushSelection(ph,brightMask,darkMask,selectMask)});
+ if(document.getElementById('pf-light-scope-local'))document.getElementById('pf-light-scope-local').onclick=async()=>{
+  brush.scope='local';syncLightAdjustmentControls(ph,true);await saveSettings();scheduleLightBrushPreview(ph);
+ };
+ if(document.getElementById('pf-light-scope-global'))document.getElementById('pf-light-scope-global').onclick=async()=>{
+  brush.scope='global';syncLightAdjustmentControls(ph,false);await saveSettings();scheduleLightBrushPreview(ph);
+ };
+ updateModeButtons();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
 }
 
 async function photoDataWithLight(ph){
