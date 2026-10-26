@@ -1214,9 +1214,11 @@ function bindThumbOnlyRanges(){
  document.addEventListener("pointercancel",release,true);
 }
 function applyPhotoZoom(ph){
- const stage=document.getElementById('pf-image-stage'),label=document.getElementById('pf-zoom-label');
+ const stage=document.getElementById('pf-image-stage'),viewport=document.getElementById('pf-image-viewport'),label=document.getElementById('pf-zoom-label');
  if(!stage)return;
  if(photoZoomState.photoId!==ph.id)photoZoomState={photoId:ph.id,scale:1,x:0,y:0};
+ if(photoZoomState.scale<=1){photoZoomState.scale=1;photoZoomState.x=0;photoZoomState.y=0}
+ else if(viewport){const maxX=Math.max(0,(stage.offsetWidth*photoZoomState.scale-viewport.clientWidth)/2),maxY=Math.max(0,(stage.offsetHeight*photoZoomState.scale-viewport.clientHeight)/2);photoZoomState.x=Math.max(-maxX,Math.min(maxX,photoZoomState.x));photoZoomState.y=Math.max(-maxY,Math.min(maxY,photoZoomState.y))}
  stage.style.setProperty('--pf-zoom',String(photoZoomState.scale));
  stage.style.setProperty('--pf-pan-x',photoZoomState.x+'px');
  stage.style.setProperty('--pf-pan-y',photoZoomState.y+'px');
@@ -1482,7 +1484,7 @@ function renderPhotoEditor(){
    $('#pf-color-brush-tools')?.classList.toggle('hidden',!brushMode);
    const lightToggle=$('#pf-light-brush-toggle'),lightOptions=$('#pf-light-brush-options');
    if(brushMode){lightToggle?.classList.remove('active');lightToggle?.setAttribute('aria-pressed','false');if(lightToggle)lightToggle.textContent='Aktifkan kuas';lightOptions?.classList.add('hidden')}
-   syncLightAdjustmentControls(ph,false);
+   syncLightAdjustmentControls(ph,isLocalLightScope(ph));
    await dbPut('projects',p);
    const mask=await getColorMixBrushCanvas(ph);renderColorMixBrushSelection(ph,mask);
    refreshColorMixPreview(ph).catch(error=>console.warn(error));
