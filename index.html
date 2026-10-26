@@ -937,6 +937,7 @@ async function bindLightBrushControls(ph,p){
   return {x:Math.max(0,Math.min(overlay.offsetWidth,(event.clientX-rect.left)/zoom)),y:Math.max(0,Math.min(overlay.offsetHeight,(event.clientY-rect.top)/zoom)),displayWidth:Math.max(1,overlay.offsetWidth)};
  };
  if(toggle)toggle.onclick=()=>{
+  const previousScope=brush.scope;
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
   const active=lightBrushEnabledPhotoId===ph.id;
   if(active){colorBrushEnabledPhotoId=null;colorBrushDrawing=null;brush.scope='local';}
@@ -945,10 +946,12 @@ async function bindLightBrushControls(ph,p){
   syncLightAdjustmentControls(ph,isLocalLightScope(ph));
   getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
   refreshColorMixPreview(ph).catch(error=>console.warn(error));refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
-  saveSettings();
+  if(previousScope!==brush.scope)invalidateLight().catch(error=>console.warn('Gagal memperbarui tahap cahaya',error));else saveSettings();
  };
  document.querySelectorAll('[data-pf-brush-mode]').forEach(button=>button.onclick=()=>{
-  brush.mode=button.dataset.pfBrushMode;brush.erase=false;brush.scope='local';updateModeButtons();syncLightAdjustmentControls(ph,true);saveSettings();
+  const previousScope=brush.scope;
+  brush.mode=button.dataset.pfBrushMode;brush.erase=false;brush.scope='local';updateModeButtons();syncLightAdjustmentControls(ph,true);
+  if(previousScope!==brush.scope)invalidateLight().catch(error=>console.warn('Gagal memperbarui tahap cahaya',error));else saveSettings();
   scheduleLightBrushPreview(ph);getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
  });
  const eraseButton=document.getElementById('pf-light-brush-erase');
@@ -985,10 +988,10 @@ async function bindLightBrushControls(ph,p){
  overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
  overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null;renderLightBrushSelection(ph,brightMask,darkMask,selectMask)});
  if(document.getElementById('pf-light-scope-local'))document.getElementById('pf-light-scope-local').onclick=async()=>{
-  brush.scope='local';syncLightAdjustmentControls(ph,true);await saveSettings();scheduleLightBrushPreview(ph);
+  if(brush.scope==='local')return;brush.scope='local';syncLightAdjustmentControls(ph,true);await invalidateLight();scheduleLightBrushPreview(ph);
  };
  if(document.getElementById('pf-light-scope-global'))document.getElementById('pf-light-scope-global').onclick=async()=>{
-  brush.scope='global';syncLightAdjustmentControls(ph,false);await saveSettings();scheduleLightBrushPreview(ph);
+  if(brush.scope==='global')return;brush.scope='global';syncLightAdjustmentControls(ph,false);await invalidateLight();scheduleLightBrushPreview(ph);
  };
  updateModeButtons();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
 }
