@@ -666,16 +666,13 @@ async function applyColorMixToCanvas(canvas,ph){
  ctx.putImageData(frame,0,0);
 }
 async function refreshColorMixPreview(ph){
- const token=++colorMixPreviewToken,imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo"),canvas=document.getElementById("pf-color-mix-preview");
- if(!imageEl||!main||!canvas||page!=="photo-editor")return;
+ const token=++colorMixPreviewToken,imageEl=document.getElementById("pf-photo-preview"),canvas=document.getElementById("pf-color-mix-preview"),stage=document.getElementById("pf-image-stage");
+ if(!imageEl||!stage||!canvas||page!=="photo-editor")return;
  const source=ph.originalSrc||ph.src;if(!source)return;
+ canvas.style.left='0px';canvas.style.top='0px';canvas.style.width='100%';canvas.style.height='100%';
  if(!colorMixHasAdjustments(ph)){
   canvas.style.display="none";imageEl.style.opacity="1";imageEl.style.filter=photoAdjustmentFilter(ph);return;
  }
- const rect=imageEl.getBoundingClientRect(),parent=main.getBoundingClientRect();
- if(rect.width<1||rect.height<1)return;
- canvas.style.left=(rect.left-parent.left)+"px";canvas.style.top=(rect.top-parent.top)+"px";
- canvas.style.width=rect.width+"px";canvas.style.height=rect.height+"px";
  const dims=lightBrushMaskDimensions(ph);canvas.width=dims.w;canvas.height=dims.h;
  try{
   const image=await loadLightBrushImage(source);
@@ -687,6 +684,7 @@ async function refreshColorMixPreview(ph){
   canvas.style.display="block";imageEl.style.opacity="0";imageEl.style.filter="none";
  }catch(error){console.warn("Pratinjau campur warna gagal",error);canvas.style.display="none";imageEl.style.opacity="1";imageEl.style.filter=photoAdjustmentFilter(ph)}
 }
+
 function scheduleColorMixPreview(ph){
  if(colorMixPreviewTimer)clearTimeout(colorMixPreviewTimer);
  colorMixPreviewTimer=setTimeout(()=>refreshColorMixPreview(ph).catch(error=>console.warn("Gagal memperbarui warna",error)),80);
@@ -700,28 +698,27 @@ function scheduleColorMixSave(p,ph){
  scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
 }
 function renderColorMixBrushSelection(ph,maskCanvas){
- const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo");
- if(!overlay||!imageEl||!main)return;
+ const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo"),stage=document.getElementById("pf-image-stage");
+ if(!overlay||!imageEl||!main||!stage)return;
  const active=page==="photo-editor"&&ph.adjust?.colorMixMode==="brush"&&colorBrushEnabledPhotoId===ph.id&&lightBrushEnabledPhotoId!==ph.id;
  main.classList.toggle("color-brush-active",active);overlay.style.display=active?"block":"none";if(!active)return;
- const rect=imageEl.getBoundingClientRect(),parent=main.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
- overlay.style.left=(rect.left-parent.left)+"px";overlay.style.top=(rect.top-parent.top)+"px";
- overlay.style.width=rect.width+"px";overlay.style.height=rect.height+"px";
- const w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));
+ overlay.style.left='0px';overlay.style.top='0px';overlay.style.width='100%';overlay.style.height='100%';
+ const w=Math.max(1,imageEl.offsetWidth),h=Math.max(1,imageEl.offsetHeight);
  if(overlay.width!==w)overlay.width=w;if(overlay.height!==h)overlay.height=h;
  const ctx=overlay.getContext("2d");ctx.clearRect(0,0,w,h);
  if(maskCanvas){ctx.drawImage(maskCanvas,0,0,w,h);ctx.globalCompositeOperation="source-in";ctx.fillStyle="rgba(57,125,255,.38)";ctx.fillRect(0,0,w,h);ctx.globalCompositeOperation="source-over"}
  const pointer=colorBrushPointer&&colorBrushPointer.photoId===ph.id?colorBrushPointer:colorBrushDrawing&&colorBrushDrawing.photoId===ph.id?colorBrushDrawing:null;
  if(pointer){
-  const brush=ensureColorMixBrushState(ph),radius=Math.max(3,rect.width*brush.size/200);
+  const brush=ensureColorMixBrushState(ph),radius=Math.max(3,w*brush.size/200);
   ctx.beginPath();ctx.arc(pointer.x,pointer.y,radius,0,Math.PI*2);ctx.lineWidth=1.5;ctx.strokeStyle="#2678ff";ctx.stroke();
  }
 }
+
 async function bindColorMixBrushControls(ph,p){
  const brush=ensureColorMixBrushState(ph),mask=await getColorMixBrushCanvas(ph);
  const overlay=document.getElementById("pf-color-brush-overlay"),imageEl=document.getElementById("pf-photo-preview"),main=document.querySelector(".pf-main-photo");
  if(!overlay||!imageEl||!main)return;
- const point=event=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(rect.width,event.clientX-rect.left)),y:Math.max(0,Math.min(rect.height,event.clientY-rect.top)),displayWidth:rect.width}};
+ const point=event=>{const rect=overlay.getBoundingClientRect(),zoom=photoZoomState.photoId===ph.id?photoZoomState.scale:1;return{x:Math.max(0,Math.min(overlay.offsetWidth,(event.clientX-rect.left)/zoom)),y:Math.max(0,Math.min(overlay.offsetHeight,(event.clientY-rect.top)/zoom)),displayWidth:Math.max(1,overlay.offsetWidth)}};
  const finish=async()=>{
   const stroke=colorBrushDrawing;if(!stroke||stroke.photoId!==ph.id)return;
   colorBrushDrawing=null;colorBrushPointer=null;brush.mask=lightBrushCanvasHasPaint(mask)?mask.toDataURL("image/png"):null;
@@ -1385,9 +1382,8 @@ function renderPhotoEditor(){
   await dbPut('projects',p);
   renderPhotoEditor();
  });
- $('#pf-hold-original').addEventListener('pointerdown',()=>{const im=$('#pf-photo-preview');if(im){im.style.filter='none';im.src=ph.originalSrc||ph.src}});
- const restoreOriginal=()=>{const im=$('#pf-photo-preview');if(im){im.src=source;im.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}};
- ['pointerup','pointercancel','pointerleave'].forEach(ev=>$('#pf-hold-original').addEventListener(ev,restoreOriginal));
+ bindPhotoZoomControls(ph);
+ bindHoldOriginalPreview(ph,source,stageIndex);
  $('#pf-finish-photo').onclick=async()=>{
   if(stageIndex===2){if(!p.templateId){toast('Pilih template atau pilih “Tanpa template” terlebih dahulu.');return}await applyProjectTemplate(p);return}
   if(stageIndex===1&&!workflowDone(ph,'cutout')){toast('Proses Cutout dahulu atau tandai tahap selesai jika ingin melewati.');if(!confirm('Lewati Cutout untuk foto ini?'))return}
@@ -1406,7 +1402,7 @@ function renderPhotoEditor(){
   };
   const update=(key,value)=>{
    ph.adjust=ph.adjust||{};
-   const localMode=lightBrushEnabledPhotoId===ph.id;
+   const localMode=isLocalLightScope(ph);
    const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
    if(localMode)ensureLightBrushState(ph).adjustments[key]=Number(value);
    else ph.adjust[prop]=Number(value);
@@ -1448,7 +1444,7 @@ function renderPhotoEditor(){
   });
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
-   const chosen=presets[e.target.value],localMode=lightBrushEnabledPhotoId===ph.id;
+   const chosen=presets[e.target.value],localMode=isLocalLightScope(ph);
    if(localMode){
     const brush=ensureLightBrushState(ph);
     brush.adjustments={exposure:chosen.exposure,contrast:chosen.contrastValue,highlight:chosen.highlight,shadows:chosen.shadows,saturation:chosen.saturationValue,warmth:chosen.warmth,glow:chosen.glow,vignette:chosen.vignette,denoise:chosen.denoise};
