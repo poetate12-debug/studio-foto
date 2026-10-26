@@ -1024,10 +1024,16 @@ async function bindLightBrushControls(ph,p){
  overlay.addEventListener('pointercancel',()=>{finishStroke().catch(error=>console.error(error))});
  overlay.addEventListener('pointerleave',()=>{if(!lightBrushDrawing)lightBrushPointer=null;renderLightBrushSelection(ph,brightMask,darkMask,selectMask)});
  if(document.getElementById('pf-light-scope-local'))document.getElementById('pf-light-scope-local').onclick=async()=>{
-  if(brush.scope==='local')return;brush.scope='local';syncLightAdjustmentControls(ph,true);await invalidateLight();scheduleLightBrushPreview(ph);
+  brush.scope='local';brush.mode='select';brush.erase=false;lightBrushEnabledPhotoId=ph.id;colorBrushEnabledPhotoId=null;colorBrushDrawing=null;
+  if(toggle){toggle.classList.add('active');toggle.setAttribute('aria-pressed','true');toggle.textContent='Kuas aktif'}
+  if(options)options.classList.remove('hidden');updateModeButtons();syncLightAdjustmentControls(ph,true);
+  renderLightBrushSelection(ph,brightMask,darkMask,selectMask);await invalidateLight();scheduleLightBrushPreview(ph);
  };
  if(document.getElementById('pf-light-scope-global'))document.getElementById('pf-light-scope-global').onclick=async()=>{
-  if(brush.scope==='global')return;brush.scope='global';syncLightAdjustmentControls(ph,false);await invalidateLight();scheduleLightBrushPreview(ph);
+  brush.scope='global';lightBrushEnabledPhotoId=null;lightBrushDrawing=null;lightBrushPointer=null;
+  if(toggle){toggle.classList.remove('active');toggle.setAttribute('aria-pressed','false');toggle.textContent='Aktifkan kuas'}
+  if(options)options.classList.add('hidden');main.classList.remove('brush-active');syncLightAdjustmentControls(ph,false);
+  await invalidateLight();scheduleLightBrushPreview(ph);
  };
  updateModeButtons();syncLightAdjustmentControls(ph,isLocalLightScope(ph));scheduleLightBrushPreview(ph);
 }
@@ -1035,7 +1041,7 @@ async function bindLightBrushControls(ph,p){
 async function photoDataWithLight(ph){
  const source=ph.originalSrc||ph.src;
  const a=adjustmentValues(ph);
- const any=(Math.abs(a.exposure)+Math.abs(a.contrast)+Math.abs(a.highlight)+Math.abs(a.shadows)+Math.abs(a.saturation)+Math.abs(a.warmth)+a.glow+a.vignette+a.denoise)>0;
+ const any=(Math.abs(a.exposure)+Math.abs(a.contrast)+Math.abs(a.highlight)+Math.abs(a.shadows)+Math.abs(a.saturation)+Math.abs(a.warmth)+a.glow+a.vignette+a.denoise+Math.abs(a.blacks)+Math.abs(a.dehaze))>0;
  const brush=ensureLightBrushState(ph);
  const hasLocalBrush=photoHasLightBrushPaint(ph),hasColorMix=colorMixHasAdjustments(ph);
  if(!any&&!hasLocalBrush&&!hasColorMix)return source;
@@ -1280,13 +1286,21 @@ function applyPhotoZoom(ph){
  if(inButton)inButton.disabled=photoZoomState.scale>=4;
 }
 function bindPhotoZoomControls(ph){
- const stage=document.getElementById('pf-image-stage'),main=document.querySelector('.pf-main-photo'),imageEl=document.getElementById('pf-photo-preview');
- if(!stage||!main||!imageEl)return;
+ const stage=document.getElementById('pf-image-stage'),viewport=document.getElementById('pf-image-viewport'),imageEl=document.getElementById('pf-photo-preview');
+ if(!stage||!viewport||!imageEl)return;
  if(photoZoomState.photoId!==ph.id){photoZoomState={photoId:ph.id,scale:1,x:0,y:0};photoZoomPointers.clear();photoZoomGesture=null}
- imageEl.addEventListener('load',()=>{fitPhotoImageStage(ph);if(page==='photo-editor'&&ph.id===activeProject()?.photos?.[activePhotoIndex]?.id){scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph)}});
+ imageEl.addEventListener('load',()=>{
+  fitPhotoImageStage(ph);
+  if(page==='photo-editor'&&originalPreviewHeldPhotoId!==ph.id&&ph.id===activeProject()?.photos?.[activePhotoIndex]?.id){
+   scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
+  }
+ });
  fitPhotoImageStage(ph);
  if(photoZoomResizeHandler)window.removeEventListener('resize',photoZoomResizeHandler);
- photoZoomResizeHandler=()=>{fitPhotoImageStage(ph);if(page==='photo-editor'){scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph)}};
+ photoZoomResizeHandler=()=>{
+  fitPhotoImageStage(ph);
+  if(page==='photo-editor'&&originalPreviewHeldPhotoId!==ph.id){scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph)}
+ };
  window.addEventListener('resize',photoZoomResizeHandler,{passive:true});
  const clampZoom=value=>Math.max(1,Math.min(4,value));
  const setZoom=value=>{
@@ -1303,76 +1317,97 @@ function bindPhotoZoomControls(ph){
   const pts=Array.from(photoZoomPointers.values());
   if(pts.length>=2){
    photoZoomGesture={type:'pinch',startDistance:Math.max(1,distance(pts[0],pts[1])),startScale:photoZoomState.scale,startX:photoZoomState.x,startY:photoZoomState.y};
-  }else if(pts.length===1&&photoZoomState.scale>1){
+  }else if(pts.length===1&&photoZoomState.scale>1&&!toolActive()){
    photoZoomGesture={type:'pan',pointerId:pts[0].id,startX:pts[0].x,startY:pts[0].y,panX:photoZoomState.x,panY:photoZoomState.y};
   }else photoZoomGesture=null;
  };
- stage.addEventListener('pointerdown',event=>{
-  if(toolActive()||event.target.closest('.pf-zoom-controls')||event.target.closest('#pf-hold-original'))return;
+ viewport.addEventListener('pointerdown',event=>{
+  if(event.target.closest('.pf-zoom-controls')||event.target.closest('#pf-hold-original'))return;
   photoZoomPointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
-  try{stage.setPointerCapture(event.pointerId)}catch(error){}
-  startGesture();
-  if(photoZoomPointers.size>1||photoZoomState.scale>1)event.preventDefault();
- });
- stage.addEventListener('pointermove',event=>{
-  if(!photoZoomPointers.has(event.pointerId)||toolActive())return;
+  if(photoZoomPointers.size>=2){
+   event.preventDefault();
+   startGesture();
+   try{viewport.setPointerCapture(event.pointerId)}catch(error){}
+  }else if(!toolActive()){
+   startGesture();
+   if(photoZoomState.scale>1)event.preventDefault();
+  }
+ },{capture:true,passive:false});
+ viewport.addEventListener('pointermove',event=>{
+  if(!photoZoomPointers.has(event.pointerId))return;
   photoZoomPointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
   const pts=Array.from(photoZoomPointers.values());
   if(pts.length>=2){
    if(!photoZoomGesture||photoZoomGesture.type!=='pinch')startGesture();
    if(photoZoomGesture?.type==='pinch'){
     event.preventDefault();
-    setZoom(photoZoomGesture.startScale*distance(pts[0],pts[1])/photoZoomGesture.startDistance);
-    photoZoomState.x=photoZoomGesture.startX;photoZoomState.y=photoZoomGesture.startY;applyPhotoZoom(ph);
+    photoZoomState.scale=clampZoom(photoZoomGesture.startScale*distance(pts[0],pts[1])/photoZoomGesture.startDistance);
+    photoZoomState.x=photoZoomGesture.startX;photoZoomState.y=photoZoomGesture.startY;
+    applyPhotoZoom(ph);
    }
-  }else if(photoZoomGesture?.type==='pan'&&photoZoomGesture.pointerId===event.pointerId){
+  }else if(photoZoomGesture?.type==='pan'&&photoZoomGesture.pointerId===event.pointerId&&!toolActive()){
    event.preventDefault();
    photoZoomState.x=photoZoomGesture.panX+event.clientX-photoZoomGesture.startX;
    photoZoomState.y=photoZoomGesture.panY+event.clientY-photoZoomGesture.startY;
    applyPhotoZoom(ph);
-   photoZoomGesture.panX=photoZoomState.x;photoZoomGesture.panY=photoZoomState.y;photoZoomGesture.startX=event.clientX;photoZoomGesture.startY=event.clientY;
+   photoZoomGesture.panX=photoZoomState.x;photoZoomGesture.panY=photoZoomState.y;
+   photoZoomGesture.startX=event.clientX;photoZoomGesture.startY=event.clientY;
   }
- });
+ },{capture:true,passive:false});
  const finish=event=>{
   if(!photoZoomPointers.has(event.pointerId))return;
   photoZoomPointers.delete(event.pointerId);
   const remaining=Array.from(photoZoomPointers.values());
-  if(remaining.length===1&&photoZoomState.scale>1){
+  if(remaining.length>=2)startGesture();
+  else if(remaining.length===1&&photoZoomState.scale>1&&!toolActive()){
    const pt=remaining[0];photoZoomGesture={type:'pan',pointerId:pt.id,startX:pt.x,startY:pt.y,panX:photoZoomState.x,panY:photoZoomState.y};
-  }else if(!remaining.length)photoZoomGesture=null;
-  else startGesture();
+  }else photoZoomGesture=null;
  };
- stage.addEventListener('pointerup',finish);stage.addEventListener('pointercancel',finish);stage.addEventListener('lostpointercapture',finish);
+ viewport.addEventListener('pointerup',finish,{capture:true});
+ viewport.addEventListener('pointercancel',finish,{capture:true});
  applyPhotoZoom(ph);
 }
+
 function bindHoldOriginalPreview(ph,stageSource,stageIndex){
  const button=document.getElementById('pf-hold-original'),imageEl=document.getElementById('pf-photo-preview');
  if(!button||!imageEl)return;
  let showingOriginal=false,savedEditedView=null;
  const canvases=['pf-color-mix-preview','pf-light-effect-preview','pf-light-brush-overlay','pf-color-brush-overlay'].map(id=>document.getElementById(id)).filter(Boolean);
  const restore=()=>{
-  if(!showingOriginal)return;showingOriginal=false;
-  if(savedEditedView){imageEl.src=savedEditedView.src;imageEl.style.filter=savedEditedView.filter;imageEl.style.opacity=savedEditedView.opacity;savedEditedView=null}
-  else{imageEl.src=stageSource;imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}
+  if(!showingOriginal)return;
+  showingOriginal=false;originalPreviewHeldPhotoId=null;
+  if(savedEditedView){
+   imageEl.src=savedEditedView.src;imageEl.style.filter=savedEditedView.filter;imageEl.style.opacity=savedEditedView.opacity;savedEditedView=null;
+  }else{
+   imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0);
+  }
+  button.textContent='◉ Tahan lihat asli';button.classList.remove('holding-original');
   canvases.forEach(canvas=>canvas.style.display='none');
   if(stageIndex===0){
-   refreshColorMixPreview(ph).catch(error=>console.warn(error));
-   refreshLightBrushPreviews(ph).catch(error=>console.warn(error));
+   scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph);
    if(ph.adjust?.colorMixMode==='brush')getColorMixBrushCanvas(ph).then(mask=>renderColorMixBrushSelection(ph,mask)).catch(error=>console.warn(error));
   }
  };
  const show=event=>{
   if(event.button!==undefined&&event.button!==0)return;
-  event.preventDefault();showingOriginal=true;
+  if(showingOriginal)return;
+  event.preventDefault();showingOriginal=true;originalPreviewHeldPhotoId=ph.id;
   savedEditedView={src:imageEl.src,filter:imageEl.style.filter,opacity:imageEl.style.opacity};
-  imageEl.src=ph.originalSrc||ph.src;imageEl.style.opacity='1';imageEl.style.filter='none';
+  if(stageIndex!==0)imageEl.src=ph.originalSrc||ph.src;
+  imageEl.style.opacity='1';imageEl.style.filter='none';
+  button.textContent='◉ Menampilkan asli · lepaskan untuk kembali';button.classList.add('holding-original');
   canvases.forEach(canvas=>canvas.style.display='none');
   try{button.setPointerCapture(event.pointerId)}catch(error){}
  };
  button.addEventListener('pointerdown',show);
- ['pointerup','pointercancel','lostpointercapture'].forEach(type=>button.addEventListener(type,restore));
+ button.addEventListener('pointerup',restore);
+ button.addEventListener('pointercancel',restore);
  button.addEventListener('contextmenu',event=>event.preventDefault());
+ button.addEventListener('touchstart',event=>{if(!showingOriginal){const touch=event.changedTouches?.[0];show({button:0,preventDefault:()=>event.preventDefault(),pointerId:touch?.identifier??0})}},{passive:false});
+ button.addEventListener('touchend',restore,{passive:true});
+ button.addEventListener('touchcancel',restore,{passive:true});
 }
+
 function renderPhotoEditor(){
  const p=activeProject();if(!p){page='projects';render();return}
  if(!p.photos?.length){page='project-gallery';renderProjectGallery();return}
