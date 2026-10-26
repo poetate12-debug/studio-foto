@@ -1394,10 +1394,10 @@ function renderPhotoEditor(){
   const localScope=isLocalLightScope(ph);
   const sliderAdj=localScope?localLightAdjustmentValues(ph):adj;
   html+='<div class="pf-presets"><label>Preset</label><div class="pf-preset-row"><select id="pf-preset"><option value="original">Original</option><option value="ngarak5">Ngarak5</option><option value="natural">Natural</option><option value="bright">Terang</option><option value="warm">Hangat</option><option value="high-contrast">Kontras tinggi</option></select><button class="pf-save-preset" id="pf-reset-light" type="button" aria-label="Reset semua pengaturan cahaya" title="Reset cahaya">↺</button><button class="pf-save-preset" id="pf-save-preset" aria-label="Simpan preset">▣</button></div></div>';
-  const sliders=[['exposure','Exposure',-100,100,sliderAdj.exposure],['contrast','Kontras',-100,100,sliderAdj.contrast],['highlight','Highlight',-100,100,sliderAdj.highlight],['shadows','Bayangan',-100,100,sliderAdj.shadows],['saturation','Saturasi',-100,100,sliderAdj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,sliderAdj.warmth],['glow','Glow (cahaya lembut)',0,100,sliderAdj.glow],['vignette','Vignette (gelap pinggir)',0,100,sliderAdj.vignette],['denoise','Denoise (kurangi noise)',0,100,sliderAdj.denoise]];
+  const sliders=[['exposure','Exposure',-100,100,sliderAdj.exposure],['contrast','Kontras',-100,100,sliderAdj.contrast],['highlight','Highlight',-100,100,sliderAdj.highlight],['shadows','Bayangan',-100,100,sliderAdj.shadows],['blacks','Hitam (Blacks)',-100,100,sliderAdj.blacks],['saturation','Saturasi',-100,100,sliderAdj.saturation],['warmth','Warmth (hangat/dingin)',-100,100,sliderAdj.warmth],['dehaze','Kabut / Dehaze',-100,100,sliderAdj.dehaze],['glow','Glow (cahaya lembut)',0,100,sliderAdj.glow],['vignette','Vignette (gelap pinggir)',0,100,sliderAdj.vignette],['denoise','Denoise (kurangi noise)',0,100,sliderAdj.denoise]];
   html+=lightBrushPanelMarkup(ph);
-  html+='<div id="pf-light-adjustment-scope" class="pf-light-scope '+(localScope?'local':'')+'">'+(localScope?(photoHasLightBrushPaint(ph)?'🖌 MODE AREA PILIHAN · Slider cahaya hanya mengubah area yang diseleksi.':'🖌 MODE AREA PILIHAN · Pilih area dengan mode Seleksi area sebelum mengubah slider.'):'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.')+'</div>';
-  html+='<div class="pf-light-scope-toggle"><button type="button" id="pf-light-scope-global" class="'+(!localScope?'active':'')+'">Seluruh foto</button><button type="button" id="pf-light-scope-local" class="'+(localScope?'active local':'')+'">Area pilihan</button></div>';
+  html+='<div id="pf-light-adjustment-scope" class="pf-light-scope '+(localScope?'local':'')+'">'+(localScope?(hasExplicitLightSelection(ph)?'🖌 MODE AREA PILIHAN · Exposure, Hitam, Kabut, Highlight, Bayangan dan slider lain hanya mengubah area biru yang diseleksi.':'🖌 MODE AREA PILIHAN · Pilih area dengan mode Seleksi area, lalu atur semua slider hanya pada area tersebut.'):'◎ MODE SELURUH FOTO · Slider mengubah seluruh foto.')+'</div>';
+  html+='<div class="pf-light-scope-toggle"><button type="button" id="pf-light-scope-global" class="'+(!localScope?'active':'')+'">Seluruh foto</button><button type="button" id="pf-light-scope-local" class="'+(localScope?'active local':'')+'">Area pilihan</button></div><p class="pf-note">Kabut / Dehaze: geser ke kiri untuk menambah efek kabut, ke kanan untuk mengurangi kabut. Hitam (Blacks) mengatur kedalaman area gelap.</p>';
   html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('');
   html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===(adj.selectedColor||'red')?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
  }else if(stageIndex===1){
@@ -1455,7 +1455,7 @@ function renderPhotoEditor(){
   await advanceWorkflowPhoto(p,ph,stage.key);
  };
  if(stageIndex===0){
-  const lightSliderKeys=['exposure','contrast','highlight','shadows','saturation','warmth','glow','vignette','denoise'];
+  const lightSliderKeys=['exposure','contrast','highlight','shadows','blacks','saturation','warmth','dehaze','glow','vignette','denoise'];
   let lightSaveTimer=null;
   const refreshImage=()=>{
    const im=$('#pf-photo-preview');
@@ -1481,9 +1481,9 @@ function renderPhotoEditor(){
   };
   lightSliderKeys.forEach(key=>$('#pf-slider-'+key)?.addEventListener('input',e=>update(key,e.target.value)));
   $('#pf-reset-light')?.addEventListener('click',()=>{
-   const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0};
+   const defaults={exposure:0,contrastValue:0,highlight:0,shadows:0,blacks:0,saturationValue:0,warmth:0,dehaze:0,glow:0,vignette:0,denoise:0};
    ph.adjust={...(ph.adjust||{}),...defaults};
-   ensureLightBrushState(ph).adjustments={exposure:0,contrast:0,highlight:0,shadows:0,saturation:0,warmth:0,glow:0,vignette:0,denoise:0};
+   ensureLightBrushState(ph).adjustments={exposure:0,contrast:0,highlight:0,shadows:0,blacks:0,saturation:0,warmth:0,dehaze:0,glow:0,vignette:0,denoise:0};
    clearPhotoLightBrushMasks(ph);
    lightSliderKeys.forEach(key=>{
     const prop=key==='saturation'?'saturationValue':key==='contrast'?'contrastValue':key;
@@ -1506,10 +1506,10 @@ function renderPhotoEditor(){
   });
   $('#pf-preset').onchange=async e=>{
    const presets={original:{exposure:0,contrastValue:0,highlight:0,shadows:0,saturationValue:0,warmth:0,glow:0,vignette:0,denoise:0},ngarak5:{exposure:20,contrastValue:8,highlight:-15,shadows:15,saturationValue:18,warmth:6,glow:5,vignette:7,denoise:8},natural:{exposure:5,contrastValue:4,highlight:-8,shadows:8,saturationValue:4,warmth:2,glow:0,vignette:0,denoise:8},bright:{exposure:22,contrastValue:0,highlight:-20,shadows:18,saturationValue:5,warmth:0,glow:0,vignette:0,denoise:0},warm:{exposure:5,contrastValue:2,highlight:-8,shadows:6,saturationValue:8,warmth:22,glow:5,vignette:0,denoise:0},'high-contrast':{exposure:0,contrastValue:25,highlight:-20,shadows:-8,saturationValue:5,warmth:0,glow:0,vignette:9,denoise:0}};
-   const chosen=presets[e.target.value],localMode=isLocalLightScope(ph);
+   const chosen={...presets[e.target.value],blacks:0,dehaze:0},localMode=isLocalLightScope(ph);
    if(localMode){
     const brush=ensureLightBrushState(ph);
-    brush.adjustments={exposure:chosen.exposure,contrast:chosen.contrastValue,highlight:chosen.highlight,shadows:chosen.shadows,saturation:chosen.saturationValue,warmth:chosen.warmth,glow:chosen.glow,vignette:chosen.vignette,denoise:chosen.denoise};
+    brush.adjustments={exposure:chosen.exposure,contrast:chosen.contrastValue,highlight:chosen.highlight,shadows:chosen.shadows,blacks:chosen.blacks,dehaze:chosen.dehaze,saturation:chosen.saturationValue,warmth:chosen.warmth,glow:chosen.glow,vignette:chosen.vignette,denoise:chosen.denoise};
    }else ph.adjust={...(ph.adjust||{}),...chosen};
    const editorScroll=document.querySelector('.pf-editor-scroll')?.scrollTop||0;
    await invalidatePhotoStages(p,ph,'light');renderPhotoEditor();
