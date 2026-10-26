@@ -758,7 +758,7 @@ function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
  const old=ph.adjust.lightBrush||{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
- ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='select'?'select':'brighten',scope:old.scope==='local'?'local':'global',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
+ ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='brighten'?'brighten':'select',scope:old.scope==='local'?'local':'global',erase:old.erase===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
   exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100)
  }};
  return ph.adjust.lightBrush;
@@ -1288,11 +1288,12 @@ function bindPhotoZoomControls(ph){
 function bindHoldOriginalPreview(ph,stageSource,stageIndex){
  const button=document.getElementById('pf-hold-original'),imageEl=document.getElementById('pf-photo-preview');
  if(!button||!imageEl)return;
- let showingOriginal=false;
+ let showingOriginal=false,savedEditedView=null;
  const canvases=['pf-color-mix-preview','pf-light-effect-preview','pf-light-brush-overlay','pf-color-brush-overlay'].map(id=>document.getElementById(id)).filter(Boolean);
  const restore=()=>{
   if(!showingOriginal)return;showingOriginal=false;
-  imageEl.src=stageSource;imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0);
+  if(savedEditedView){imageEl.src=savedEditedView.src;imageEl.style.filter=savedEditedView.filter;imageEl.style.opacity=savedEditedView.opacity;savedEditedView=null}
+  else{imageEl.src=stageSource;imageEl.style.opacity='1';imageEl.style.filter=photoAdjustmentFilter(ph,stageIndex!==0)}
   canvases.forEach(canvas=>canvas.style.display='none');
   if(stageIndex===0){
    refreshColorMixPreview(ph).catch(error=>console.warn(error));
@@ -1303,6 +1304,7 @@ function bindHoldOriginalPreview(ph,stageSource,stageIndex){
  const show=event=>{
   if(event.button!==undefined&&event.button!==0)return;
   event.preventDefault();showingOriginal=true;
+  savedEditedView={src:imageEl.src,filter:imageEl.style.filter,opacity:imageEl.style.opacity};
   imageEl.src=ph.originalSrc||ph.src;imageEl.style.opacity='1';imageEl.style.filter='none';
   canvases.forEach(canvas=>canvas.style.display='none');
   try{button.setPointerCapture(event.pointerId)}catch(error){}
