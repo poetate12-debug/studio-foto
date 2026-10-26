@@ -814,34 +814,36 @@ function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
  }
  ctx.restore();
 }
-function renderLightBrushSelection(ph,brightMask,darkMask){
+function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  const brushCanvas=document.getElementById('pf-light-brush-overlay'),main=document.querySelector('.pf-main-photo');
  if(!brushCanvas||!main)return;
- const active=lightBrushEnabledPhotoId===ph.id;main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
- const rect=brushCanvas.getBoundingClientRect(),width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph),mask=brush.mode==='darken'?darkMask:brightMask;
+ const active=lightBrushEnabledPhotoId===ph.id;
+ main.classList.toggle('brush-active',active);brushCanvas.style.display=active?'block':'none';if(!active)return;
+ const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d'),brush=ensureLightBrushState(ph);
+ const mask=brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask);
  ctx.clearRect(0,0,width,height);
- if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle='rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
+ if(mask){ctx.drawImage(mask,0,0,width,height);ctx.globalCompositeOperation='source-in';ctx.fillStyle=brush.mode==='select'?'rgba(54,125,235,.40)':'rgba(255,137,36,.42)';ctx.fillRect(0,0,width,height);ctx.globalCompositeOperation='source-over'}
  if(lightBrushPointer&&lightBrushPointer.photoId===ph.id){
-  const radius=Math.max(2,rect.width*brush.size/200);ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,radius,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,Math.max(1,radius-1),0,Math.PI*2);ctx.stroke();ctx.restore();
+  const radius=Math.max(2,width*brush.size/200);ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,radius,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(lightBrushPointer.x,lightBrushPointer.y,Math.max(1,radius-1),0,Math.PI*2);ctx.stroke();ctx.restore();
  }
 }
+
 async function refreshLightBrushPreviews(ph){
- const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),effect=document.getElementById('pf-light-effect-preview'),brushOverlay=document.getElementById('pf-light-brush-overlay');
+ const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),effect=document.getElementById('pf-light-effect-preview'),brushOverlay=document.getElementById('pf-light-brush-overlay'),stage=document.getElementById('pf-image-stage');
  if(!imageEl||!main||!effect||!brushOverlay||page!=='photo-editor')return;
  const source=ph.originalSrc||ph.src;if(!source)return;
- const [brightMask,darkMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken')]),image=await loadLightBrushImage(source);
+ const [brightMask,darkMask,selectMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]),image=await loadLightBrushImage(source);
  if(!document.getElementById('pf-photo-preview')||page!=='photo-editor')return;
- const rect=imageEl.getBoundingClientRect(),parentRect=main.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
- [effect,brushOverlay].forEach(canvas=>{canvas.style.left=(rect.left-parentRect.left)+'px';canvas.style.top=(rect.top-parentRect.top)+'px';canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px'});
+ const baseWidth=Math.max(1,imageEl.offsetWidth),baseHeight=Math.max(1,imageEl.offsetHeight);
+ [effect,brushOverlay].forEach(canvas=>{canvas.style.left='0px';canvas.style.top='0px';canvas.style.width='100%';canvas.style.height='100%'});
  if(effect.width!==brightMask.width)effect.width=brightMask.width;if(effect.height!==brightMask.height)effect.height=brightMask.height;
- const overlayWidth=Math.max(1,Math.round(rect.width)),overlayHeight=Math.max(1,Math.round(rect.height));
- if(brushOverlay.width!==overlayWidth)brushOverlay.width=overlayWidth;if(brushOverlay.height!==overlayHeight)brushOverlay.height=overlayHeight;
+ if(brushOverlay.width!==baseWidth)brushOverlay.width=baseWidth;if(brushOverlay.height!==baseHeight)brushOverlay.height=baseHeight;
  const brush=ensureLightBrushState(ph),drawing=lightBrushDrawing&&lightBrushDrawing.photoId===ph.id?lightBrushDrawing:null;
  const hasBright=!!brush.masks.brighten||(drawing&&drawing.mode==='brighten'&&!drawing.erase),hasDark=!!brush.masks.darken||(drawing&&drawing.mode==='darken'&&!drawing.erase);
  const hasMask=photoHasLightBrushPaint(ph)||!!drawing;
  const global=adjustmentValues(ph),localValues=localLightAdjustmentValues(ph);
  const hasGlobalExtras=Math.abs(global.highlight)+Math.abs(global.shadows)+global.glow+global.vignette>0;
- const localActive=hasMask&&lightAdjustmentValuesHaveChanges(localValues);
+ const localActive=isLocalLightScope(ph)&&hasMask&&lightAdjustmentValuesHaveChanges(localValues);
  const needsComposite=hasMask||hasGlobalExtras;
  const effectCtx=effect.getContext('2d');effectCtx.clearRect(0,0,effect.width,effect.height);
  if(needsComposite){
@@ -859,8 +861,9 @@ async function refreshLightBrushPreviews(ph){
   effect.style.display='none';
   imageEl.style.filter=photoAdjustmentFilter(ph);
  }
- renderLightBrushSelection(ph,brightMask,darkMask);
+ renderLightBrushSelection(ph,brightMask,darkMask,selectMask);
 }
+
 let lightBrushPreviewTimer=null;
 function scheduleLightBrushPreview(ph){
  if(lightBrushPreviewTimer)clearTimeout(lightBrushPreviewTimer);
