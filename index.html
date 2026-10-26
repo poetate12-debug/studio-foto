@@ -96,7 +96,8 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-brush-hint{font-size:10px;color:#85808b;line-height:1.5}
 .pf-brush-clear{border:1px solid #ece1d9;background:#fff;border-radius:9px;padding:8px 10px;color:#9a5630;font-weight:750;font-size:11px}
 
-.pf-original-toggle{position:absolute;right:10px;bottom:10px;z-index:30;border:0;border-radius:99px;background:#14161ce8;color:#fff;padding:9px 13px;font-size:12px;font-weight:700;touch-action:none;user-select:none;-webkit-user-select:none}
+.pf-original-toggle{position:absolute;right:10px;bottom:10px;z-index:30;border:0;border-radius:99px;background:#14161ce8;color:#fff;padding:9px 13px;font-size:12px;font-weight:700;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.pf-original-toggle.holding-original{background:#e77a24;color:#fff;box-shadow:0 0 0 3px #e77a2440}
 .pf-image-viewport{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;z-index:1}
 .pf-image-stage{position:relative;display:block;flex:none;width:fit-content;height:100%;max-width:100%;max-height:100%;transform:translate3d(var(--pf-pan-x,0px),var(--pf-pan-y,0px),0) scale(var(--pf-zoom,1));transform-origin:center center;touch-action:none;will-change:transform}
 .pf-image-stage #pf-photo-preview{display:block;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;pointer-events:none;transition:none}
@@ -731,13 +732,16 @@ async function bindColorMixBrushControls(ph,p){
  };
  overlay.addEventListener("pointerdown",event=>{
   if(colorBrushEnabledPhotoId!==ph.id||ph.adjust?.colorMixMode!=="brush")return;
+  if(photoZoomPointers.size>=2){event.preventDefault();if(colorBrushDrawing)finish().catch(error=>console.warn(error));return}
   event.preventDefault();const pt=point(event);colorBrushDrawing={photoId:ph.id,x:pt.x,y:pt.y,last:pt};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
   paintLightBrushSegment(mask,pt,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);
   renderColorMixBrushSelection(ph,mask);
  });
  overlay.addEventListener("pointermove",event=>{
-  const pt=point(event),stroke=colorBrushDrawing;
+  const pt=point(event);
+  if(photoZoomPointers.size>=2||photoZoomGesture?.type==="pinch"){renderColorMixBrushSelection(ph,mask);return}
+  const stroke=colorBrushDrawing;
   if(stroke&&stroke.photoId===ph.id){
    event.preventDefault();paintLightBrushSegment(mask,stroke.last,pt,pt.displayWidth,{size:brush.size,softness:brush.softness,intensity:100},false);stroke.last=pt;
   }
@@ -1005,6 +1009,7 @@ async function bindLightBrushControls(ph,p){
  };
  overlay.addEventListener('pointerdown',event=>{
   if(lightBrushEnabledPhotoId!==ph.id)return;
+  if(photoZoomPointers.size>=2){event.preventDefault();if(lightBrushDrawing)finishStroke().catch(error=>console.warn(error));return}
   event.preventDefault();const point=pointForEvent(event),mode=brush.mode;
   lightBrushDrawing={photoId:ph.id,mode,erase:brush.erase,last:point};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
@@ -1013,7 +1018,9 @@ async function bindLightBrushControls(ph,p){
   renderLightBrushSelection(ph,brightMask,darkMask,selectMask);scheduleLightBrushPreview(ph);
  });
  overlay.addEventListener('pointermove',event=>{
-  const point=pointForEvent(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};const stroke=lightBrushDrawing;
+  const point=pointForEvent(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
+  if(photoZoomPointers.size>=2||photoZoomGesture?.type==='pinch'){renderLightBrushSelection(ph,brightMask,darkMask,selectMask);return}
+  const stroke=lightBrushDrawing;
   if(stroke&&stroke.photoId===ph.id){
    event.preventDefault();const target=stroke.mode==='darken'?darkMask:(stroke.mode==='select'?selectMask:brightMask);
    paintLightBrushSegment(target,stroke.last,point,point.displayWidth,stroke.mode==='select'?{...brush,intensity:100}:brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph);
