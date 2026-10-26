@@ -969,14 +969,14 @@ async function bindLightBrushControls(ph,p){
   lightBrushDrawing={photoId:ph.id,mode,erase:brush.erase,last:point};lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};
   try{overlay.setPointerCapture(event.pointerId)}catch(error){}
   const target=mode==='darken'?darkMask:(mode==='select'?selectMask:brightMask);
-  paintLightBrushSegment(target,point,point,point.displayWidth,brush,brush.erase);
+  paintLightBrushSegment(target,point,point,point.displayWidth,mode==='select'?{...brush,intensity:100}:brush,brush.erase);
   renderLightBrushSelection(ph,brightMask,darkMask,selectMask);scheduleLightBrushPreview(ph);
  });
  overlay.addEventListener('pointermove',event=>{
   const point=pointForEvent(event);lightBrushPointer={photoId:ph.id,x:point.x,y:point.y};const stroke=lightBrushDrawing;
   if(stroke&&stroke.photoId===ph.id){
    event.preventDefault();const target=stroke.mode==='darken'?darkMask:(stroke.mode==='select'?selectMask:brightMask);
-   paintLightBrushSegment(target,stroke.last,point,point.displayWidth,brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph);
+   paintLightBrushSegment(target,stroke.last,point,point.displayWidth,stroke.mode==='select'?{...brush,intensity:100}:brush,stroke.erase);stroke.last=point;scheduleLightBrushPreview(ph);
   }
   renderLightBrushSelection(ph,brightMask,darkMask,selectMask);
  });
