@@ -98,8 +98,8 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 
 .pf-original-toggle{position:absolute;right:10px;bottom:10px;z-index:30;border:0;border-radius:99px;background:#14161ce8;color:#fff;padding:9px 13px;font-size:12px;font-weight:700;touch-action:none;user-select:none;-webkit-user-select:none}
 .pf-image-viewport{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;z-index:1}
-.pf-image-stage{position:relative;display:block;flex:none;width:fit-content;height:100%;max-width:100%;transform:translate3d(var(--pf-pan-x,0px),var(--pf-pan-y,0px),0) scale(var(--pf-zoom,1));transform-origin:center center;touch-action:none;will-change:transform}
-.pf-image-stage #pf-photo-preview{display:block;width:auto;height:100%;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;transition:none}
+.pf-image-stage{position:relative;display:block;flex:none;width:fit-content;height:100%;max-width:100%;max-height:100%;transform:translate3d(var(--pf-pan-x,0px),var(--pf-pan-y,0px),0) scale(var(--pf-zoom,1));transform-origin:center center;touch-action:none;will-change:transform}
+.pf-image-stage #pf-photo-preview{display:block;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;pointer-events:none;transition:none}
 .pf-image-stage .pf-local-canvas{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;pointer-events:none}
 .pf-zoom-controls{position:absolute;left:10px;top:10px;z-index:31;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:#111827ce;backdrop-filter:blur(5px);color:white}
 .pf-zoom-controls button{height:30px;min-width:30px;padding:0 7px;border:0;border-radius:8px;background:#ffffff1c;color:#fff;font-size:17px;font-weight:800}
@@ -489,6 +489,7 @@ let colorBrushPointer=null;
 let photoZoomState={photoId:null,scale:1,x:0,y:0};
 let photoZoomPointers=new Map();
 let photoZoomGesture=null;
+let photoZoomResizeHandler=null;
 let lightBrushEnabledPhotoId=null;
 let lightBrushDrawing=null;
 let lightBrushPointer=null;
@@ -1214,6 +1215,16 @@ function bindThumbOnlyRanges(){
  document.addEventListener("pointerup",release,true);
  document.addEventListener("pointercancel",release,true);
 }
+function fitPhotoImageStage(ph){
+ const imageEl=document.getElementById('pf-photo-preview'),viewport=document.getElementById('pf-image-viewport'),stage=document.getElementById('pf-image-stage');
+ if(!imageEl||!viewport||!stage||!imageEl.naturalWidth||!imageEl.naturalHeight)return;
+ const vw=Math.max(1,viewport.clientWidth),vh=Math.max(1,viewport.clientHeight),ratio=imageEl.naturalWidth/imageEl.naturalHeight;
+ let width=Math.min(vw,vh*ratio),height=width/ratio;
+ if(height>vh){height=vh;width=height*ratio}
+ stage.style.width=Math.max(1,width)+'px';stage.style.height=Math.max(1,height)+'px';
+ imageEl.style.width='100%';imageEl.style.height='100%';imageEl.style.maxWidth='none';imageEl.style.maxHeight='none';
+ applyPhotoZoom(ph);
+}
 function applyPhotoZoom(ph){
  const stage=document.getElementById('pf-image-stage'),viewport=document.getElementById('pf-image-viewport'),label=document.getElementById('pf-zoom-label');
  if(!stage)return;
@@ -1229,9 +1240,14 @@ function applyPhotoZoom(ph){
  if(inButton)inButton.disabled=photoZoomState.scale>=4;
 }
 function bindPhotoZoomControls(ph){
- const stage=document.getElementById('pf-image-stage'),main=document.querySelector('.pf-main-photo');
- if(!stage||!main)return;
+ const stage=document.getElementById('pf-image-stage'),main=document.querySelector('.pf-main-photo'),imageEl=document.getElementById('pf-photo-preview');
+ if(!stage||!main||!imageEl)return;
  if(photoZoomState.photoId!==ph.id){photoZoomState={photoId:ph.id,scale:1,x:0,y:0};photoZoomPointers.clear();photoZoomGesture=null}
+ imageEl.addEventListener('load',()=>{fitPhotoImageStage(ph);if(page==='photo-editor'&&ph.id===activeProject()?.photos?.[activePhotoIndex]?.id){scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph)}});
+ fitPhotoImageStage(ph);
+ if(photoZoomResizeHandler)window.removeEventListener('resize',photoZoomResizeHandler);
+ photoZoomResizeHandler=()=>{fitPhotoImageStage(ph);if(page==='photo-editor'){scheduleColorMixPreview(ph);scheduleLightBrushPreview(ph)}};
+ window.addEventListener('resize',photoZoomResizeHandler,{passive:true});
  const clampZoom=value=>Math.max(1,Math.min(4,value));
  const setZoom=value=>{
   photoZoomState.scale=clampZoom(value);
@@ -1274,6 +1290,7 @@ function bindPhotoZoomControls(ph){
    photoZoomState.x=photoZoomGesture.panX+event.clientX-photoZoomGesture.startX;
    photoZoomState.y=photoZoomGesture.panY+event.clientY-photoZoomGesture.startY;
    applyPhotoZoom(ph);
+   photoZoomGesture.panX=photoZoomState.x;photoZoomGesture.panY=photoZoomState.y;photoZoomGesture.startX=event.clientX;photoZoomGesture.startY=event.clientY;
   }
  });
  const finish=event=>{
