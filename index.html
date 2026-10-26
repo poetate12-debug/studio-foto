@@ -96,6 +96,12 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-brush-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
 .pf-brush-hint{font-size:10px;color:#85808b;line-height:1.5}
 .pf-brush-clear{border:1px solid #ece1d9;background:#fff;border-radius:9px;padding:8px 10px;color:#9a5630;font-weight:750;font-size:11px}
+.pf-brush-selection-actions{display:flex;gap:8px;margin:12px 0 8px}
+.pf-brush-selection-actions button{flex:1;border:1px solid #e8c8a7;border-radius:10px;padding:10px;background:#fff1e4;color:#92501d;font-size:11px;font-weight:800}
+.pf-brush-selection-actions button.primary{background:#df7e2c;border-color:#df7e2c;color:white}
+.pf-brush-light-controls{margin-top:13px;padding:12px;border:1px solid #d8e5fb;border-radius:12px;background:#f6f9ff}
+.pf-brush-light-controls h4{margin:0;color:#33578b;font-size:13px}
+.pf-brush-light-controls p{margin:5px 0 8px;color:#6c7b91;font-size:11px;line-height:1.45}
 
 .pf-original-toggle{position:absolute;right:10px;bottom:10px;z-index:30;border:0;border-radius:99px;background:#14161ce8;color:#fff;padding:9px 13px;font-size:12px;font-weight:700;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .pf-original-toggle.holding-original{background:#e77a24;color:#fff;box-shadow:0 0 0 3px #e77a2440}
@@ -579,6 +585,9 @@ function syncLightAdjustmentControls(ph,localMode){
   const input=document.getElementById('pf-slider-'+key),label=document.getElementById('pf-value-'+key),value=Number(values[props[key]])||0;
   if(input){input.value=String(value);const min=Number(input.min||0),max=Number(input.max||100);input.style.setProperty('--pf-range-fill',(Math.max(0,Math.min(1,(value-min)/(max-min)))*100)+'%')}
   if(label)label.textContent=(value>0?'+':'')+value;
+  const localValues=localLightAdjustmentValues(ph),localInput=document.getElementById('pf-local-slider-'+key),localLabel=document.getElementById('pf-local-value-'+key),localValue=Number(localValues[props[key]])||0;
+  if(localInput){localInput.value=String(localValue);const localMin=Number(localInput.min||0),localMax=Number(localInput.max||100);localInput.style.setProperty('--pf-range-fill',(Math.max(0,Math.min(1,(localValue-localMin)/(localMax-localMin)))*100)+'%')}
+  if(localLabel)localLabel.textContent=(localValue>0?'+':'')+localValue;
  }
  const scope=document.getElementById('pf-light-adjustment-scope');
  const localButton=document.getElementById('pf-light-scope-local'),globalButton=document.getElementById('pf-light-scope-global');
@@ -801,14 +810,17 @@ function lightBrushCanvasHasPaint(canvas){
  try{const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;for(let i=3;i<data.length;i+=4)if(data[i]>2)return true}catch(error){console.warn('Tidak bisa membaca mask kuas',error)}
  return false;
 }
-function lightBrushPanelMarkup(ph){
- const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id,mode=brush.mode;
- return '<section class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Kuas cahaya lokal</strong><p>Pilih area dahulu, lalu atur Exposure, Terang, Highlight, Bayangan, Saturasi dan lainnya hanya pada area pilihan.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
+function lightBrushPanelMarkup(ph,localSliderMarkup){
+ const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id,mode=brush.mode,localScope=isLocalLightScope(ph),hasSelection=hasExplicitLightSelection(ph);
+ const done=localScope&&brush.selectionDone===true&&hasSelection;
+ return '<section class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Mode Kuas</strong><p>Seleksi area biru, tekan Selesai menyeleksi, lalu atur cahaya di kartu yang sama. Area biru tetap terlihat saat slider diubah.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
  '<div id="pf-light-brush-options" class="pf-light-brush-options '+(active?'':'hidden')+'"><div class="pf-brush-mode-row"><button type="button" data-pf-brush-mode="select" class="pf-brush-mode '+(mode==='select'&&!brush.erase?'active':'')+'">▧ Seleksi area</button><button type="button" data-pf-brush-mode="brighten" class="pf-brush-mode '+(mode==='brighten'&&!brush.erase?'active':'')+'">☀ Terangkan</button><button type="button" data-pf-brush-mode="darken" class="pf-brush-mode '+(mode==='darken'&&!brush.erase?'active':'')+'">◐ Gelapkan</button><button type="button" id="pf-light-brush-erase" class="pf-brush-mode '+(brush.erase?'active':'')+'">⌫ Penghapus</button></div>'+
  '<div class="pf-brush-range"><label for="pf-light-brush-size">Ukuran kuas <span id="pf-light-brush-size-value">'+brush.size+'%</span></label><input id="pf-light-brush-size" type="range" min="2" max="24" step="1" value="'+brush.size+'"></div>'+
  '<div class="pf-brush-range"><label for="pf-light-brush-intensity">Kekuatan sapuan <span id="pf-light-brush-intensity-value">'+brush.intensity+'%</span></label><input id="pf-light-brush-intensity" type="range" min="10" max="100" step="5" value="'+brush.intensity+'"></div>'+
  '<div class="pf-brush-range"><label for="pf-light-brush-softness">Kelembutan tepi <span id="pf-light-brush-softness-value">'+brush.softness+'%</span></label><input id="pf-light-brush-softness" type="range" min="0" max="100" step="5" value="'+brush.softness+'"></div>'+
- '<div class="pf-brush-footer"><span class="pf-brush-hint">Mode Seleksi membuat mask untuk slider cahaya. Sapukan pada foto, lalu pilih Area pilihan.</span><button type="button" id="pf-light-brush-clear" class="pf-brush-clear">Hapus semua sapuan</button></div></div></section>';
+ '<div id="pf-brush-selection-actions" class="pf-brush-selection-actions '+(localScope?'':'hidden')+'"><button type="button" id="pf-light-selection-finish" class="primary '+(done?'hidden':'')+'">✓ Selesai menyeleksi</button><button type="button" id="pf-light-selection-edit" class="'+(done?'':'hidden')+'">↺ Ubah seleksi</button></div>'+
+ '<div class="pf-brush-footer"><span class="pf-brush-hint">Zoom dua jari tidak akan membuat sapuan kuas. Selesaikan seleksi sebelum mengatur cahaya lokal.</span><button type="button" id="pf-light-brush-clear" class="pf-brush-clear">Hapus sapuan</button></div></div>'+
+ '<div id="pf-brush-light-controls" class="pf-brush-light-controls '+(done?'':'hidden')+'"><h4>☀ Pengaturan cahaya area biru</h4><p>Perubahan hanya diterapkan ke area yang diseleksi. Mask biru tetap terlihat selama pengaturan.</p>'+localSliderMarkup+'</div></section>';
 }
 function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
  const ctx=maskCanvas.getContext('2d'),scale=maskCanvas.width/Math.max(1,displayWidth);
@@ -852,7 +864,7 @@ async function refreshLightBrushPreviews(ph){
  const hasMask=photoHasLightBrushPaint(ph)||!!drawing;
  const global=adjustmentValues(ph),localValues=localLightAdjustmentValues(ph);
  const hasGlobalExtras=Math.abs(global.highlight)+Math.abs(global.shadows)+global.glow+global.vignette+Math.abs(global.blacks)+Math.abs(global.dehaze)>0;
- const localActive=isLocalLightScope(ph)&&hasExplicitLightSelection(ph)&&lightAdjustmentValuesHaveChanges(localValues);
+ const localActive=isLocalLightScope(ph)&&brush.selectionDone&&hasExplicitLightSelection(ph)&&lightAdjustmentValuesHaveChanges(localValues);
  const needsComposite=hasMask||hasGlobalExtras;
  const effectCtx=effect.getContext('2d');effectCtx.clearRect(0,0,effect.width,effect.height);
  if(needsComposite){
@@ -946,7 +958,7 @@ async function applyBlacksAndDehazeToCanvas(canvas,adjustments){
 
 async function applyMaskedLocalLightAdjustmentsToCanvas(canvas,ph){
  const brush=ensureLightBrushState(ph),values=localLightAdjustmentValues(ph);
- if(!isLocalLightScope(ph)||!hasExplicitLightSelection(ph)||!lightAdjustmentValuesHaveChanges(values))return;
+ if(!isLocalLightScope(ph)||!brush.selectionDone||!hasExplicitLightSelection(ph)||!lightAdjustmentValuesHaveChanges(values))return;
  const layer=document.createElement('canvas');layer.width=canvas.width;layer.height=canvas.height;
  const lctx=layer.getContext('2d');lctx.filter=photoAdjustmentFilter(ph,false,values);lctx.drawImage(canvas,0,0);lctx.filter='none';
  await applyAdditionalLightAdjustmentsToCanvas(layer,values);
