@@ -830,7 +830,6 @@ function lightBrushPanelMarkup(ph,localSliderMarkup){
  '<div class="pf-brush-range"><label for="pf-light-brush-softness">Kelembutan tepi <span id="pf-light-brush-softness-value">'+brush.softness+'%</span></label><input id="pf-light-brush-softness" type="range" min="0" max="100" step="5" value="'+brush.softness+'"></div>'+
  '<div class="pf-brush-footer"><span class="pf-brush-hint">Ukuran dan kelembutan mengatur bentuk kuas. Slider cahaya di atas mengatur hasil pada area biru.</span><button type="button" id="pf-light-brush-clear" class="pf-brush-clear">Hapus seleksi</button></div></div></section>';
 }
-function paintLightBrushSegment(
 function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
  const ctx=maskCanvas.getContext('2d'),scale=maskCanvas.width/Math.max(1,displayWidth);
  const x0=from.x*scale,y0=from.y*scale,x1=to.x*scale,y1=to.y*scale,dx=x1-x0,dy=y1-y0,distance=Math.sqrt(dx*dx+dy*dy);
