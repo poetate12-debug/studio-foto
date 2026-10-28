@@ -1545,15 +1545,17 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   if(stageIndex===3&&!workflowDone(ph,'face')){toast('Proses Wajah dahulu atau konfirmasi untuk melewati tahap ini.');if(!confirm('Lewati tahap Wajah untuk foto ini?'))return}
   if(stageIndex===0){
     if(isLocalLightScope(ph)){
-     const brush=ensureLightBrushState(ph);
-     if(!hasExplicitLightSelection(ph)||!brush.selectionDone){
+     const brush=ensureLightBrushState(ph),selected=hasExplicitLightSelection(ph)&&brush.selectionDone;
+     const hasDirectBrush=!!(brush.masks.brighten||brush.masks.darken);
+     const hasLocalEffect=lightAdjustmentValuesHaveChanges(localLightAdjustmentValues(ph))||hasDirectBrush;
+     if(!selected||!hasLocalEffect){
       lightBrushEnabledPhotoId=ph.id;
       const toggle=document.getElementById('pf-light-brush-toggle'),options=document.getElementById('pf-light-brush-options');
       if(toggle){toggle.classList.add('active');toggle.setAttribute('aria-pressed','true');toggle.textContent='Kuas aktif'}
       if(options)options.classList.remove('hidden');
       const scroller=document.querySelector('.pf-editor-scroll'),card=document.getElementById('pf-light-brush-panel');
       if(scroller&&card)scroller.scrollTop=Math.max(0,card.offsetTop-8);
-      toast('Foto belum ditandai selesai. Selesaikan seleksi area biru pada kartu Mode Kuas, atau pilih Seluruh foto.');
+      toast(!selected?'Foto belum selesai: seleksi area biru lalu tekan Selesai menyeleksi.':'Area sudah terseleksi tetapi belum ada efek cahaya. Geser minimal satu slider pada kartu Mode Kuas.');
       return;
      }
     }
