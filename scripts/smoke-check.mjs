@@ -40,7 +40,7 @@ requireSource(html.includes("function stageCanBeOpened(p,targetIndex)") && html.
 requireSource(html.includes("pf-finish-button.next") && html.includes("pf-finish-button.complete"), "continue and completed status use different colors");
 requireSource(html.includes("async function saveCanvasToDevice("), "export has a device-save path");
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
-requireSource(sw.includes("reang-studio-foto-v3") && sw.includes("const isAppShell"), "service worker cache is versioned and app shell is network-first");
+requireSource(sw.includes("reang-studio-foto-v4") && sw.includes("const isAppShell"), "service worker cache is versioned and app shell is network-first");
 
 const inlineScripts = [];
 let cursor = 0;
