@@ -820,7 +820,7 @@ function lightBrushCanvasHasPaint(canvas){
 }
 function lightBrushPanelMarkup(ph,localSliderMarkup){
  const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id,localScope=isLocalLightScope(ph),hasSelection=hasExplicitLightSelection(ph),selected=localScope&&hasSelection,done=selected&&brush.selectionDone===true;
- return '<section id="pf-light-brush-panel" class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Mode Kuas · v118</strong><p>Sapukan jari untuk membuat area biru. Setelah area muncul, atur cahaya langsung melalui slider di kartu ini.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
+ return '<section id="pf-light-brush-panel" class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Mode Kuas · v120</strong><p>Sapukan jari untuk membuat area biru. Setelah area muncul, atur cahaya langsung melalui slider di kartu ini.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
  '<div id="pf-brush-light-controls" class="pf-brush-light-controls '+(localScope?'':'hidden')+'"><h4>☀ Pengaturan cahaya area biru</h4><p>Buat area biru dengan kuas, lalu selesaikan seleksi. Slider di bawah menerapkan cahaya hanya pada area tersebut.</p>'+localSliderMarkup+'</div>'+
  '<div id="pf-light-brush-options" class="pf-light-brush-options '+(active?'':'hidden')+'">'+
  '<p class="pf-brush-hint">Sapukan satu jari pada foto untuk menandai area. Kontrol zoom dua jari tidak akan melukis. Tekan Selesai menyeleksi untuk mengunci area bila diperlukan.</p>'+
@@ -847,6 +847,8 @@ function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  if(!brushCanvas||!main)return;
  const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id&&originalPreviewHeldPhotoId!==ph.id;
  main.classList.toggle('brush-active',active);main.classList.toggle('brush-painting-active',active&&!brush.selectionDone&&!photoZoomSuppressBrushForGesture);brushCanvas.style.display=active?'block':'none';if(!active)return;
+ const canPaint=active&&!brush.selectionDone&&!photoZoomSuppressBrushForGesture;
+ brushCanvas.style.pointerEvents=canPaint?'auto':'none';brushCanvas.style.touchAction=canPaint?'none':'auto';
  const width=Math.max(1,brushCanvas.width),height=Math.max(1,brushCanvas.height),ctx=brushCanvas.getContext('2d');
  const hasSelection=brush.scope==='local'&&lightBrushCanvasHasPaint(selectMask);
  const mask=hasSelection?selectMask:(brush.mode==='select'?selectMask:(brush.mode==='darken'?darkMask:brightMask));
@@ -997,6 +999,8 @@ async function applyLocalLightBrushToCanvas(canvas,ph){
 async function bindLightBrushControls(ph,p){
  const brush=ensureLightBrushState(ph);
  const [brightMask,darkMask,selectMask]=await Promise.all([getLightBrushMaskCanvas(ph,'brighten'),getLightBrushMaskCanvas(ph,'darken'),getLightBrushMaskCanvas(ph,'select')]);
+ // Never leave the brush locked when its persisted selection mask is missing or empty.
+ if(brush.selectionDone&&(!hasExplicitLightSelection(ph)||!lightBrushCanvasHasPaint(selectMask)))brush.selectionDone=false;
  const imageEl=document.getElementById('pf-photo-preview'),main=document.querySelector('.pf-main-photo'),overlay=document.getElementById('pf-light-brush-overlay');
  if(!imageEl||!main||!overlay)return;
  const toggle=document.getElementById('pf-light-brush-toggle'),options=document.getElementById('pf-light-brush-options');
@@ -1490,12 +1494,12 @@ function renderPhotoEditor(){
  const stage=workflowStages[stageIndex];
  const initialLightBrush=ensureLightBrushState(ph);
  // Restored local scope must enter paint-ready mode after every render/reopen.
- if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;}
+ if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}
  else if(lightBrushEnabledPhotoId===ph.id)lightBrushEnabledPhotoId=null;
  const adj=adjustmentValues(ph);
  const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
- let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto <span class="pf-build-version">Kuas v118</span></p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
+ let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto <span class="pf-build-version">Kuas v120</span></p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
  html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
