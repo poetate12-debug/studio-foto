@@ -204,6 +204,8 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-slider-row input[type=range]{touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .pf-slider-row input[type=range]::-webkit-slider-thumb{transition:box-shadow .08s ease,transform .08s ease}
 .pf-slider-row input[type=range]:active::-webkit-slider-thumb{transform:scale(1.08)}
+
+.pf-cutout-panel .field{margin:14px 0}.pf-cutout-panel .field small{display:block;color:#818898;font-size:12px;line-height:1.5;margin-top:6px}.pf-cutout-brush-tools{margin-top:18px;padding:14px;border:1px solid #e8eaf1;border-radius:14px;background:#f8f9fc}.pf-cutout-brush-tools h3{font-size:15px;margin:0 0 8px}.pf-cutout-brush-tools p{font-size:13px;color:#697184;line-height:1.55}.pf-main-photo.cutout-painting-active #pf-cutout-brush-overlay{pointer-events:auto;touch-action:none;cursor:crosshair}
 </style>
 </head>
 <body>
@@ -486,6 +488,7 @@ const workflowStages=[
  {key:'export',title:'Ekspor',desc:'Ekspor foto satu per satu atau seluruh foto yang telah selesai.'}
 ];
 let gallerySelectMode=false;
+let cutoutBrushEnabledPhotoId=null,cutoutBrushMode='add',cutoutBrushDrawing=null,cutoutWorkingCanvas=null,cutoutWorkingPhotoId=null;
 const selectedPhotoIds=new Set();
 const lightBrushMaskCanvases=new Map();
 const colorMixBrushCanvases=new Map();
@@ -1315,6 +1318,93 @@ async function useWorkflowResult(localSource){
  activeProjectId=p.id;activePhotoIndex=index;page='photo-editor';workflowReturn=null;
  await advanceWorkflowPhoto(p,ph,context.stageKey);
 }
+async function runProjectCutout(p,ph){
+ const button=$('#pf-run-cutout'),status=$('#pf-cutout-status'),select=$('#pf-cutout-model');
+ const apiKey=(apiKeySession||'').trim();
+ if(!apiKey){if(status)status.textContent='API key belum tersedia. Buka Pengaturan → AI & fal.ai, masukkan API key, lalu kembali ke proyek.';return}
+ if(button){button.disabled=true;button.textContent='Menyiapkan foto…'}
+ const progress=(title,detail)=>{if(button)button.textContent=title;if(status)status.textContent=detail};
+ try{
+  const source=await photoDataWithLight(ph);
+  const imageUrl=await prepareFalImage(source);
+  const choice=select?.value||settings.models.remove||'bria';
+  const model=choice==='rmbg'?'fal-ai/imageutils/rembg':choice==='birefnet'?'fal-ai/birefnet':'fal-ai/bria/background/remove';
+  const input={image_url:imageUrl};
+  if(choice==='birefnet')input.model='General Use (Heavy)';
+  ph.workflowResults.cutoutSource=source;
+  progress('Mengirim ke AI…','Model: '+model+'. Permintaan akan memakai saldo fal.ai.');
+  const result=await falQueueRun(model,input,apiKey,(state,n)=>progress('AI memproses…','Model: '+model+' · Status: '+(state||'menunggu')+' · '+(n*2)+' detik'));
+  const url=falImageUrl(result);
+  if(!url)throw new Error('Model tidak mengembalikan gambar cutout.');
+  progress('Menyiapkan hasil…','Mengambil PNG transparan untuk menyimpan hasil dan koreksi kuas.');
+  let cutoutData;
+  if(url.startsWith('data:image/'))cutoutData=url;
+  else{
+   const response=await fetch(url,{mode:'cors'});
+   if(!response.ok)throw new Error('Gambar hasil tidak dapat diunduh (HTTP '+response.status+').');
+   const blob=await response.blob();
+   cutoutData=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Gagal membaca PNG hasil.'));reader.readAsDataURL(blob)});
+  }
+  ph.workflowResults.cutout=cutoutData;
+  ph.workflow.cutout=true;ph.workflow.face=false;ph.workflow.export=false;
+  delete ph.workflowResults.face;
+  p.updatedAt=Date.now();
+  await dbPut('projects',p);
+  cutoutWorkingCanvas=null;cutoutWorkingPhotoId=null;cutoutBrushEnabledPhotoId=null;
+  renderPhotoEditor();
+  toast('Cutout selesai dan tersimpan di proyek.');
+ }catch(error){
+  console.error('Cutout proyek gagal',error);
+  progress('✂ Coba Cutout lagi',String(error?.message||error)+' Pastikan API key, koneksi, dan saldo fal.ai tersedia.');
+ }finally{
+  const current=$('#pf-run-cutout');
+  if(current){current.disabled=false;current.textContent=workflowDone(ph,'cutout')?'Proses ulang dengan AI':'✂ Proses Cutout dengan AI'}
+ }
+}
+async function bindProjectCutoutBrush(p,ph){
+ const overlay=$('#pf-cutout-brush-overlay'),stage=$('#pf-image-stage'),photo=$('#pf-photo-preview');
+ if(!overlay||!stage||!photo||!ph.workflowResults?.cutout)return;
+ const base=await loadCanvasImage(ph.workflowResults.cutout);
+ const source=await loadCanvasImage(ph.workflowResults.cutoutSource||ph.workflowResults.light||ph.originalSrc||ph.src);
+ const w=base.naturalWidth||base.width,h=base.naturalHeight||base.height;
+ if(!w||!h)throw new Error('Ukuran gambar cutout tidak valid.');
+ cutoutWorkingCanvas=document.createElement('canvas');cutoutWorkingCanvas.width=w;cutoutWorkingCanvas.height=h;
+ cutoutWorkingPhotoId=ph.id;
+ const ctx=cutoutWorkingCanvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(base,0,0,w,h);
+ overlay.width=w;overlay.height=h;
+ const preview=overlay.getContext('2d');
+ const rect=()=>overlay.getBoundingClientRect();
+ let drawing=null;
+ const point=e=>{const r=rect();return{x:Math.max(0,Math.min(w,(e.clientX-r.left)/Math.max(1,r.width)*w)),y:Math.max(0,Math.min(h,(e.clientY-r.top)/Math.max(1,r.height)*h))}};
+ const stroke=(a,b,mode,size)=>{
+  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=size;
+  if(mode==='remove'){ctx.globalCompositeOperation='destination-out';ctx.strokeStyle='rgba(0,0,0,1)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+  else{ctx.globalCompositeOperation='source-over';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle='rgba(255,255,255,1)';ctx.stroke();ctx.globalCompositeOperation='destination-in';ctx.drawImage(source,0,0,w,h);ctx.restore();return}
+  ctx.restore();
+ };
+ const overlayStroke=(a,b,mode,size)=>{
+  preview.save();preview.lineCap='round';preview.lineJoin='round';preview.lineWidth=size;preview.strokeStyle=mode==='remove'?'rgba(235,65,75,.55)':'rgba(36,190,125,.55)';preview.beginPath();preview.moveTo(a.x,a.y);preview.lineTo(b.x,b.y);preview.stroke();preview.restore();
+ };
+ overlay.onpointerdown=e=>{
+  if(e.button!==undefined&&e.button!==0)return;e.preventDefault();
+  const size=Math.max(2,w*(Number($('#pf-cutout-brush-size')?.value||4)/100));
+  drawing={last:point(e),mode:$('#pf-cutout-brush-mode')?.value||cutoutBrushMode,size};
+  cutoutBrushDrawing=drawing;
+  try{overlay.setPointerCapture(e.pointerId)}catch(_){}
+ };
+ overlay.onpointermove=e=>{
+  if(!drawing)return;e.preventDefault();const next=point(e);stroke(drawing.last,next,drawing.mode,drawing.size);overlayStroke(drawing.last,next,drawing.mode,drawing.size);drawing.last=next;
+ };
+ const finish=async()=>{
+  if(!drawing)return;drawing=null;cutoutBrushDrawing=null;preview.clearRect(0,0,w,h);
+  ph.workflowResults.cutout=cutoutWorkingCanvas.toDataURL('image/png');
+  p.updatedAt=Date.now();await dbPut('projects',p);
+  const img=$('#pf-photo-preview');if(img)img.src=ph.workflowResults.cutout;
+  const thumb=p.photos.find(x=>x.id===ph.id);if(thumb)thumb.finalThumb=ph.workflowResults.cutout;
+  await dbPut('projects',p);
+ };
+ overlay.onpointerup=finish;overlay.onpointercancel=finish;overlay.onlostpointercapture=finish;
+}
 function bindThumbOnlyRanges(){
  const inputs=Array.from(document.querySelectorAll(".pf-editor-controls input[type=range]"));
  const setFill=input=>{
@@ -1536,11 +1626,11 @@ function renderPhotoEditor(){
  if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}
  else if(lightBrushEnabledPhotoId===ph.id)lightBrushEnabledPhotoId=null;
  const adj=adjustmentValues(ph);
- const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
+ const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.cutout||ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
  let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto <span class="pf-build-version">Kuas v122</span></p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
- html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
+ html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===1?'<canvas id="pf-cutout-brush-overlay" class="pf-local-canvas" aria-label="Kuas koreksi cutout"></canvas>':'')+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';
  if(stageIndex===0){
   const color=ph.adjust?.selectedColor||'red';
@@ -1558,7 +1648,8 @@ function renderPhotoEditor(){
    html+=sliders.map(([key,label,min,max,value])=>'<div class="pf-slider-row"><label>'+label+'<span id="pf-value-'+key+'">'+(value>0?'+':'')+value+'</span></label><input type="range" min="'+min+'" max="'+max+'" step="1" value="'+value+'" id="pf-slider-'+key+'"></div>').join('')+'</div>';
 html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div class="pf-color-mode"><button class="'+(colorMode==='all'?'active':'')+'" id="pf-color-all" type="button">Seluruh subjek</button><button class="'+(colorMode==='brush'?'active':'')+'" id="pf-color-brush" type="button">Kuas (seleksi bebas)</button></div><div class="pf-color-dots">'+[['red','#e63946'],['orange','#f28c28'],['yellow','#e8c928'],['green','#3aa65b'],['blue','#367de0'],['purple','#8a55d7'],['pink','#d4489d']].map(([key,color])=>'<button data-pf-color="'+key+'" class="'+(key===(adj.selectedColor||'red')?'active':'')+'" style="--dot:'+color+'" aria-label="'+key+'"></button>').join('')+'</div><div class="pf-slider-row"><label>Saturasi <span id="pf-value-color-sat">'+((adj.colorMix?.[color]?.sat)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.sat)||0)+'" id="pf-slider-color-sat"></div><div class="pf-slider-row"><label>Terang <span id="pf-value-color-bright">'+((adj.colorMix?.[color]?.bright)||0)+'</span></label><input type="range" min="-100" max="100" value="'+((adj.colorMix?.[color]?.bright)||0)+'" id="pf-slider-color-bright"></div><div id="pf-color-brush-tools" class="'+(colorMode==='brush'?'':'hidden')+'"><div class="pf-slider-row"><label>Ukuran kuas warna <span id="pf-color-brush-size-value">'+(adj.colorMixBrush?.size||8)+'%</span></label><input type="range" min="2" max="24" step="1" value="'+(adj.colorMixBrush?.size||8)+'" id="pf-color-brush-size"></div><button type="button" class="btn small" id="pf-color-brush-clear">Hapus seleksi kuas</button><p class="pf-note">Sapukan pada foto untuk membatasi campur warna ke area yang dipilih.</p></div><p class="pf-note">Pilih warna, lalu atur saturasi dan terang. Perubahan diterapkan pada piksel dengan warna tersebut, atau hanya area kuas bila mode Kuas dipilih.</p></div>';
  }else if(stageIndex===1){
-  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Pisahkan subjek dari latar. Hasil transparan disimpan terpisah dari foto asli.</p><button class="btn primary workflow-primary" id="pf-run-cutout">✂ Proses Cutout dengan AI</button><p class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Foto ini sudah memiliki hasil Cutout. Anda bisa memproses ulang.':'Selesaikan semua foto pada tahap Cutout untuk melanjutkan ke Template.')+'</p></div>';
+  const currentCutoutModel=['rmbg','birefnet','bria'].includes(settings.models.remove)?settings.models.remove:'bria';
+  html+='<div class="pf-stage-panel pf-cutout-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Hapus latar</h2><p>Proses di halaman proyek ini. Pilih model sesuai biaya dan kualitas, lalu rapikan hasil dengan kuas tanpa mengubah foto asli.</p><div class="field"><label for="pf-cutout-model">Model AI · ekonomis sampai kualitas tinggi</label><select id="pf-cutout-model"><option value="rmbg" '+(currentCutoutModel==='rmbg'?'selected':'')+'>Ekonomis & cepat — RMBG</option><option value="birefnet" '+(currentCutoutModel==='birefnet'?'selected':'')+'>Seimbang — BiRefNet</option><option value="bria" '+(currentCutoutModel==='bria'?'selected':'')+'>Kualitas tinggi — Bria RMBG 2.0</option></select><small>Biaya mengikuti tarif model fal.ai yang dipilih. Periksa harga akun sebelum memproses.</small></div><button class="btn primary workflow-primary" id="pf-run-cutout">✂ '+(workflowDone(ph,'cutout')?'Proses ulang dengan AI':'Proses Cutout dengan AI')+'</button><div id="pf-cutout-status" class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Cutout selesai. Anda bisa mengoreksi tepi atau memproses ulang.':'Foto asli tetap aman; hasil cutout disimpan pada proyek.')+'</div><div class="pf-cutout-brush-tools"><h3>Koreksi manual dengan kuas</h3><p>Aktifkan kuas lalu sapukan pada foto. <b>Tambah</b> memulihkan piksel dari foto sumber; <b>Hapus</b> membuat area transparan.</p><button type="button" class="btn '+(cutoutBrushEnabledPhotoId===ph.id?'primary':'')+'" id="pf-cutout-brush-toggle">'+(cutoutBrushEnabledPhotoId===ph.id?'✓ Kuas aktif':'Aktifkan kuas koreksi')+'</button><div class="'+(cutoutBrushEnabledPhotoId===ph.id?'':'hidden')+'" id="pf-cutout-brush-options"><div class="field"><label for="pf-cutout-brush-mode">Mode kuas</label><select id="pf-cutout-brush-mode"><option value="add" '+(cutoutBrushMode==='add'?'selected':'')+'>Tambah subjek / pulihkan</option><option value="remove" '+(cutoutBrushMode==='remove'?'selected':'')+'>Hapus / transparan</option></select></div><div class="field"><label for="pf-cutout-brush-size">Ukuran kuas <span id="pf-cutout-brush-size-value">4%</span></label><input type="range" id="pf-cutout-brush-size" min="1" max="12" step="1" value="4"></div><button type="button" class="btn small" id="pf-cutout-brush-done">Selesai mengoreksi</button></div></div><p class="pf-note">'+(workflowDone(ph,'cutout')?'Setelah koreksi, tekan Selesai — lanjut foto.':'Selesaikan cutout foto ini untuk melanjutkan ke Template.')+'</p></div>';
  }else if(stageIndex===2){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 3 DARI 5</span><h2>Template proyek</h2><p>Pilih template yang sama untuk semua foto di proyek ini.</p><div class="field"><label>Template</label><select id="pf-template"><option value="">Tanpa template</option>'+templates.map(t=>'<option value="'+t.id+'" '+(p.templateId===t.id?'selected':'')+'>'+esc(t.name)+' · '+esc(t.sizeName)+'</option>').join('')+'</select></div><button class="btn primary workflow-primary" id="pf-apply-template">Terapkan template & lanjut</button></div>';
  }else if(stageIndex===3){
@@ -1734,10 +1825,20 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   bindColorMixBrushControls(ph,p).catch(error=>{console.warn('Kuas seleksi warna tidak dapat diinisialisasi',error);toast('Kuas seleksi warna belum siap. Coba muat ulang foto.')});
   scheduleColorMixPreview(ph);
  }
- if(stageIndex===1)$('#pf-run-cutout').onclick=async()=>{
-  try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'};toolFileData=await photoDataWithLight(ph);toolKey='remove';page='tool-runner';render()}
-  catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Cutout.')}
- };
+ if(stageIndex===1){
+  $('#pf-cutout-model').onchange=()=>{settings.models.remove=$('#pf-cutout-model').value;saveSettings()};
+  $('#pf-run-cutout').onclick=()=>runProjectCutout(p,ph);
+  $('#pf-cutout-brush-toggle').onclick=async()=>{
+   if(!workflowDone(ph,'cutout')){toast('Proses Cutout dengan AI terlebih dahulu.');return}
+   cutoutBrushEnabledPhotoId=cutoutBrushEnabledPhotoId===ph.id?null:ph.id;
+   if(cutoutBrushEnabledPhotoId!==ph.id)cutoutBrushDrawing=null;
+   renderPhotoEditor();
+  };
+  $('#pf-cutout-brush-mode')?.addEventListener('change',e=>{cutoutBrushMode=e.target.value});
+  $('#pf-cutout-brush-size')?.addEventListener('input',e=>{const label=$('#pf-cutout-brush-size-value');if(label)label.textContent=e.target.value+'%'});
+  $('#pf-cutout-brush-done')?.addEventListener('click',async()=>{cutoutBrushEnabledPhotoId=null;cutoutBrushDrawing=null;await dbPut('projects',p);renderPhotoEditor();toast('Koreksi cutout tersimpan.')});
+  if(cutoutBrushEnabledPhotoId===ph.id)bindProjectCutoutBrush(p,ph).catch(error=>{console.warn(error);toast(error.message||'Kuas cutout tidak dapat dimulai.')});
+ }
  if(stageIndex===2)$('#pf-template').onchange=async e=>{
   const template=templates.find(t=>t.id===e.target.value)||null;
   const preview=$('#pf-photo-preview');
