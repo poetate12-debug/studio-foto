@@ -30,7 +30,7 @@ requireSource(html.includes("Promise.allSettled([dbGetAll('projects'),dbGetAll('
 requireSource(html.includes("function renderProjects()") && html.includes("function renderProjectGallery()") && html.includes("function renderPhotoEditor()"), "main list, project photo gallery and editor are separate pages");
 requireSource(html.includes("key:'light'") && html.includes("key:'cutout'") && html.includes("key:'template'") && html.includes("key:'face'") && html.includes("key:'export'"), "five editing stages are present in order");
 requireSource(html.includes("function runProjectCutout(p,ph)") && html.includes("fal-ai/imageutils/rembg") && html.includes("fal-ai/birefnet") && html.includes("fal-ai/bria/background/remove"), "project cutout offers economy, balanced, and high-quality AI model choices");
-const cutoutHandlerStart = html.indexOf("if(stageIndex===1){\\n  $('#pf-cutout-model')", html.indexOf("function renderPhotoEditor"));
+const cutoutHandlerStart = html.indexOf("if(stageIndex===1){\n  $('#pf-cutout-model')", html.indexOf("function renderPhotoEditor"));
 const cutoutHandlerEnd = html.indexOf("if(stageIndex===2)$('#pf-template')", cutoutHandlerStart);
 const cutoutHandlerSource = cutoutHandlerStart >= 0 && cutoutHandlerEnd > cutoutHandlerStart ? html.slice(cutoutHandlerStart, cutoutHandlerEnd) : "";
 requireSource(cutoutHandlerSource.includes("runProjectCutout(p,ph)") && !cutoutHandlerSource.includes("page='tool-runner'") && !cutoutHandlerSource.includes("workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'}"), "cutout runs inside the project editor without navigating to the separate AI tool page");
