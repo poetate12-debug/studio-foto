@@ -38,11 +38,11 @@ requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes('
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
 requireSource(html.includes("if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}"), "restored local scope automatically activates the selection-only brush");
 const mapStart = html.indexOf("function mapBrushPointerToCanvas(");
-const mapEnd = html.indexOf("\\nfunction renderLightBrushSelection", mapStart);
+const mapEnd = html.indexOf("\nfunction renderLightBrushSelection", mapStart);
 let brushCoordinateTestPassed = false;
 if (mapStart >= 0 && mapEnd > mapStart) {
   try {
-    const mapPoint = runInNewContext(html.slice(mapStart, mapEnd) + "\\nmapBrushPointerToCanvas;");
+    const mapPoint = runInNewContext(html.slice(mapStart, mapEnd) + "\nmapBrushPointerToCanvas;");
     const mapped = mapPoint(155.5, 76.2, {left:40,top:30,width:231,height:115.5}, 100, 50);
     brushCoordinateTestPassed = Math.abs(mapped.x-50)<0.001 && Math.abs(mapped.y-20)<0.001 && mapped.displayWidth===100;
     const clamped = mapPoint(-100,-100,{left:40,top:30,width:231,height:115.5},100,50);
@@ -100,7 +100,7 @@ while (true) {
 requireSource(inlineScripts.length >= 1, "inline application script exists");
 let inlineSyntaxValid = false;
 try {
-  new Function(inlineScripts.join("\\n;\\n"));
+  new Function(inlineScripts.join("\n;\n"));
   inlineSyntaxValid = true;
 } catch (error) {
   console.error("[smoke-check] Inline application JavaScript syntax error:", error);
