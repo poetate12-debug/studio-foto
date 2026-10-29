@@ -124,11 +124,58 @@ jobs:
           keytool -list -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey >/dev/null
           keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep 'SHA256:'
 
+      - name: Force Gradle to use the persistent signing key
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('android/app/build.gradle')
+          source = path.read_text(encoding='utf-8')
+          if 'signingConfigs {' not in source:
+              source, count = re.subn(
+                  r'android\\s*\\{',
+                  '''android {
+              signingConfigs {
+                  debug {
+                      storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")
+                      storePassword "android"
+                      keyAlias "androiddebugkey"
+                      keyPassword "android"
+                  }
+              }''',
+                  source, count=1
+              )
+              if count != 1: raise SystemExit('Could not insert persistent signingConfigs into app/build.gradle')
+          if not re.search(r'buildTypes\\s*\\{[\\s\\S]*?debug\\s*\\{\\s*signingConfig\\s+signingConfigs\\.debug', source):
+              source, count = re.subn(r'buildTypes\\s*\\{', 'buildTypes {\\n        debug { signingConfig signingConfigs.debug }', source, count=1)
+              if count != 1: raise SystemExit('Could not pin debug buildType to persistent signing config')
+          path.write_text(source, encoding='utf-8')
+          print('Pinned debug signing to $HOME/.android/debug.keystore')
+          PY
+          cd android
+          chmod +x gradlew
+          ./gradlew signingReport --console=plain
+
       - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK certificate matches persistent key
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then echo "::error::apksigner not found at $APKSIGNER"; exit 1; fi
+          EXPECTED=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | sed -n 's/.*SHA256: //p' | head -n 1 | tr -d ': ' | tr '[:lower:]' '[:upper:]')
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ': ' | tr '[:lower:]' '[:upper:]')
+          echo "Expected signing certificate: $EXPECTED"
+          echo "APK signing certificate:      $ACTUAL"
+          if [ -z "$EXPECTED" ] || [ -z "$ACTUAL" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::APK signature does not match the persistent repository signing key; refusing to publish."
+            exit 1
+          fi
+          echo "APK certificate verified against persistent key."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
