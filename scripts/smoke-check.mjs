@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 const html = readFileSync("index.html", "utf8");
 const sw = readFileSync("sw.js", "utf8");
+const androidWorkflow = readFileSync(".github/workflows/android-apk.yml", "utf8");
 const fail = (message) => { console.error("[smoke-check] FAIL:", message); process.exitCode = 1; };
 const pass = (message) => console.log("[smoke-check] OK:", message);
 
@@ -35,6 +37,28 @@ requireSource(html.includes("function invalidatePhotoStages("), "editing an earl
 requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes('input.style.pointerEvents="none"') && html.includes("hitRadius=13"), "range sliders only start dragging when the thumb is touched");
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
 requireSource(html.includes("if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}"), "restored local scope automatically activates the selection-only brush");
+requireSource(html.includes("const scaleX=rect.width/displayWidth||1,scaleY=rect.height/displayHeight||1;") && html.includes("clientY-rect.top)/scaleY"), "brush touch coordinates are mapped through the actual zoomed canvas rectangle");
+requireSource(html.includes("function blendMaskedLightPixels(baseData,adjustedData,maskData)") && html.includes("blendMaskedLightPixels(base.data,adjusted.data,maskData)"), "area-light preview blends adjusted pixels only by the selection mask");
+const blendStart = html.indexOf("function blendMaskedLightPixels(");
+const blendEnd = html.indexOf("\nasync function applyMaskedLocalLightAdjustmentsToCanvas", blendStart);
+let blendUnitTestPassed = false;
+if (blendStart >= 0 && blendEnd > blendStart) {
+  try {
+    const blend = runInNewContext(html.slice(blendStart, blendEnd) + "\nblendMaskedLightPixels;");
+    const base = new Uint8ClampedArray([10,20,30,255, 10,20,30,255, 10,20,30,255]);
+    const adjusted = new Uint8ClampedArray([110,120,130,255, 110,120,130,255, 110,120,130,255]);
+    const mask = new Uint8ClampedArray([0,0,0,0, 0,0,0,128, 0,0,0,255]);
+    blend(base, adjusted, mask);
+    blendUnitTestPassed = base[0] === 10 && base[1] === 20 && base[2] === 30 &&
+      base[4] === 60 && base[5] === 70 && base[6] === 80 &&
+      base[8] === 110 && base[9] === 120 && base[10] === 130;
+  } catch (error) {
+    console.error("[smoke-check] Local mask blend unit test threw:", error);
+  }
+}
+requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixels and changes partially/fully selected pixels");
+requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
+requireSource(sw.includes("reang-studio-foto-v7") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
@@ -46,7 +70,7 @@ requireSource(html.includes("function stageCanBeOpened(p,targetIndex)") && html.
 requireSource(html.includes("pf-finish-button.next") && html.includes("pf-finish-button.complete"), "continue and completed status use different colors");
 requireSource(html.includes("async function saveCanvasToDevice("), "export has a device-save path");
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
-requireSource(sw.includes("reang-studio-foto-v6") && sw.includes("const isAppShell"), "service worker cache is versioned and app shell is network-first");
+// Service-worker cache invalidation is checked alongside the new brush regression assertions above.
 
 const inlineScripts = [];
 let cursor = 0;
