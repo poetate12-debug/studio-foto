@@ -131,7 +131,7 @@ jobs:
                       break
           if count != 1 or not any('applicationId' in line and 'id.reang.studiofoto.v2' in line for line in lines):
               raise SystemExit('Could not set recovery applicationId to id.reang.studiofoto.v2')
-          gradle.write_text('\\n'.join(lines) + '\\n', encoding='utf-8')
+          gradle.write_text(chr(10).join(lines) + chr(10), encoding='utf-8')
           strings = Path('android/app/src/main/res/values/strings.xml')
           if strings.exists():
               xml_lines = strings.read_text(encoding='utf-8').splitlines()
@@ -141,7 +141,7 @@ jobs:
                       _, suffix = rest.split('</string>', 1)
                       xml_lines[i] = prefix + '>Reang Studio Foto Baru</string>' + suffix
                       break
-              strings.write_text('\\n'.join(xml_lines) + '\\n', encoding='utf-8')
+              strings.write_text(chr(10).join(xml_lines) + chr(10), encoding='utf-8')
           print('Recovery package ID set to id.reang.studiofoto.v2')
           PY
       - name: Restore stable Android debug signing key
