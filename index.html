@@ -1376,16 +1376,8 @@ async function bindProjectCutoutBrush(p,ph){
  const rect=()=>overlay.getBoundingClientRect();
  let drawing=null;
  const point=e=>{const r=rect();return{x:Math.max(0,Math.min(w,(e.clientX-r.left)/Math.max(1,r.width)*w)),y:Math.max(0,Math.min(h,(e.clientY-r.top)/Math.max(1,r.height)*h))}};
- const stroke=(a,b,mode,size)=>{
-  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=size;
-  if(mode==='remove'){ctx.globalCompositeOperation='destination-out';ctx.strokeStyle='rgba(0,0,0,1)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
-  else{
-   const addLayer=document.createElement('canvas');addLayer.width=w;addLayer.height=h;
-   const addCtx=addLayer.getContext('2d');addCtx.lineCap='round';addCtx.lineJoin='round';addCtx.lineWidth=size;addCtx.strokeStyle='rgba(255,255,255,1)';addCtx.beginPath();addCtx.moveTo(a.x,a.y);addCtx.lineTo(b.x,b.y);addCtx.stroke();
-   addCtx.globalCompositeOperation='destination-in';addCtx.drawImage(source,0,0,w,h);
-   ctx.globalCompositeOperation='source-over';ctx.drawImage(addLayer,0,0);ctx.restore();return
-  }
-  ctx.restore();
+ const stroke=(maskCanvas,a,b,size)=>{
+  const maskCtx=maskCanvas.getContext('2d');maskCtx.lineCap='round';maskCtx.lineJoin='round';maskCtx.lineWidth=size;maskCtx.strokeStyle='rgba(255,255,255,1)';maskCtx.beginPath();maskCtx.moveTo(a.x,a.y);maskCtx.lineTo(b.x,b.y);maskCtx.stroke();
  };
  const overlayStroke=(a,b,mode,size)=>{
   preview.save();preview.lineCap='round';preview.lineJoin='round';preview.lineWidth=size;preview.strokeStyle=mode==='remove'?'rgba(235,65,75,.55)':'rgba(36,190,125,.55)';preview.beginPath();preview.moveTo(a.x,a.y);preview.lineTo(b.x,b.y);preview.stroke();preview.restore();
@@ -1393,15 +1385,19 @@ async function bindProjectCutoutBrush(p,ph){
  overlay.onpointerdown=e=>{
   if(e.button!==undefined&&e.button!==0)return;e.preventDefault();
   const size=Math.max(2,w*(Number($('#pf-cutout-brush-size')?.value||4)/100));
-  drawing={last:point(e),mode:$('#pf-cutout-brush-mode')?.value||cutoutBrushMode,size};
+  const maskCanvas=document.createElement('canvas');maskCanvas.width=w;maskCanvas.height=h;
+  drawing={last:point(e),mode:$('#pf-cutout-brush-mode')?.value||cutoutBrushMode,size,maskCanvas};
   cutoutBrushDrawing=drawing;
   try{overlay.setPointerCapture(e.pointerId)}catch(_){}
  };
  overlay.onpointermove=e=>{
-  if(!drawing)return;e.preventDefault();const next=point(e);stroke(drawing.last,next,drawing.mode,drawing.size);overlayStroke(drawing.last,next,drawing.mode,drawing.size);drawing.last=next;
+  if(!drawing)return;e.preventDefault();const next=point(e);stroke(drawing.maskCanvas,drawing.last,next,drawing.size);overlayStroke(drawing.last,next,drawing.mode,drawing.size);drawing.last=next;
  };
  const finish=async()=>{
-  if(!drawing)return;drawing=null;cutoutBrushDrawing=null;preview.clearRect(0,0,w,h);
+  if(!drawing)return;
+  const completed=drawing;drawing=null;cutoutBrushDrawing=null;preview.clearRect(0,0,w,h);
+  if(completed.mode==='remove'){ctx.globalCompositeOperation='destination-out';ctx.drawImage(completed.maskCanvas,0,0);ctx.globalCompositeOperation='source-over'}
+  else{const addCtx=completed.maskCanvas.getContext('2d');addCtx.globalCompositeOperation='destination-in';addCtx.drawImage(source,0,0,w,h);ctx.globalCompositeOperation='source-over';ctx.drawImage(completed.maskCanvas,0,0)}
   ph.workflowResults.cutout=cutoutWorkingCanvas.toDataURL('image/png');
   p.updatedAt=Date.now();await dbPut('projects',p);
   const img=$('#pf-photo-preview');if(img)img.src=ph.workflowResults.cutout;
