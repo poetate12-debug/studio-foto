@@ -29,6 +29,13 @@ requireSource(renderSource.includes("catch(error)") && renderSource.includes("re
 requireSource(html.includes("Promise.allSettled([dbGetAll('projects'),dbGetAll('templates')])"), "project/template storage loading fails independently");
 requireSource(html.includes("function renderProjects()") && html.includes("function renderProjectGallery()") && html.includes("function renderPhotoEditor()"), "main list, project photo gallery and editor are separate pages");
 requireSource(html.includes("key:'light'") && html.includes("key:'cutout'") && html.includes("key:'template'") && html.includes("key:'face'") && html.includes("key:'export'"), "five editing stages are present in order");
+requireSource(html.includes("function runProjectCutout(p,ph)") && html.includes("fal-ai/imageutils/rembg") && html.includes("fal-ai/birefnet") && html.includes("fal-ai/bria/background/remove"), "project cutout offers economy, balanced, and high-quality AI model choices");
+const cutoutHandlerStart = html.indexOf("if(stageIndex===1){\n  $('#pf-cutout-model')", html.indexOf("function renderPhotoEditor"));
+const cutoutHandlerEnd = html.indexOf("if(stageIndex===2)$('#pf-template')", cutoutHandlerStart);
+const cutoutHandlerSource = cutoutHandlerStart >= 0 && cutoutHandlerEnd > cutoutHandlerStart ? html.slice(cutoutHandlerStart, cutoutHandlerEnd) : "";
+requireSource(cutoutHandlerSource.includes("runProjectCutout(p,ph)") && !cutoutHandlerSource.includes("page='tool-runner'") && !cutoutHandlerSource.includes("workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'}"), "cutout runs inside the project editor without navigating to the separate AI tool page");
+requireSource(html.includes("function bindProjectCutoutBrush(p,ph)") && html.includes("Tambah subjek / pulihkan") && html.includes("Hapus / transparan") && html.includes("destination-out"), "cutout result supports manual add-subject and remove-transparent brush corrections");
+requireSource(html.includes("ph.workflowResults.cutoutSource=source") && html.includes("ph.workflowResults.cutout=cutoutWorkingCanvas.toDataURL('image/png')"), "cutout source and manual corrections are stored separately in the project");
 const orderedStageKeys = ["key:'light'", "key:'cutout'", "key:'template'", "key:'face'", "key:'export'"].map((key) => html.indexOf(key));
 requireSource(orderedStageKeys.every((index, i) => index >= 0 && (i === 0 || index > orderedStageKeys[i - 1])), "stages appear in the required order");
 requireSource(html.includes("function wireNav()") && html.includes("function navTo(next)"), "navigation is wired and has a route guard");
