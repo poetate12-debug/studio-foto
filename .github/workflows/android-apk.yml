@@ -110,6 +110,40 @@ jobs:
         env:
           CI: true
 
+      - name: Prepare side-by-side recovery app identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('android/app/build.gradle')
+          source = gradle.read_text(encoding='utf-8')
+          lines = source.splitlines()
+          count = 0
+          for i, line in enumerate(lines):
+              if 'applicationId' in line and 'id.reang.studiofoto' in line:
+                  lines[i] = line.replace('id.reang.studiofoto', 'id.reang.studiofoto.v2', 1)
+                  count += 1
+                  break
+          if count == 0:
+              for i, line in enumerate(lines):
+                  if 'defaultConfig {' in line:
+                      lines.insert(i + 1, '        applicationId "id.reang.studiofoto.v2"')
+                      count = 1
+                      break
+          if count != 1 or not any('applicationId' in line and 'id.reang.studiofoto.v2' in line for line in lines):
+              raise SystemExit('Could not set recovery applicationId to id.reang.studiofoto.v2')
+          gradle.write_text(chr(10).join(lines) + chr(10), encoding='utf-8')
+          strings = Path('android/app/src/main/res/values/strings.xml')
+          if strings.exists():
+              xml_lines = strings.read_text(encoding='utf-8').splitlines()
+              for i, line in enumerate(xml_lines):
+                  if '<string' in line and 'name="app_name"' in line and '</string>' in line:
+                      prefix, rest = line.split('>', 1)
+                      _, suffix = rest.split('</string>', 1)
+                      xml_lines[i] = prefix + '>Reang Studio Foto Baru</string>' + suffix
+                      break
+              strings.write_text(chr(10).join(xml_lines) + chr(10), encoding='utf-8')
+          print('Recovery package ID set to id.reang.studiofoto.v2')
+          PY
       - name: Restore stable Android debug signing key
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
@@ -157,6 +191,18 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK can coexist with the old installation
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          if [ ! -x "$AAPT" ]; then echo "::error::aapt not found at $AAPT"; exit 1; fi
+          ACTUAL=$("$AAPT" dump badging "$APK" | awk -F"'" '/^package: name=/{print $2; exit}')
+          echo "APK package ID: $ACTUAL"
+          if [ "$ACTUAL" != "id.reang.studiofoto.v2" ]; then
+            echo "::error::Recovery APK package ID is wrong; expected id.reang.studiofoto.v2"
+            exit 1
+          fi
 
       - name: Verify APK certificate matches persistent key
         run: |
