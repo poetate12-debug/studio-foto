@@ -37,7 +37,21 @@ requireSource(html.includes("function invalidatePhotoStages("), "editing an earl
 requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes('input.style.pointerEvents="none"') && html.includes("hitRadius=13"), "range sliders only start dragging when the thumb is touched");
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
 requireSource(html.includes("if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}"), "restored local scope automatically activates the selection-only brush");
-requireSource(html.includes("const scaleX=rect.width/displayWidth||1,scaleY=rect.height/displayHeight||1;") && html.includes("clientY-rect.top)/scaleY"), "brush touch coordinates are mapped through the actual zoomed canvas rectangle");
+const mapStart = html.indexOf("function mapBrushPointerToCanvas(");
+const mapEnd = html.indexOf("\\nfunction renderLightBrushSelection", mapStart);
+let brushCoordinateTestPassed = false;
+if (mapStart >= 0 && mapEnd > mapStart) {
+  try {
+    const mapPoint = runInNewContext(html.slice(mapStart, mapEnd) + "\\nmapBrushPointerToCanvas;");
+    const mapped = mapPoint(155.5, 76.2, {left:40,top:30,width:231,height:115.5}, 100, 50);
+    brushCoordinateTestPassed = Math.abs(mapped.x-50)<0.001 && Math.abs(mapped.y-20)<0.001 && mapped.displayWidth===100;
+    const clamped = mapPoint(-100,-100,{left:40,top:30,width:231,height:115.5},100,50);
+    brushCoordinateTestPassed = brushCoordinateTestPassed && clamped.x===0 && clamped.y===0;
+  } catch (error) {
+    console.error("[smoke-check] Brush coordinate unit test threw:", error);
+  }
+}
+requireSource(brushCoordinateTestPassed, "brush pointer coordinates map correctly through zoom and clamp to the image bounds");
 requireSource(html.includes("function blendMaskedLightPixels(baseData,adjustedData,maskData)") && html.includes("blendMaskedLightPixels(base.data,adjusted.data,maskData)"), "area-light preview blends adjusted pixels only by the selection mask");
 const blendStart = html.indexOf("function blendMaskedLightPixels(");
 const blendEnd = html.indexOf("\nasync function applyMaskedLocalLightAdjustmentsToCanvas", blendStart);
@@ -84,6 +98,14 @@ while (true) {
   cursor = end + "</script>".length;
 }
 requireSource(inlineScripts.length >= 1, "inline application script exists");
+let inlineSyntaxValid = false;
+try {
+  new Function(inlineScripts.join("\\n;\\n"));
+  inlineSyntaxValid = true;
+} catch (error) {
+  console.error("[smoke-check] Inline application JavaScript syntax error:", error);
+}
+requireSource(inlineSyntaxValid, "inline application JavaScript parses without syntax errors");
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log("[smoke-check] All static checks passed.");
