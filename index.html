@@ -1837,7 +1837,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   scheduleColorMixPreview(ph);
  }
  if(stageIndex===1){
-  $('[data-cutout-mode]').forEach(b=>b.onclick=()=>{projectCutoutMode=b.dataset.cutoutMode;cutoutBrushEnabledPhotoId=null;renderPhotoEditor()});
+  $$('[data-cutout-mode]').forEach(b=>b.onclick=()=>{projectCutoutMode=b.dataset.cutoutMode;cutoutBrushEnabledPhotoId=null;renderPhotoEditor()});
   $('#pf-cutout-model').onchange=()=>{settings.models.remove=$('#pf-cutout-model').value;saveSettings()};
   $('#pf-cutout-blur-strength')?.addEventListener('input',e=>{const label=$('#pf-cutout-blur-value');if(label)label.textContent=e.target.value});
   $('#pf-run-cutout').onclick=()=>runProjectCutout(p,ph);
