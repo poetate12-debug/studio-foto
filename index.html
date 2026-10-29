@@ -842,6 +842,16 @@ function paintLightBrushSegment(maskCanvas,from,to,displayWidth,brush,erase){
  }
  ctx.restore();
 }
+function mapBrushPointerToCanvas(clientX,clientY,rect,displayWidth,displayHeight){
+ const width=Math.max(1,displayWidth),height=Math.max(1,displayHeight);
+ // The canvas is inside a CSS-transformed zoom/pan stage. Derive scale from the real bounding rectangle instead of assuming the zoom control's number matches rendered CSS geometry.
+ const scaleX=rect.width/width||1,scaleY=rect.height/height||1;
+ return {
+  x:Math.max(0,Math.min(width,(clientX-rect.left)/scaleX)),
+  y:Math.max(0,Math.min(height,(clientY-rect.top)/scaleY)),
+  displayWidth:width
+ };
+}
 function renderLightBrushSelection(ph,brightMask,darkMask,selectMask){
  const brushCanvas=document.getElementById('pf-light-brush-overlay'),main=document.querySelector('.pf-main-photo');
  if(!brushCanvas||!main)return;
@@ -1015,16 +1025,7 @@ async function bindLightBrushControls(ph,p){
  const saveSettings=()=>{p.updatedAt=Date.now();dbPut('projects',p).catch(error=>console.warn('Pengaturan kuas tidak tersimpan',error))};
  const invalidateLight=async()=>{await invalidatePhotoStages(p,ph,'light');p.updatedAt=Date.now();await dbPut('projects',p)};
  const updateBrushRange=(key,value)=>{brush[key]=Number(value);const label=document.getElementById('pf-light-brush-'+key+'-value');if(label)label.textContent=String(brush[key])+'%';renderLightBrushSelection(ph,brightMask,darkMask,selectMask);if(key==='size')scheduleLightBrushPreview(ph);saveSettings()};
- const pointForEvent=event=>{
-  const rect=overlay.getBoundingClientRect(),displayWidth=Math.max(1,overlay.offsetWidth),displayHeight=Math.max(1,overlay.offsetHeight);
-  // Map screen coordinates back into the unscaled canvas. The canvas is inside a CSS-transformed zoom/pan stage, so using the zoom value alone can drift on Android.
-  const scaleX=rect.width/displayWidth||1,scaleY=rect.height/displayHeight||1;
-  return {
-   x:Math.max(0,Math.min(displayWidth,(event.clientX-rect.left)/scaleX)),
-   y:Math.max(0,Math.min(displayHeight,(event.clientY-rect.top)/scaleY)),
-   displayWidth
-  };
- };
+ const pointForEvent=event=>mapBrushPointerToCanvas(event.clientX,event.clientY,overlay.getBoundingClientRect(),Math.max(1,overlay.offsetWidth),Math.max(1,overlay.offsetHeight));
  if(toggle)toggle.onclick=()=>{
   const previousScope=brush.scope;
   lightBrushEnabledPhotoId=lightBrushEnabledPhotoId===ph.id?null:ph.id;lightBrushPointer=null;
