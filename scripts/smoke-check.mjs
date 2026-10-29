@@ -114,9 +114,9 @@ requireSource(html.includes("touch-action:pan-y") && html.includes("--pf-range-f
 requireSource(html.includes("function stageCanBeOpened(p,targetIndex)") && html.includes("Selesaikan minimal satu foto pada tahap"), "next stage can open after at least one eligible photo");
 requireSource(html.includes("pf-finish-button.next") && html.includes("pf-finish-button.complete"), "continue and completed status use different colors");
 requireSource(html.includes("async function saveCanvasToDevice("), "export has a device-save path");
-requireSource(html.includes("id="template-zoom-in"") && html.includes("id="template-zoom-out"") && html.includes("function bindTemplateCanvasZoom()"), "template canvas has working zoom controls and pan handlers");
+requireSource(html.includes('id="template-zoom-in"') && html.includes('id="template-zoom-out"') && html.includes("function bindTemplateCanvasZoom()"), "template canvas has working zoom controls and pan handlers");
 requireSource(html.includes("position:sticky;top:82px") && html.includes(".canvas-wrap{order:-1;top:65px"), "template canvas stays at the top on mobile while scrolling layer controls");
-requireSource(html.includes("data-cutout-mode="cutout"") && html.includes("data-cutout-mode="generate"") && html.includes("data-cutout-mode="blur""), "project cutout offers transparent cutout, AI background, and bokeh blur modes");
+requireSource(html.includes('data-cutout-mode="cutout"') && html.includes('data-cutout-mode="generate"') && html.includes('data-cutout-mode="blur"'), "project cutout offers transparent cutout, AI background, and bokeh blur modes");
 requireSource(html.includes("fal-ai/bria/background/replace") && html.includes("makeBlurredBackgroundComposite(source,url") && html.includes("pf-cutout-background-prompt"), "AI background replacement and local bokeh modes are wired to project processing");
 
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
