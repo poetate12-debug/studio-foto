@@ -782,12 +782,37 @@ async function bindColorMixBrushControls(ph,p){
 
 function ensureLightBrushState(ph){
  ph.adjust=ph.adjust||{};
- const old=ph.adjust.lightBrush||{};
+ // Keep this object and its nested masks/adjustments alive. Replacing it on
+ // every read detaches the brush reference captured by pointer handlers:
+ // painted pixels then get written to an obsolete object and disappear before
+ // the local-light renderer can read the selection.
+ const state=ph.adjust.lightBrush&&typeof ph.adjust.lightBrush==='object'?ph.adjust.lightBrush:{};
  const number=(value,fallback,min,max)=>value===undefined||value===null||!Number.isFinite(Number(value))?fallback:Math.max(min,Math.min(max,Number(value)));
- ph.adjust.lightBrush={size:number(old.size,8,2,24),intensity:number(old.intensity,55,10,100),softness:number(old.softness,75,0,100),mode:old.mode==='darken'?'darken':old.mode==='brighten'?'brighten':'select',scope:(ph.adjust.lightScope==='local'||(ph.adjust.lightScope!=='global'&&old.scope==='local'))?'local':'global',erase:old.erase===true,selectionDone:old.selectionDone===true,masks:{brighten:typeof old.masks?.brighten==='string'&&old.masks.brighten?old.masks.brighten:null,darken:typeof old.masks?.darken==='string'&&old.masks.darken?old.masks.darken:null,select:typeof old.masks?.select==='string'&&old.masks.select?old.masks.select:null},adjustments:{
-  exposure:number(old.adjustments?.exposure,0,-100,100),contrast:number(old.adjustments?.contrast,0,-100,100),highlight:number(old.adjustments?.highlight,0,-100,100),shadows:number(old.adjustments?.shadows,0,-100,100),saturation:number(old.adjustments?.saturation,0,-100,100),warmth:number(old.adjustments?.warmth,0,-100,100),glow:number(old.adjustments?.glow,0,0,100),vignette:number(old.adjustments?.vignette,0,0,100),denoise:number(old.adjustments?.denoise,0,0,100),blacks:number(old.adjustments?.blacks,0,-100,100),dehaze:number(old.adjustments?.dehaze,0,-100,100)
- }};
- return ph.adjust.lightBrush;
+ state.size=number(state.size,8,2,24);
+ state.intensity=number(state.intensity,55,10,100);
+ state.softness=number(state.softness,75,0,100);
+ state.mode=state.mode==='darken'?'darken':state.mode==='brighten'?'brighten':'select';
+ state.scope=(ph.adjust.lightScope==='local'||(ph.adjust.lightScope!=='global'&&state.scope==='local'))?'local':'global';
+ state.erase=state.erase===true;
+ state.selectionDone=state.selectionDone===true;
+ const masks=state.masks&&typeof state.masks==='object'?state.masks:{};
+ for(const mode of ['brighten','darken','select'])masks[mode]=typeof masks[mode]==='string'&&masks[mode]?masks[mode]:null;
+ state.masks=masks;
+ const adjustments=state.adjustments&&typeof state.adjustments==='object'?state.adjustments:{};
+ adjustments.exposure=number(adjustments.exposure,0,-100,100);
+ adjustments.contrast=number(adjustments.contrast,0,-100,100);
+ adjustments.highlight=number(adjustments.highlight,0,-100,100);
+ adjustments.shadows=number(adjustments.shadows,0,-100,100);
+ adjustments.saturation=number(adjustments.saturation,0,-100,100);
+ adjustments.warmth=number(adjustments.warmth,0,-100,100);
+ adjustments.glow=number(adjustments.glow,0,0,100);
+ adjustments.vignette=number(adjustments.vignette,0,0,100);
+ adjustments.denoise=number(adjustments.denoise,0,0,100);
+ adjustments.blacks=number(adjustments.blacks,0,-100,100);
+ adjustments.dehaze=number(adjustments.dehaze,0,-100,100);
+ state.adjustments=adjustments;
+ ph.adjust.lightBrush=state;
+ return state;
 }
 function lightBrushMaskKey(ph,mode){return String(ph.id)+':'+mode}
 function lightBrushMaskDimensions(ph){
@@ -820,7 +845,7 @@ function lightBrushCanvasHasPaint(canvas){
 }
 function lightBrushPanelMarkup(ph,localSliderMarkup){
  const brush=ensureLightBrushState(ph),active=lightBrushEnabledPhotoId===ph.id,localScope=isLocalLightScope(ph),hasSelection=hasExplicitLightSelection(ph),selected=localScope&&hasSelection,done=selected&&brush.selectionDone===true;
- return '<section id="pf-light-brush-panel" class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Mode Kuas · v121</strong><p>Sapukan jari untuk membuat area biru. Setelah area muncul, atur cahaya langsung melalui slider di kartu ini.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
+ return '<section id="pf-light-brush-panel" class="pf-light-brush-panel"><div class="pf-light-brush-head"><div><strong>🖌 Mode Kuas · v122</strong><p>Sapukan jari untuk membuat area biru. Setelah area muncul, atur cahaya langsung melalui slider di kartu ini.</p></div><button type="button" id="pf-light-brush-toggle" class="pf-brush-toggle '+(active?'active':'')+'" aria-pressed="'+active+'">'+(active?'Kuas aktif':'Aktifkan kuas')+'</button></div>'+
  '<div id="pf-brush-light-controls" class="pf-brush-light-controls '+(localScope?'':'hidden')+'"><h4>☀ Pengaturan cahaya area biru</h4><p>Buat area biru dengan kuas, lalu selesaikan seleksi. Slider di bawah menerapkan cahaya hanya pada area tersebut.</p>'+localSliderMarkup+'</div>'+
  '<div id="pf-light-brush-options" class="pf-light-brush-options '+(active?'':'hidden')+'">'+
  '<p class="pf-brush-hint">Sapukan satu jari pada foto untuk menandai area. Kontrol zoom dua jari tidak akan melukis. Tekan Selesai menyeleksi untuk mengunci area bila diperlukan.</p>'+
@@ -1513,7 +1538,7 @@ function renderPhotoEditor(){
  const adj=adjustmentValues(ph);
  const source=stageIndex===0?(ph.originalSrc||ph.src):(stageIndex===1?(ph.workflowResults.light||ph.originalSrc||ph.src):(stageIndex===2?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):(stageIndex===3?(ph.workflowResults.cutout||ph.workflowResults.light||ph.src):stagePhotoSource(ph))));
  const doneCount=p.photos.filter(x=>workflowDone(x,stage.key)).length;
- let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto <span class="pf-build-version">Kuas v121</span></p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
+ let html='<section class="pf-editor-page"><header class="pf-header pf-editor-header"><button class="pf-icon-btn" id="pf-editor-back" aria-label="Kembali ke galeri">‹</button><div class="pf-header-title"><h1>'+esc(p.name)+'</h1><p>'+esc(p.eventDate||'')+' · '+(activePhotoIndex+1)+' / '+p.photos.length+' foto <span class="pf-build-version">Kuas v122</span></p></div><button class="pf-icon-btn" id="pf-editor-gallery" aria-label="Galeri">▦</button><button class="pf-icon-btn danger" id="pf-delete-current" aria-label="Hapus foto">▤</button><button class="pf-icon-btn orange" id="pf-editor-add" aria-label="Tambah foto">▧＋</button></header>';
  html+='<input type="file" id="pf-editor-files" accept="image/*" multiple hidden>';
  html+='<div class="pf-editor-media"><div class="pf-main-photo"><div class="pf-image-viewport" id="pf-image-viewport"><div class="pf-image-stage" id="pf-image-stage"><img id="pf-photo-preview" src="'+esc(source)+'" alt="'+esc(ph.name)+'" style="filter:'+photoAdjustmentFilter(ph,stageIndex!==0)+'">'+(stageIndex===0?'<canvas id="pf-color-mix-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-effect-preview" class="pf-local-canvas" aria-hidden="true"></canvas><canvas id="pf-light-brush-overlay" class="pf-local-canvas" aria-label="Sapukan kuas cahaya pada foto"></canvas><canvas id="pf-color-brush-overlay" class="pf-local-canvas" aria-label="Pilih area untuk campur warna"></canvas>':'')+'</div></div><div class="pf-zoom-controls" aria-label="Zoom foto"><button type="button" id="pf-zoom-out" aria-label="Perkecil gambar">−</button><span id="pf-zoom-label">100%</span><button type="button" id="pf-zoom-in" aria-label="Perbesar gambar">＋</button><button type="button" data-zoom-reset id="pf-zoom-reset" aria-label="Reset zoom">Pas</button></div><button id="pf-hold-original" class="pf-original-toggle" type="button">◉ Before</button></div><div class="pf-photo-switch"><button class="pf-round-btn" id="pf-prev-photo" '+(activePhotoIndex===0?'disabled':'')+'>‹</button><span>'+(activePhotoIndex+1)+' / '+p.photos.length+'</span><button class="pf-round-btn" id="pf-next-photo" '+(activePhotoIndex===p.photos.length-1?'disabled':'')+'>›</button></div><button class="pf-finish-button '+(workflowDone(ph,stage.key)?'complete':'next')+'" id="pf-finish-photo">'+(workflowDone(ph,stage.key)?'✓ Selesai — lanjut foto':(stageIndex===4?'Selesai ekspor':'Selesai — lanjut foto'))+'</button></div>';
  html+='<div class="pf-editor-scroll"><div class="pf-editor-controls">';

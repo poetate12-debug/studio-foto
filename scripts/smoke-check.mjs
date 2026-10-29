@@ -37,6 +37,28 @@ requireSource(html.includes("function invalidatePhotoStages("), "editing an earl
 requireSource(html.includes("function bindThumbOnlyRanges()") && html.includes('input.style.pointerEvents="none"') && html.includes("hitRadius=13"), "range sliders only start dragging when the thumb is touched");
 requireSource(html.includes("const update=(key,value)=>") && html.includes("lightSaveTimer=setTimeout"), "light slider preview updates synchronously and storage writes are debounced");
 requireSource(html.includes("if(stageIndex===0&&initialLightBrush.scope==='local'){lightBrushEnabledPhotoId=ph.id;initialLightBrush.mode='select';initialLightBrush.erase=false;if(!hasExplicitLightSelection(ph))initialLightBrush.selectionDone=false;}"), "restored local scope automatically activates the selection-only brush");
+const brushStateStart = html.indexOf("function ensureLightBrushState(");
+const brushStateEnd = html.indexOf("\nfunction lightBrushMaskKey", brushStateStart);
+let brushStateReferenceTestPassed = false;
+if (brushStateStart >= 0 && brushStateEnd > brushStateStart) {
+  try {
+    const ensureBrushState = runInNewContext(html.slice(brushStateStart, brushStateEnd) + "\nensureLightBrushState;");
+    const photo = { adjust: { lightScope: "local" } };
+    const capturedBrush = ensureBrushState(photo);
+    ensureBrushState(photo); // redraw/preview reads state between pointerdown and pointerup
+    capturedBrush.masks.select = "data:image/png;base64,selection-mask";
+    capturedBrush.adjustments.exposure = 65;
+    const currentBrush = ensureBrushState(photo);
+    brushStateReferenceTestPassed =
+      capturedBrush === currentBrush &&
+      currentBrush.masks.select === "data:image/png;base64,selection-mask" &&
+      currentBrush.adjustments.exposure === 65 &&
+      currentBrush.scope === "local";
+  } catch (error) {
+    console.error("[smoke-check] Brush state reference regression test threw:", error);
+  }
+}
+requireSource(brushStateReferenceTestPassed, "brush state identity, selection masks, and local adjustments survive repeated preview reads");
 const mapStart = html.indexOf("function mapBrushPointerToCanvas(");
 const mapEnd = html.indexOf("\nfunction renderLightBrushSelection", mapStart);
 let brushCoordinateTestPassed = false;
@@ -72,7 +94,7 @@ if (blendStart >= 0 && blendEnd > blendStart) {
 }
 requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixels and changes partially/fully selected pixels");
 requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
-requireSource(sw.includes("reang-studio-foto-v7") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
+requireSource(sw.includes("reang-studio-foto-v8") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
