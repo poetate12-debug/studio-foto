@@ -141,11 +141,11 @@ jobs:
           '''
           if 'signingConfigs {' not in source:
               if 'android {' not in source: raise SystemExit('No android {} block in app/build.gradle')
-              source = source.replace('android {', 'android {\\n' + signing, 1)
-          debug_config = '        debug { signingConfig signingConfigs.debug }\\n'
+              source = source.replace('android {' + chr(10) + signing, 1)
+          debug_config = '        debug { signingConfig signingConfigs.debug }' + chr(10)
           if 'debug { signingConfig signingConfigs.debug }' not in source:
               if 'buildTypes {' not in source: raise SystemExit('No buildTypes {} block in app/build.gradle')
-              source = source.replace('buildTypes {', 'buildTypes {\\n' + debug_config, 1)
+              source = source.replace('buildTypes {' + chr(10) + debug_config, 1)
           path.write_text(source, encoding='utf-8')
           print('Pinned debug buildType to the persistent $HOME/.android/debug.keystore')
           PY
