@@ -355,7 +355,8 @@ function renderTools(){
  $('#main').innerHTML=html;$$('[data-tool]').forEach(b=>b.addEventListener('click',()=>openTool(b.dataset.tool)));
 }
 function renderTemplates(){
- let html=head('WORKSPACE / TEMPLATE','Template dan background','Siapkan template cetak dan kumpulkan foto background untuk dipakai saat Tahap Template.','<button class="btn primary" id="new-template">＋ Tambah template</button>');
+ const project=activeProject();const returnToProject=!!(project&&Number(project.workflowStage)===2);
+ let html=head('WORKSPACE / TEMPLATE','Template dan background','Siapkan template cetak dan kumpulkan foto background untuk dipakai saat Tahap Template.',(returnToProject?'<button class="btn" id="back-to-template-project">← Kembali ke proyek</button>':'')+'<button class="btn primary" id="new-template">＋ Tambah template</button>');
  html+='<section class="panel background-library-panel"><div class="background-library-head"><div><h2>Daftar background</h2><p class="lead">Unggah background yang akan tersedia untuk semua proyek. Background dipilih pada Tahap Template.</p></div><button class="btn primary" id="add-backgrounds">＋ Tambah background</button><input id="background-library-files" type="file" accept="image/*" multiple hidden></div>';
  if(!backgrounds.length)html+='<div class="background-library-empty">Belum ada background. Unggah beberapa gambar untuk mulai membuat daftar background.</div>';
  else html+='<div class="background-library-grid">'+backgrounds.map(bg=>'<article class="background-library-card"><img src="'+esc(bg.src)+'" alt="'+esc(bg.name)+'"><div class="background-library-card-body"><b>'+esc(bg.name)+'</b><button class="btn small danger" data-delete-background="'+bg.id+'">Hapus</button></div></article>').join('')+'</div>';
@@ -363,6 +364,7 @@ function renderTemplates(){
  if(!templates.length)html+='<div class="empty-state"><div class="big">▧</div><h3>Buat template sesuai kebutuhan cetak</h3><p>Mulai dari kanvas A3, tambahkan PNG bingkai, logo, dan elemen desain.</p><button class="btn primary" id="new-template-empty">＋ Buat template</button></div>';
  else html+='<div class="project-grid">'+templates.map(t=>'<article class="project-card"><div class="project-preview" style="background:linear-gradient(160deg,#eeeaff,#f8f5eb)"><div style="position:absolute;inset:10%;border:2px solid #bdb3e6;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:14px;color:#6757b7;text-align:center"><b style="font-size:11px">'+esc(t.name)+'</b><div style="border:1px dashed #aaa0de;width:70%;height:55%;display:grid;place-items:center;font-size:11px">AREA FOTO</div><small>'+esc(t.sizeName)+' · '+t.layers.length+' layer</small></div></div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(t.name)+'</h3><div class="card-meta">'+esc(t.sizeName)+' · '+t.widthCm+' × '+t.heightCm+' cm</div></div><span class="badge">'+t.layers.length+' layer</span></div><div class="card-foot"><span>Template tersimpan</span><button class="btn small primary" data-edit-template="'+t.id+'">Edit template →</button></div></div></article>').join('')+'</div>';
  $('#main').innerHTML=html;
+ $('#back-to-template-project')?.addEventListener('click',()=>{page='photo-editor';renderPhotoEditor()});
  $('#new-template')?.addEventListener('click',()=>showTemplateModal());
  $('#new-template-empty')?.addEventListener('click',()=>showTemplateModal());
  $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>openTemplate(b.dataset.editTemplate)));
@@ -374,7 +376,7 @@ function renderTemplates(){
   for(const file of files){
    if(file.size>30*1024*1024){toast(file.name+' terlalu besar (maksimal 30 MB).');continue}
    try{
-    const item={id:uid(),name:file.name.replace(/\\.[^.]+$/,''),fileName:file.name,src:await dataURL(file),createdAt:Date.now()};
+    const item={id:uid(),name:file.name.replace(/\.[^.]+$/,''),fileName:file.name,src:await dataURL(file),createdAt:Date.now()};
     await dbPut('backgrounds',item);backgrounds.push(item);added++;
    }catch(error){toast('Gagal menyimpan '+file.name+'. Periksa ruang penyimpanan.')}
   }
