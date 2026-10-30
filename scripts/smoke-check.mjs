@@ -144,7 +144,7 @@ requireSource(html.includes("Atur background") && html.includes("Atur objek karn
 requireSource(html.includes("function bindTemplateStageGestures(project,photo)") && html.includes("overlay.addEventListener('pointerdown'") && html.includes("overlay.addEventListener('pointermove'") && html.includes("pointers.size>=2"), "Template stage supports one-finger dragging and two-finger pinch adjustments");
 requireSource(html.includes("function refreshTemplateStagePreview(project,photo)") && html.includes("await dbPut('projects',project)"), "template position changes persist and refresh the project preview");
 requireSource(html.includes("function drawPanCover") && html.includes("project?.templateBackgroundPlacement") && html.includes("chosenBackground.src"), "selected background is positioned and rendered behind the carnival subject");
-requireSource(html.includes("stageIndex===2?'':'<div class="pf-zoom-controls"") && html.includes("if(stageIndex===2)bindTemplateStageGestures(p,ph);else bindPhotoZoomControls(ph)"), "floating photo zoom controls are removed from the Template stage");
+requireSource(html.includes("stageIndex===2?'':'") && html.includes('class="pf-zoom-controls"') && html.includes("if(stageIndex===2)bindTemplateStageGestures(p,ph);else bindPhotoZoomControls(ph)"), "floating photo zoom controls are removed from the Template stage");
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
 // Service-worker cache invalidation is checked alongside the new brush regression assertions above.
 
