@@ -206,7 +206,6 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-slider-row input[type=range]:active::-webkit-slider-thumb{transform:scale(1.08)}
 
 .pf-cutout-panel .field{margin:14px 0}.pf-cutout-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:14px 0}.pf-cutout-mode{display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;text-align:center;min-height:78px;padding:10px 5px;border:1px solid #e1e4ee;border-radius:12px;background:#fff;color:#34384a;font-size:12px;font-weight:800}.pf-cutout-mode small{font-size:10px;font-weight:500;color:#7d8494}.pf-cutout-mode.active{border-color:#8d7df2;background:#f3f0ff;color:#5545c4;box-shadow:0 0 0 1px #8d7df2}.pf-cutout-extra{padding:12px;border-radius:12px;background:#f7f8fc;border:1px solid #e7e9f2}.pf-cutout-extra textarea{width:100%;min-height:86px;border:1px solid #dfe2eb;border-radius:10px;padding:10px;font-size:13px}.pf-cutout-panel .field small{display:block;color:#818898;font-size:12px;line-height:1.5;margin-top:6px}.pf-cutout-brush-tools{margin-top:18px;padding:14px;border:1px solid #e8eaf1;border-radius:14px;background:#f8f9fc}.pf-cutout-brush-tools h3{font-size:15px;margin:0 0 8px}.pf-cutout-brush-tools p{font-size:13px;color:#697184;line-height:1.55}.pf-main-photo.cutout-painting-active #pf-cutout-brush-overlay{pointer-events:auto;touch-action:none;cursor:crosshair}
-<style>
 /* Reang Studio Foto: compact visual pickers and clean template-stage gestures */
 .pf-template-adjust-overlay{position:absolute;inset:0;z-index:22;touch-action:none;user-select:none;-webkit-user-select:none;cursor:move;background:transparent!important;border:0!important;outline:0!important}
 .pf-template-adjust-box,.pf-template-adjust-box.subject{display:none!important;border:0!important;background:transparent!important;box-shadow:none!important}
@@ -525,7 +524,7 @@ function ensureTemplateEventDateLayer(template,project){
  layer.eventDateAuto=true;
  layer.fontSize=Math.max(8,Math.min(16,Number(layer.fontSize)||14));
  template.simpleDateLayerId=layer.id;
- template.eventDate=project?projectEventDate(project):(template.eventDate||'');
+ template.eventDate=project?projectEventDate(project):(template.eventDate||localDateInputValue());
  return layer;
 }
 function showProjectModal(){const today=localDateInputValue();showModal('Buat proyek baru','<div class="field"><label>Nama proyek</label><input id="modal-project-name" placeholder="Contoh: Parade Putra Surti Muda" maxlength="100"></div><div class="form-row"><div class="field"><label>Tanggal acara</label><input id="modal-project-date" type="date" value="'+today+'"></div><div class="field"><label>Catatan (opsional)</label><input id="modal-project-note" placeholder="Lokasi / tema"></div></div><div class="notice info">Tanggal proyek ini bisa digunakan sebagai tanggal cetak pada layer teks template.</div>','<button class="btn" id="cancel-project">Batal</button><button class="btn primary" id="create-project-confirm">Buat proyek</button>');$('#cancel-project').onclick=closeModal;$('#create-project-confirm').onclick=async()=>{const name=$('#modal-project-name').value.trim();if(!name){toast('Isi nama proyek terlebih dahulu.');return}const p={id:uid(),name,eventDate:$('#modal-project-date').value||today,note:$('#modal-project-note').value,photos:[],createdAt:Date.now(),updatedAt:Date.now()};projects.push(p);await dbPut('projects',p);closeModal();openProject(p.id);toast('Proyek baru berhasil dibuat.')}}
@@ -1720,6 +1719,7 @@ function renderPhotoEditor(){
  const ph=ensurePhotoWorkflow(p.photos[activePhotoIndex]);
  const stageIndex=Math.max(0,Math.min(4,Number(p.workflowStage)||0));
  const stage=workflowStages[stageIndex];
+ if(stageIndex===2&&p.templateId){const stageTemplate=templates.find(item=>item.id===p.templateId);if(stageTemplate){ensureTemplateEventDateLayer(stageTemplate,p);dbPut('templates',stageTemplate).catch(error=>console.warn('Tanggal template belum tersimpan',error))}}
  const initialLightBrush=ensureLightBrushState(ph);
  if(stageIndex===2){photoZoomState={photoId:ph.id,scale:1,x:0,y:0};photoZoomPointers.clear();photoZoomGesture=null;}
  // Restored local scope must enter paint-ready mode after every render/reopen.
