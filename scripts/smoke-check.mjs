@@ -214,3 +214,5 @@ requireSource(html.includes("fal-ai/esrgan") && html.includes("fal-ai/recraft/up
 requireSource(html.includes("ctx.globalCompositeOperation='destination-in'") && html.includes("ctx.globalAlpha=amount"), "enhanced subject is blended by strength while original Cutout transparency protects the background");
 requireSource(html.includes("ph.workflowResults.face=merged;ph.workflow.face=true") && html.includes("delete ph.workflowResults.face"), "enhancement result is saved to the workflow and can be restored to original Cutout");
 requireSource(sw.includes("reang-studio-foto-v23"), "service worker cache version is updated for carnival object enhancement");
+
+requireSource(html.includes("enhancedWidth/prepared.crop.w") && html.includes("enhancedHeight/prepared.crop.h") && html.includes("requestedScale=Math.max(1,Math.min(ratioX,ratioY))"), "enhanced crop is placed back using its scale relative to the original full-size cutout");

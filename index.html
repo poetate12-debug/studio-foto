@@ -1480,8 +1480,9 @@ async function mergeCarnivalEnhancement(prepared,enhancedSource,strength){
  const enhanced=await loadCanvasImage(enhancedSource);
  const enhancedWidth=enhanced.naturalWidth||enhanced.width,enhancedHeight=enhanced.naturalHeight||enhanced.height;
  if(!enhancedWidth||!enhancedHeight)throw new Error('Model AI tidak mengembalikan gambar peningkatan yang valid.');
- const ratioX=enhancedWidth/prepared.cropWidth,ratioY=enhancedHeight/prepared.cropHeight;
- const scale=Math.min(ratioX,ratioY,Math.max(1,6000/Math.max(prepared.width,prepared.height)));
+ const ratioX=enhancedWidth/prepared.crop.w,ratioY=enhancedHeight/prepared.crop.h;
+ const requestedScale=Math.max(1,Math.min(ratioX,ratioY));
+ const scale=Math.min(requestedScale,6000/Math.max(prepared.width,prepared.height));
  const outWidth=Math.max(1,Math.round(prepared.width*scale)),outHeight=Math.max(1,Math.round(prepared.height*scale));
  const canvas=document.createElement('canvas');canvas.width=outWidth;canvas.height=outHeight;
  const ctx=canvas.getContext('2d');
