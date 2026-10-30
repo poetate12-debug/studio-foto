@@ -1,4 +1,4 @@
-const CACHE_NAME = "reang-studio-foto-v19";
+const CACHE_NAME = "reang-studio-foto-v20";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./native-download.bundle.js"];
 
 self.addEventListener("install", (event) => {
