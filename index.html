@@ -536,7 +536,7 @@ async function handlePhotoUpload(files){const p=activeProject();if(!p)return;con
 function sizeForTemplate(t){let w=t.widthCm||29.7,h=t.heightCm||42;return{w,h,dpi:t.dpi||300}}
 function normalizedToSize(n,size){return n/100*size}
 function paintTemplateThumbnails(selector){
- $(selector).forEach(async image=>{
+ Array.from(document.querySelectorAll(selector)).forEach(async image=>{
   const id=image.dataset.templateThumb||image.dataset.templateLibraryThumb;
   const template=templates.find(item=>item.id===id);
   if(!template)return;
@@ -1948,8 +1948,8 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   if(cutoutBrushEnabledPhotoId===ph.id)bindProjectCutoutBrush(p,ph).catch(error=>{console.warn(error);toast(error.message||'Kuas cutout tidak dapat dimulai.')});
  }
  if(stageIndex===2){
-  const syncTemplatePicker=()=>$('[data-pf-template],[data-pf-template-clear]').forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-template-clear')?!p.templateId:button.dataset.pfTemplate===p.templateId));
-  const syncBackgroundPicker=()=>$('[data-pf-background],[data-pf-background-clear]').forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-background-clear')?!p.backgroundId:button.dataset.pfBackground===p.backgroundId));
+  const syncTemplatePicker=()=>Array.from(document.querySelectorAll('[data-pf-template],[data-pf-template-clear]')).forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-template-clear')?!p.templateId:button.dataset.pfTemplate===p.templateId));
+  const syncBackgroundPicker=()=>Array.from(document.querySelectorAll('[data-pf-background],[data-pf-background-clear]')).forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-background-clear')?!p.backgroundId:button.dataset.pfBackground===p.backgroundId));
   const chooseTemplate=async chosen=>{
    const previousTemplate=p.templateId||null;
    if(previousTemplate!==chosen){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.export=false}}
@@ -1958,14 +1958,14 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
    if(selectedTemplate){ensureTemplateEventDateLayer(selectedTemplate,p);await dbPut('templates',selectedTemplate)}
    await dbPut('projects',p);syncTemplatePicker();await refreshTemplateStagePreview(p,ph);
   };
-  $('[data-pf-template]').forEach(button=>button.addEventListener('click',()=>chooseTemplate(button.dataset.pfTemplate||null)));
+  Array.from(document.querySelectorAll('[data-pf-template]')).forEach(button=>button.addEventListener('click',()=>chooseTemplate(button.dataset.pfTemplate||null)));
   $('[data-pf-template-clear]')?.addEventListener('click',()=>chooseTemplate(null));
   const chooseBackground=async chosen=>{
    p.backgroundId=chosen;
    p.templateBackgroundPlacement={x:0,y:0,w:100,h:100};
    await dbPut('projects',p);syncBackgroundPicker();await refreshTemplateStagePreview(p,ph);
   };
-  $('[data-pf-background]').forEach(button=>button.addEventListener('click',()=>chooseBackground(button.dataset.pfBackground||null)));
+  Array.from(document.querySelectorAll('[data-pf-background]')).forEach(button=>button.addEventListener('click',()=>chooseBackground(button.dataset.pfBackground||null)));
   $('[data-pf-background-clear]')?.addEventListener('click',()=>chooseBackground(null));
   paintTemplateThumbnails('[data-template-thumb]');
   $('#pf-manage-backgrounds').onclick=async()=>{await dbPut('projects',p);page='templates';renderTemplates()};
