@@ -148,7 +148,7 @@ requireSource(html.includes("data-template-library-thumb") && html.includes("tem
 requireSource(!html.includes("OBJEK KARNAVAL</span>") && !html.includes('class="pf-template-adjust-box'), "Template stage has no carnival label or yellow selection border");
 requireSource(html.includes("function updateTemplateAdjustOverlay(project,photo)") && html.includes("Gesture surface remains active, but no selection box") && html.includes("x:-20,y:-20,w:140,h:140"), "template drag/pinch remains active without visible outlines and background has movable overscan");
 requireSource(html.includes("data-delete-project") && html.includes("data-delete-photo") && html.includes("data-delete-template") && html.includes("data-delete-background"), "projects, photos, templates and backgrounds each have delete actions");
-requireSource(sw.includes("reang-studio-foto-v16"), "service worker cache version is updated for the UI changes");
+requireSource(sw.includes("reang-studio-foto-v17"), "service worker cache version is updated for the UI changes");
 requireSource(html.includes("Atur background") && html.includes("Atur objek karnaval") && html.includes("templateBackgroundPlacement"), "Template stage exposes separate background and carnival-object adjustment targets");
 requireSource(html.includes("function bindTemplateStageGestures(project,photo)") && html.includes("stage.addEventListener('pointerdown'") && html.includes("stage.addEventListener('pointermove'") && html.includes("pointers.size>=2") && html.includes("stage.style.pointerEvents='auto'"), "Template stage uses the image stage as a hit-testable drag/pinch surface");
 requireSource(html.includes("function refreshTemplateStagePreview(project,photo)") && html.includes("await dbPut('projects',project)"), "template position changes persist and refresh the project preview");
@@ -180,3 +180,7 @@ requireSource(inlineSyntaxValid, "inline application JavaScript parses without s
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log("[smoke-check] All static checks passed.");
+
+requireSource(html.includes("layer.fontSize=Math.max(4,Math.min(64") && html.includes("fontSize=clamp(pinch.font*factor,4,64)") && html.includes("Math.max(5,Number(layer.fontSize||24)"), "date text can be reduced to a small readable size");
+requireSource(html.includes("open-background-library") && html.includes("open-template-library") && html.includes("menu-add-backgrounds"), "template settings page opens collections through separate menus");
+requireSource(html.includes("openProject(card.dataset.projectCard)"), "clicking a project card opens the project");
