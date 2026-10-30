@@ -260,6 +260,7 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-template-adjust-overlay{pointer-events:none!important;background:transparent!important}
 .pf-image-stage{background:rgba(0,0,0,.001);pointer-events:auto;touch-action:none}
 @media(max-width:520px){.pf-modal-picker-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.pf-modal-picker-card{padding:5px}.pf-stage-picker-current{min-height:64px}.pf-stage-picker-thumb{width:52px;height:52px}}
+.simple-date-size-control{display:grid;gap:6px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:11px}.simple-date-size-control label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:800}.simple-date-size-control label b{color:#6756d8;font-size:12px}.simple-date-size-control input[type=range]{width:100%;margin:2px 0;touch-action:pan-y}.simple-date-handle{touch-action:none!important;pointer-events:auto;-webkit-user-select:none;user-select:none}
 </style>
 </head>
 <body>
@@ -1528,11 +1529,71 @@ async function bindProjectCutoutBrush(p,ph){
  };
  overlay.onpointerup=finish;overlay.onpointercancel=finish;overlay.onlostpointercapture=finish;
 }
+const reangNativeRangeValue=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+function reangRangeOffset(input){return reangNativeRangeValue?Number(reangNativeRangeValue.get.call(input)||0):0}
+function setReangRangeOffset(input,offset,emit=true){
+ if(!input)return;
+ const value=Math.max(-100,Math.min(100,Number(offset)||0));
+ if(reangNativeRangeValue)reangNativeRangeValue.set.call(input,String(value));else input.value=String(value);
+ if(emit){input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}))}
+}
+function installCenteredRangeControls(root=document){
+ if(!reangNativeRangeValue||!root.querySelectorAll)return;
+ root.querySelectorAll('input[type="range"]:not([data-reang-centered])').forEach(input=>{
+  const min=Number(input.getAttribute('min')??0),max=Number(input.getAttribute('max')??100),stepText=input.getAttribute('step')||'1',step=stepText==='any'?0.01:Math.max(.000001,Number(stepText)||1);
+  const base=Number(reangNativeRangeValue.get.call(input));
+  if(!Number.isFinite(min)||!Number.isFinite(max)||max<=min||!Number.isFinite(base))return;
+  const quantize=value=>{
+   const rounded=min+Math.round((value-min)/step)*step;
+   const precision=stepText.includes('.')?stepText.split('.')[1].length:0;
+   return Number(Math.max(min,Math.min(max,rounded)).toFixed(Math.min(6,precision)));
+  };
+  const fromOffset=offset=>{
+   const n=Math.max(-100,Math.min(100,Number(offset)||0));
+   if(n===0)return base;
+   return quantize(n<0?base+(base-min)*(n/100):base+(max-base)*(n/100));
+  };
+  const toOffset=value=>{
+   const n=Number(value);
+   if(!Number.isFinite(n)||n===base)return 0;
+   if(n<base)return base<=min?0:Math.max(-100,Math.min(0,-100*(base-n)/(base-min)));
+   return max<=base?0:Math.max(0,Math.min(100,100*(n-base)/(max-base)));
+  };
+  input.dataset.reangCentered='1';input.dataset.reangBase=String(base);input.dataset.reangMin=String(min);input.dataset.reangMax=String(max);input.dataset.reangStep=String(step);
+  Object.defineProperty(input,'value',{configurable:true,enumerable:true,get(){return String(fromOffset(reangNativeRangeValue.get.call(this)))},set(value){reangNativeRangeValue.set.call(this,String(toOffset(value)))}});
+  input.min='-100';input.max='100';input.step='1';reangNativeRangeValue.set.call(input,'0');
+  input.classList.add('reang-centered-range');input.style.setProperty('--pf-range-fill','50%');
+  input.title='Posisi tengah = nilai awal. Geser kiri (−) untuk mengurangi, kanan (+) untuk menambah. Ketuk dua kali pada bulatan untuk reset.';
+ });
+}
+function startReangCenteredRangeObserver(){
+ if(window.__reangCenteredRangeObserver)return;
+ installCenteredRangeControls(document);
+ const observer=new MutationObserver(()=>installCenteredRangeControls(document));
+ observer.observe(document.body,{childList:true,subtree:true});
+ window.__reangCenteredRangeObserver=observer;
+ document.addEventListener('pointerdown',event=>{
+  const input=event.target?.closest?.('input[type="range"][data-reang-centered="1"]');
+  if(!input)return;
+  const rect=input.getBoundingClientRect(),offset=reangRangeOffset(input),thumbX=rect.left+12+((offset+100)/200)*Math.max(0,rect.width-24);
+  const near=Math.abs(event.clientX-thumbX)<=18&&Math.abs(event.clientY-(rect.top+rect.height/2))<=18;
+  const now=Date.now(),last=window.__reangRangeLastTap;
+  if(near&&last&&last.input===input&&now-last.time<=480&&Math.abs(event.clientX-last.x)<=24&&Math.abs(event.clientY-last.y)<=24){
+   event.preventDefault();event.stopPropagation();setReangRangeOffset(input,0,true);window.__reangRangeLastTap=null;
+  }else window.__reangRangeLastTap=near?{input,time:now,x:event.clientX,y:event.clientY}:null;
+ },true);
+ document.addEventListener('dblclick',event=>{
+  const input=event.target?.closest?.('input[type="range"][data-reang-centered="1"]');
+  if(!input)return;
+  const rect=input.getBoundingClientRect(),offset=reangRangeOffset(input),thumbX=rect.left+12+((offset+100)/200)*Math.max(0,rect.width-24);
+  if(Math.abs(event.clientX-thumbX)<=20){event.preventDefault();setReangRangeOffset(input,0,true)}
+ },true);
+}
 function bindThumbOnlyRanges(){
  const inputs=Array.from(document.querySelectorAll(".pf-editor-controls input[type=range]"));
  const setFill=input=>{
-  const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
-  const fraction=max===min?0:Math.max(0,Math.min(1,(value-min)/(max-min)));
+  const offset=reangRangeOffset(input);
+  const fraction=Math.max(0,Math.min(1,(offset+100)/200));
   input.style.setProperty("--pf-range-fill",(fraction*100)+"%");
  };
  inputs.forEach(input=>{
@@ -1558,21 +1619,26 @@ function bindThumbOnlyRanges(){
  document.addEventListener("pointerdown",event=>{
   if(event.button!==undefined&&event.button!==0)return;
   const found=findSlider(event);if(!found)return;
-  const input=found.input,rect=found.rect,min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value||0);
-  if(max<=min)return;
+  const input=found.input,rect=found.rect,min=-100,max=100,value=reangRangeOffset(input);
   const fraction=Math.max(0,Math.min(1,(value-min)/(max-min)));
   const center=rect.left+thumbSize/2+fraction*Math.max(0,rect.width-thumbSize);
   if(Math.abs(event.clientX-center)>hitRadius)return;
-  active={input,pointerId:event.pointerId,rect,min,max,thumbSize};
+  const now=Date.now(),last=window.__reangCustomRangeLastTap;
+  if(last&&last.input===input&&now-last.time<=480&&Math.abs(event.clientX-last.x)<=24){
+   event.preventDefault();active=null;setReangRangeOffset(input,0,true);window.__reangCustomRangeLastTap=null;return;
+  }
+  window.__reangCustomRangeLastTap={input,time:now,x:event.clientX};
+  active={input,pointerId:event.pointerId,rect,min,max,thumbSize,startX:event.clientX};
   event.preventDefault();
  },{capture:true,passive:false});
  document.addEventListener("pointermove",event=>{
   if(!active||event.pointerId!==active.pointerId)return;
   event.preventDefault();
+  if(Math.abs(event.clientX-active.startX)>3)window.__reangCustomRangeLastTap=null;
   const left=active.rect.left+active.thumbSize/2,right=active.rect.right-active.thumbSize/2;
   const fraction=right<=left?0:Math.max(0,Math.min(1,(event.clientX-left)/(right-left)));
-  const raw=active.min+fraction*(active.max-active.min),step=Math.max(.0001,Number(active.input.step||1));
-  active.input.value=String(Math.max(active.min,Math.min(active.max,Math.round(raw/step)*step)));
+  const offset=active.min+fraction*(active.max-active.min);
+  setReangRangeOffset(active.input,offset,false);
   active.input.dispatchEvent(new Event("input",{bubbles:true}));
  },{capture:true,passive:false});
  const release=event=>{
@@ -2158,10 +2224,17 @@ function renderTemplateEditor(){
  const dateValue=projectEventDate(p)||t.eventDate||localDateInputValue();
  const ratio=(Number(t.widthCm)||42)/(Number(t.heightCm)||29.7);
  let html=head('TEMPLATE / EDITOR',esc(t.name),'Mode sederhana · PNG + tanggal otomatis','<button class="btn" id="back-templates">← Daftar template</button>');
- html+='<div class="simple-template-editor"><div class="simple-template-actions"><div class="simple-template-action"><b>1. Desain PNG</b><span>'+ (artwork?'PNG sudah terpasang. Ukuran mengikuti bingkai template.':'Unggah satu PNG yang sudah disiapkan ukurannya.')+'</span><button class="btn primary" id="simple-upload-png">'+(artwork?'Ganti PNG':'Pilih PNG')+'</button><input id="simple-png-input" type="file" accept=".png,image/png" hidden></div><div class="simple-template-action"><b>2. Tanggal acara</b><span>'+ (dateLayer?'Geser teks atau cubit langsung pada tanggal untuk mengatur posisi dan ukuran.':'Tambahkan satu tanggal otomatis di atas desain PNG.')+'</span><button class="btn" id="simple-add-date">'+(dateLayer?'Pilih / tampilkan tanggal':'＋ Tambah tanggal otomatis')+'</button></div></div><div class="simple-date-input"><label for="simple-event-date">Tanggal event</label><input id="simple-event-date" type="date" value="'+esc(dateValue)+'" disabled><small>Mengikuti otomatis tanggal acara yang tersimpan pada proyek.</small></div><div class="simple-preview-wrap"><div class="simple-preview-stage" id="template-simple-stage" style="aspect-ratio:'+ratio+'"><canvas id="template-canvas"></canvas>'+(dateLayer?'<div class="simple-date-handle" id="template-date-handle" role="slider" aria-label="Geser dan cubit untuk mengatur tanggal">'+(dateValue?esc(fmtDate(dateValue)):'PILIH TANGGAL')+'</div>':'')+'</div></div><div class="simple-template-help">'+(dateLayer?'Sentuh dan geser tanggal dengan satu jari. Cubit dua jari tepat pada teks untuk memperbesar atau memperkecil.':'Tekan “Tambah tanggal otomatis” untuk meletakkan tanggal pada desain.')+'</div><div class="simple-template-footer"><button class="btn primary" id="simple-save-template">Simpan template</button><button class="btn" id="simple-export-template">Ekspor PNG</button></div></div>';
+ html+='<div class="simple-template-editor"><div class="simple-template-actions"><div class="simple-template-action"><b>1. Desain PNG</b><span>'+ (artwork?'PNG sudah terpasang. Ukuran mengikuti bingkai template.':'Unggah satu PNG yang sudah disiapkan ukurannya.')+'</span><button class="btn primary" id="simple-upload-png">'+(artwork?'Ganti PNG':'Pilih PNG')+'</button><input id="simple-png-input" type="file" accept=".png,image/png" hidden></div><div class="simple-template-action"><b>2. Tanggal acara</b><span>'+ (dateLayer?'Geser teks atau cubit langsung pada tanggal untuk mengatur posisi dan ukuran.':'Tambahkan satu tanggal otomatis di atas desain PNG.')+'</span><button class="btn" id="simple-add-date">'+(dateLayer?'Pilih / tampilkan tanggal':'＋ Tambah tanggal otomatis')+'</button></div></div><div class="simple-date-input"><label for="simple-event-date">Tanggal event</label><input id="simple-event-date" type="date" value="'+esc(dateValue)+'" disabled><small>Mengikuti otomatis tanggal acara yang tersimpan pada proyek.</small></div>'+(dateLayer?'<div class="simple-date-size-control"><label for="simple-date-size"><span>Ukuran tulisan tanggal</span><b id="simple-date-size-value">'+Math.round(dateLayer.fontSize||24)+' px</b></label><input id="simple-date-size" type="range" min="4" max="64" step="1" value="'+(dateLayer.fontSize||24)+'"></div>':'')+'<div class="simple-preview-wrap"><div class="simple-preview-stage" id="template-simple-stage" style="aspect-ratio:'+ratio+'"><canvas id="template-canvas"></canvas>'+(dateLayer?'<div class="simple-date-handle" id="template-date-handle" role="slider" aria-label="Geser dan cubit untuk mengatur tanggal">'+(dateValue?esc(fmtDate(dateValue)):'PILIH TANGGAL')+'</div>':'')+'</div></div><div class="simple-template-help">'+(dateLayer?'Sentuh dan geser tanggal dengan satu jari. Cubit dua jari tepat pada teks untuk memperbesar atau memperkecil.':'Tekan “Tambah tanggal otomatis” untuk meletakkan tanggal pada desain.')+'</div><div class="simple-template-footer"><button class="btn primary" id="simple-save-template">Simpan template</button><button class="btn" id="simple-export-template">Ekspor PNG</button></div></div>';
  $('#main').innerHTML=html;
  $('#back-templates').onclick=()=>navTo('templates');
  $('#simple-save-template').onclick=async()=>{await dbPut('templates',t);toast('Template tersimpan.')};
+ const dateSizeSlider=$('#simple-date-size');
+ dateSizeSlider?.addEventListener('input',event=>{
+  dateLayer.fontSize=Math.max(4,Math.min(64,Number(event.target.value)||4));
+  const value=$('#simple-date-size-value');if(value)value.textContent=Math.round(dateLayer.fontSize)+' px';
+  const handle=$('#template-date-handle');if(handle)handle.style.fontSize=Math.max(5,dateLayer.fontSize*($('#template-simple-stage')?.clientWidth||650)/650)+'px';
+ });
+ dateSizeSlider?.addEventListener('change',async()=>{await dbPut('templates',t);toast('Ukuran tanggal disimpan.')});
  $('#simple-upload-png').onclick=()=>$('#simple-png-input').click();
  $('#simple-png-input').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
@@ -2200,20 +2273,26 @@ function bindSimpleDateGestures(t){
   handle.style.height=clamp(Number(layer.h??10),5,35)+'%';
   handle.style.fontSize=Math.max(5,Number(layer.fontSize||24)*stage.clientWidth/650)+'px';
   handle.textContent=dateValue()?fmtDate(dateValue()):'PILIH TANGGAL';
+  const sizeSlider=$('#simple-date-size'),sizeValue=$('#simple-date-size-value');
+  if(sizeSlider)sizeSlider.value=Number(layer.fontSize||24);
+  if(sizeValue)sizeValue.textContent=Math.round(Number(layer.fontSize||24))+' px';
  };
  paint();
  const pointers=new Map();let move=null,pinch=null;
  const point=e=>({x:e.clientX,y:e.clientY});
- handle.addEventListener('pointerdown',e=>{
+ stage.addEventListener('pointerdown',e=>{
+  const rect=handle.getBoundingClientRect();
+  const startsOnDate=e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom;
+  if(pointers.size===0&&!startsOnDate)return;
   e.preventDefault();e.stopPropagation();pointers.set(e.pointerId,point(e));
-  try{handle.setPointerCapture(e.pointerId)}catch(_){}
+  try{stage.setPointerCapture(e.pointerId)}catch(_){}
   if(pointers.size===1)move={x:e.clientX,y:e.clientY,startX:Number(layer.x??20),startY:Number(layer.y??84)};
   if(pointers.size===2){
    move=null;const pts=[...pointers.values()];
    pinch={distance:Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)),font:Number(layer.fontSize||24),w:Number(layer.w||60),h:Number(layer.h||10),cx:Number(layer.x??20)+Number(layer.w??60)/2,cy:Number(layer.y??84)+Number(layer.h??10)/2};
   }
  },{passive:false});
- handle.addEventListener('pointermove',e=>{
+ stage.addEventListener('pointermove',e=>{
   if(!pointers.has(e.pointerId))return;
   pointers.set(e.pointerId,point(e));
   if(pointers.size>=2&&pinch){
@@ -2231,9 +2310,9 @@ function bindSimpleDateGestures(t){
   if(pointers.size===0){move=null;pinch=null;await dbPut('templates',t);if(activeProject()){const project=activeProject();project.updatedAt=Date.now();await dbPut('projects',project)}}
   else if(pointers.size===1){const remaining=[...pointers.values()][0];move={x:remaining.x,y:remaining.y,startX:Number(layer.x??20),startY:Number(layer.y??84)};pinch=null}
  };
- handle.addEventListener('pointerup',finish);
- handle.addEventListener('pointercancel',finish);
- handle.addEventListener('lostpointercapture',finish);
+ stage.addEventListener('pointerup',finish);
+ stage.addEventListener('pointercancel',finish);
+ stage.addEventListener('lostpointercapture',finish);
 }
 function applyTemplateCanvasTransform(){const c=$('#template-canvas'),label=$('#template-zoom-label');if(!c)return;c.style.transform='translate('+templatePanX+'px,'+templatePanY+'px) scale('+templateZoom+')';if(label)label.textContent=Math.round(templateZoom*100)+'%'}
 function bindTemplateCanvasZoom(){
@@ -2648,6 +2727,7 @@ async function init(){
  if(backgroundResult.status==='rejected')console.error('Daftar background gagal dibaca.',backgroundResult.reason);
  try{wireNav()}catch(error){console.error('Navigasi utama gagal dipasang.',error)}
  render();
+ startReangCenteredRangeObserver();
  if('serviceWorker'in navigator&&location.protocol.startsWith('http')){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
    if(window.__reangControllerReloadCheck)return;
