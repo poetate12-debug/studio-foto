@@ -398,7 +398,7 @@ function renderProjects(){
  else {html+='<div class="project-grid" id="project-grid">'+projects.slice().sort((a,b)=>b.updatedAt-a.updatedAt).map(p=>'<article class="project-card" data-project-card="'+p.id+'"><div class="project-preview">'+projectPreview(p)+'</div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(p.name)+'</h3><div class="card-meta">'+esc(p.eventDate||'Tanggal belum diatur')+'</div></div><span class="badge '+(p.photos.length?'green':'gray')+'">'+p.photos.length+' foto</span></div><div class="card-foot"><span>Diubah '+new Date(p.updatedAt).toLocaleDateString('id-ID')+'</span><div class="card-foot-actions"><button class="btn small danger" data-delete-project="'+p.id+'">Hapus</button><button class="btn small primary" data-open-project="'+p.id+'">Buka proyek →</button></div></div></div></article>').join('')+'</div>'}
  $('#main').innerHTML=html;
  $('#new-project')?.addEventListener('click',()=>showProjectModal());$('#new-project-empty')?.addEventListener('click',()=>showProjectModal());
- Array.from(document.querySelectorAll('#project-search')?.addEventListener('input',e=>$$('[data-project-card]')).forEach(c=>c.classList.toggle('hidden',!c.innerText.toLowerCase().includes(e.target.value.toLowerCase()))));
+ $('#project-search')?.addEventListener('input',e=>$$('[data-project-card]').forEach(c=>c.classList.toggle('hidden',!c.innerText.toLowerCase().includes(e.target.value.toLowerCase()))));
  Array.from(document.querySelectorAll('[data-open-project]')).forEach(b=>b.addEventListener('click',()=>openProject(b.dataset.openProject)));
  Array.from(document.querySelectorAll('[data-delete-project]')).forEach(b=>b.addEventListener('click',event=>{event.stopPropagation();const id=b.dataset.deleteProject;const target=projects.find(item=>item.id===id);if(!target)return;confirmModal('Hapus proyek?','Proyek “'+target.name+'” beserta '+(target.photos||[]).length+' foto dan semua hasil editnya akan dihapus permanen dari perangkat ini.',async()=>{await dbDelete('projects',id);projects=projects.filter(item=>item.id!==id);if(activeProjectId===id){activeProjectId=null;activePhotoIndex=0}renderProjects();toast('Proyek dihapus.')})}));
 }
@@ -407,7 +407,7 @@ function renderTools(){
  const list=[['remove','◒','Hapus background','Pisahkan subjek dan buat latar transparan. Mask dapat dikoreksi manual.'],['object','⌁','Hapus objek','Tandai objek atau tulisan yang mengganggu untuk dihapus.'],['blur','◉','Blur background','Buat efek bokeh dengan subjek tetap tajam.'],['generate','✧','Buat background','Buat latar baru dari prompt, tanpa mengubah template tersimpan.'],['enhance','✥','Enhance foto','Perjelas detail dan tingkatkan resolusi untuk cetak.'],['gaze','◎','Perbaiki arah mata','Model edit gambar untuk memperbaiki arah pandangan.']];
  html+='<div class="tool-grid">'+list.map(t=>'<article class="tool-card"><div class="tool-icon">'+t[1]+'</div><h3>'+t[2]+'</h3><p>'+t[3]+'</p><button class="btn subtle" data-tool="'+t[0]+'">Buka alat →</button><div class="tool-tag">MODEL: '+esc((settings.models[t[0]]||'auto').toUpperCase())+'</div></article>').join('')+'</div>';
  html+='<div class="notice info" style="margin-top:18px"><span>ⓘ</span><div><b>Status integrasi AI:</b> semua alat memanggil endpoint fal.ai langsung. API key hanya berada di memori aplikasi selama sesi; penggunaan model tetap dapat menimbulkan biaya.</div></div>';
- Array.from(document.querySelectorAll('#main').innerHTML=html;$$('[data-tool]')).forEach(b=>b.addEventListener('click',()=>openTool(b.dataset.tool)));
+ $('#main').innerHTML=html;$$('[data-tool]').forEach(b=>b.addEventListener('click',()=>openTool(b.dataset.tool)));
 }
 function renderTemplates(){
  const project=activeProject();const returnToProject=!!(project&&Number(project.workflowStage)===2);
@@ -439,7 +439,7 @@ function renderTemplates(){
   }
   renderTemplates();if(added)toast(added+' background ditambahkan.');
  });
- $Array.from(document.querySelectorAll('[data-delete-background]')).forEach(button=>button.addEventListener('click',()=>confirmModal('Hapus background?','Background ini akan dihapus dari daftar pilihan proyek.',async()=>{
+ $$('[data-delete-background]').forEach(button=>button.addEventListener('click',()=>confirmModal('Hapus background?','Background ini akan dihapus dari daftar pilihan proyek.',async()=>{
   const id=button.dataset.deleteBackground;await dbDelete('backgrounds',id);backgrounds=backgrounds.filter(item=>item.id!==id);for(const project of projects.filter(item=>item.backgroundId===id)){project.backgroundId=null;project.templateBackgroundPlacement={x:-20,y:-20,w:140,h:140};project.updatedAt=Date.now();await dbPut('projects',project)}renderTemplates();toast('Background dihapus.')
  })));
 }
@@ -455,7 +455,7 @@ function renderSettings(){
  html+='<div class="hr"></div><h2>Data aplikasi</h2><p class="lead">Proyek dan template tersimpan di perangkat browser ini menggunakan IndexedDB. Hapus data browser dapat menghapus proyek lokal.</p><button class="btn danger" id="reset-local">Hapus semua proyek & template lokal</button></section></div>';
  $('#main').innerHTML=html;$('#fal-key').value=apiKeySession;
  $('#ai-mode').value=settings.mode;$('#export-dpi').value=String(settings.exportDpi||300);$('#export-format').value=settings.exportFormat||'png';
- Array.from(document.querySelectorAll('#save-model-settings').addEventListener('click',()=>{settings.mode=$('#ai-mode').value;$$('[data-model]')).forEach(s=>settings.models[s.dataset.model]=s.value);settings.defaultSizeId=$('#default-size').value;settings.exportDpi=Number($('#export-dpi').value);settings.exportFormat=$('#export-format').value;saveSettings();toast('Preferensi berhasil disimpan di perangkat ini.');renderSettings()});
+ $('#save-model-settings').addEventListener('click',()=>{settings.mode=$('#ai-mode').value;$$('[data-model]').forEach(s=>settings.models[s.dataset.model]=s.value);settings.defaultSizeId=$('#default-size').value;settings.exportDpi=Number($('#export-dpi').value);settings.exportFormat=$('#export-format').value;saveSettings();toast('Preferensi berhasil disimpan di perangkat ini.');renderSettings()});
  $('#clear-api-key').addEventListener('click',()=>{$('#fal-key').value='';apiKeySession='';toast('Kolom API key dikosongkan.')});
  $('#test-fal-connection').addEventListener('click',async()=>{
    const b=$('#test-fal-connection'),status=$('#fal-connection-status');
@@ -486,7 +486,7 @@ function renderSettings(){
  });
  $('#fal-key').addEventListener('input',e=>{apiKeySession=e.target.value});
  $('#add-size').addEventListener('click',()=>showSizeModal());
- $Array.from(document.querySelectorAll('[data-delete-size]')).forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.deleteSize;if(id===settings.defaultSizeId){toast('Pilih ukuran default lain sebelum menghapus ukuran ini.');return}settings.sizes=settings.sizes.filter(s=>s.id!==id);saveSettings();renderSettings()}));
+ $$('[data-delete-size]').forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.deleteSize;if(id===settings.defaultSizeId){toast('Pilih ukuran default lain sebelum menghapus ukuran ini.');return}settings.sizes=settings.sizes.filter(s=>s.id!==id);saveSettings();renderSettings()}));
  $('#reset-local').addEventListener('click',()=>confirmModal('Hapus data lokal?','Semua proyek, foto, template, dan layer yang tersimpan di browser ini akan dihapus. Aksi ini tidak dapat dibatalkan.',async()=>{for(const p of projects)await dbDelete('projects',p.id);for(const t of templates)await dbDelete('templates',t.id);projects=[];templates=[];activeProjectId=null;activeTemplateId=null;renderSettings();toast('Data lokal dihapus.')}));
 }
 function renderErrorScreen(error, failedPage){
@@ -1818,8 +1818,8 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
  $('#pf-delete-current').onclick=()=>confirmModal('Hapus foto?','Foto ini akan dihapus dari proyek.',async()=>{p.photos.splice(activePhotoIndex,1);p.updatedAt=Date.now();await dbPut('projects',p);if(!p.photos.length){page='project-gallery';render()}else{activePhotoIndex=Math.min(activePhotoIndex,p.photos.length-1);renderPhotoEditor()}});
  $('#pf-prev-photo').onclick=()=>{activePhotoIndex=Math.max(0,activePhotoIndex-1);renderPhotoEditor()};
  $('#pf-next-photo').onclick=()=>{activePhotoIndex=Math.min(p.photos.length-1,activePhotoIndex+1);renderPhotoEditor()};
- $Array.from(document.querySelectorAll('[data-pf-thumb]')).forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.pfThumb);renderPhotoEditor()});
- $Array.from(document.querySelectorAll('[data-pf-stage]')).forEach(b=>b.onclick=async()=>{
+ $$('[data-pf-thumb]').forEach(b=>b.onclick=()=>{activePhotoIndex=Number(b.dataset.pfThumb);renderPhotoEditor()});
+ $$('[data-pf-stage]').forEach(b=>b.onclick=async()=>{
   const target=Number(b.dataset.pfStage);
   if(target===stageIndex){const currentEligible=firstEligiblePhotoIndex(p,target);if(currentEligible>=0){activePhotoIndex=currentEligible;renderPhotoEditor()}return}
   if(!stageCanBeOpened(p,target)){
@@ -1930,9 +1930,9 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   $('#pf-save-preset').onclick=()=>showModal('Simpan preset','<div class="field"><label>Nama preset</label><input id="pf-preset-name" value="Preset baru" maxlength="40"></div>','<button class="btn" id="pf-preset-cancel">Batal</button><button class="btn primary" id="pf-preset-confirm">Simpan</button>');
   $('#pf-preset-cancel')?.addEventListener('click',closeModal);
   $('#pf-preset-confirm')?.addEventListener('click',()=>{const name=$('#pf-preset-name').value.trim();if(!name)return;settings.photoPresets=settings.photoPresets||[];settings.photoPresets.push({name,adjust:{...ph.adjust}});saveSettings();closeModal();toast('Preset disimpan di pengaturan.')});
-  $Array.from(document.querySelectorAll('[data-pf-color]')).forEach(b=>b.onclick=()=>{
+  $$('[data-pf-color]').forEach(b=>b.onclick=()=>{
    ph.adjust=ph.adjust||{};ph.adjust.selectedColor=b.dataset.pfColor;
-   $Array.from(document.querySelectorAll('[data-pf-color]')).forEach(dot=>dot.classList.toggle('active',dot.dataset.pfColor===ph.adjust.selectedColor));
+   $$('[data-pf-color]').forEach(dot=>dot.classList.toggle('active',dot.dataset.pfColor===ph.adjust.selectedColor));
    const tune=(adjustmentValues(ph).colorMix[ph.adjust.selectedColor]||{sat:0,bright:0});
    const sat=$('#pf-slider-color-sat'),bright=$('#pf-slider-color-bright');
    if(sat){sat.value=String(tune.sat||0);sat.style.setProperty('--pf-range-fill',((Number(sat.value)-Number(sat.min))/(Number(sat.max)-Number(sat.min))*100)+'%')}
@@ -1967,7 +1967,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   scheduleColorMixPreview(ph);
  }
  if(stageIndex===1){
-  $Array.from(document.querySelectorAll('[data-cutout-mode]')).forEach(b=>b.onclick=()=>{projectCutoutMode=b.dataset.cutoutMode;cutoutBrushEnabledPhotoId=null;renderPhotoEditor()});
+  $$('[data-cutout-mode]').forEach(b=>b.onclick=()=>{projectCutoutMode=b.dataset.cutoutMode;cutoutBrushEnabledPhotoId=null;renderPhotoEditor()});
   $('#pf-cutout-model').onchange=()=>{settings.models.remove=$('#pf-cutout-model').value;saveSettings()};
   $('#pf-cutout-blur-strength')?.addEventListener('input',e=>{const label=$('#pf-cutout-blur-value');if(label)label.textContent=e.target.value});
   $('#pf-run-cutout').onclick=()=>runProjectCutout(p,ph);
@@ -2137,12 +2137,12 @@ function renderProjectEditor(){
  $('#main').innerHTML=html;
  $('#back-projects').onclick=()=>navTo('projects');$('#add-photos')?.addEventListener('click',()=>$('#photo-files').click());$('#upload-first')?.addEventListener('click',()=>$('#photo-files').click());
  $('#photo-files')?.addEventListener('change',e=>handlePhotoUpload(e.target.files));
- $Array.from(document.querySelectorAll('[data-photo-index]')).forEach(b=>b.addEventListener('click',()=>{activePhotoIndex=Number(b.dataset.photoIndex);renderProjectEditor()}));
+ $$('[data-photo-index]').forEach(b=>b.addEventListener('click',()=>{activePhotoIndex=Number(b.dataset.photoIndex);renderProjectEditor()}));
  $('#project-template')?.addEventListener('change',async e=>{p.templateId=e.target.value||null;p.updatedAt=Date.now();const tpl=templates.find(t=>t.id===p.templateId)||null;for(const phx of p.photos){const preview=await renderComposite(p,phx,tpl,170);phx.finalThumb=preview.toDataURL('image/jpeg',.72)}await dbPut('projects',p);renderProjectEditor()});
  $('#make-template')?.addEventListener('click',()=>showTemplateModal());
  $('#add-photo-layer')?.addEventListener('click',()=>$('#photo-layer-input').click());
  $('#photo-layer-input')?.addEventListener('change',async e=>{if(!e.target.files[0])return;const src=await dataURL(e.target.files[0]);ph.layers=ph.layers||[];ph.layers.push({id:uid(),name:e.target.files[0].name,src,type:'image',x:12,y:12,w:76,h:76,opacity:1});p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor()});
- $Array.from(document.querySelectorAll('[data-remove-photo-layer]')).forEach(b=>b.addEventListener('click',async()=>{ph.layers=ph.layers.filter(l=>l.id!==b.dataset.removePhotoLayer);await dbPut('projects',p);renderProjectEditor()}));
+ $$('[data-remove-photo-layer]').forEach(b=>b.addEventListener('click',async()=>{ph.layers=ph.layers.filter(l=>l.id!==b.dataset.removePhotoLayer);await dbPut('projects',p);renderProjectEditor()}));
  ['brightness','contrast','saturation'].forEach(k=>$('#'+k)?.addEventListener('input',e=>{ph.adjust=ph.adjust||{};ph.adjust[k==='brightness'?'brightness':k==='contrast'?'contrast':'saturation']=Number(e.target.value);const labelEl=$('#'+(k==='brightness'?'bright':k)+'-val');if(labelEl)labelEl.textContent=e.target.value+'%';schedulePhotoRender()}));['x','y','w','h'].forEach(k=>$('#subject-'+k)?.addEventListener('input',e=>{ph.subject=ph.subject||{x:9,y:13,w:82,h:79};ph.subject[k]=Number(e.target.value);const subjectLabel=$('#subject-'+k+'-val');if(subjectLabel)subjectLabel.textContent=e.target.value+'%';schedulePhotoRender()}));
  $('#reset-adjust')?.addEventListener('click',async()=>{ph.adjust={brightness:100,contrast:100,saturation:100};ph.subject={x:9,y:13,w:82,h:79};await dbPut('projects',p);renderProjectEditor()});
  $('#save-project-meta')?.addEventListener('click',async()=>{p.name=$('#project-name-edit').value.trim()||p.name;p.eventDate=$('#project-date').value;p.updatedAt=Date.now();await dbPut('projects',p);renderProjectEditor();toast('Detail proyek disimpan.')});
@@ -2645,7 +2645,7 @@ function renderToolRunner(){
  $('#run-tool').onclick=async()=>{if(!toolFileData){toast('Unggah foto terlebih dahulu.');return}if(key==='enhance'){await runFalEnhancement();return}await runFalFeature()};
 }
 function confirmModal(title,text,action){showModal(title,'<p style="font-size:13px;line-height:1.6;color:#666b7f">'+esc(text)+'</p>','<button class="btn" id="confirm-cancel">Batal</button><button class="btn danger" id="confirm-yes">Ya, lanjutkan</button>');$('#confirm-cancel').onclick=closeModal;$('#confirm-yes').onclick=async()=>{closeModal();await action()}}
-function wireNav(){$Array.from(document.querySelectorAll('[data-page]')).forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)))}
+function wireNav(){$$('[data-page]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)))}
 async function init(){
  try{db=await dbOpen()}catch(error){db=null;console.warn('IndexedDB tidak tersedia; mencoba penyimpanan cadangan.',error)}
  const [projectResult,templateResult,backgroundResult]=await Promise.allSettled([dbGetAll('projects'),dbGetAll('templates'),dbGetAll('backgrounds')]);
