@@ -229,6 +229,37 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .background-library-card-body{gap:6px;padding:8px}
 .background-library-card-body b{font-size:11px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:520px){.pf-template-picker,.pf-background-picker{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.pf-template-choice,.pf-background-choice{padding:5px;font-size:10px}.pf-template-choice.selected,.pf-background-choice.selected{padding:4px}.pf-picker-heading .btn{padding:6px 8px;font-size:10px}}
+/* Reang Studio Foto: template menus, compact date, delete controls and stable touch surface */
+.simple-date-input{gap:4px;padding:8px 10px;border-radius:10px}
+.simple-date-input label{font-size:12px}
+.simple-date-input input{min-height:34px;height:34px;padding:4px 9px;font-size:13px;font-weight:500;font-family:inherit;line-height:1.2}
+.simple-date-input small{font-size:10px}
+.simple-date-handle{min-height:20px;padding:1px;border-width:1px}
+.pf-stage-picker-block{display:grid;gap:6px;margin:12px 0}
+.pf-stage-picker-block>label{font-size:12px;font-weight:800;color:#535a6b}
+.pf-stage-picker-current{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e4e7ef;border-radius:12px;background:#fff;min-height:70px}
+.pf-stage-picker-thumb{display:flex;flex:none;width:58px;height:58px;align-items:center;justify-content:center;overflow:hidden;border-radius:8px;background:#f1f2f6;color:#8a8fa0}
+.pf-stage-picker-thumb img{width:100%;height:100%;object-fit:cover}
+.pf-stage-picker-thumb.empty{font-size:22px}
+.pf-stage-picker-info{display:grid;gap:3px;flex:1;min-width:0}
+.pf-stage-picker-info b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-stage-picker-info small{font-size:10px;color:#858b99}
+.pf-stage-picker-current>.btn{flex:none}
+.pf-modal-picker-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.pf-modal-picker-card{display:flex;min-width:0;flex-direction:column;align-items:stretch;gap:4px;padding:6px;border:1px solid #e3e6ee;border-radius:10px;background:#fff;text-align:left;color:#414757;overflow:hidden}
+.pf-modal-picker-thumb{display:flex;width:100%;aspect-ratio:4/3;align-items:center;justify-content:center;overflow:hidden;border-radius:7px;background:#f0f1f5}
+.pf-modal-picker-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.pf-modal-picker-thumb.empty{color:#858b99;font-size:18px}
+.pf-modal-picker-card b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.pf-modal-picker-card small{font-size:10px;color:#858b99}
+.card-foot-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pf-photo-card-wrap{position:relative;min-width:0}
+.pf-photo-card-wrap .pf-photo-card{display:block;width:100%}
+.pf-photo-delete{position:absolute;top:7px;right:7px;z-index:4;width:28px;height:28px;border:1px solid #ffffffb0;border-radius:50%;background:#1a1d28de;color:#fff;font-size:19px;line-height:1;box-shadow:0 2px 8px #0003}
+.pf-photo-delete:active{background:#c43e4b}
+.pf-template-adjust-overlay{pointer-events:none!important;background:transparent!important}
+.pf-image-stage{background:rgba(0,0,0,.001);pointer-events:auto;touch-action:none}
+@media(max-width:520px){.pf-modal-picker-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.pf-modal-picker-card{padding:5px}.pf-stage-picker-current{min-height:64px}.pf-stage-picker-thumb{width:52px;height:52px}}
 </style>
 </head>
 <body>
@@ -364,11 +395,12 @@ function renderProjects(){
  html+='<div class="stats"><div class="stat"><div><div class="stat-top">Total proyek <span class="stat-icon">▦</span></div><div class="stat-num">'+projects.length+'</div><div class="stat-sub">Proyek tersimpan di perangkat</div></div></div><div class="stat"><div><div class="stat-top">Jumlah foto <span class="stat-icon">▧</span></div><div class="stat-num">'+totalPhotos+'</div><div class="stat-sub">Foto dalam semua proyek</div></div></div><div class="stat"><div><div class="stat-top">Sudah diedit <span class="stat-icon">✧</span></div><div class="stat-num">'+allEdited+'</div><div class="stat-sub">Foto dengan penyesuaian tersimpan</div></div></div></div>';
  html+='<div class="section-head"><div><h2>Proyek Anda</h2><p>Foto asli tetap tersimpan terpisah dari hasil edit akhir.</p></div><div class="search"><span>⌕</span><input id="project-search" placeholder="Cari proyek..."></div></div>';
  if(!projects.length){html+='<div class="empty-state"><div class="big">✦</div><h3>Mulai proyek foto pertama Anda</h3><p>Buat proyek, masukkan foto, pilih template berukuran A3 atau ukuran khusus, lalu susun hasil dengan layer terpisah.</p><button class="btn primary" id="new-project-empty">＋ Buat proyek pertama</button></div>'}
- else {html+='<div class="project-grid" id="project-grid">'+projects.slice().sort((a,b)=>b.updatedAt-a.updatedAt).map(p=>'<article class="project-card" data-project-card="'+p.id+'"><div class="project-preview">'+projectPreview(p)+'</div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(p.name)+'</h3><div class="card-meta">'+esc(p.eventDate||'Tanggal belum diatur')+'</div></div><span class="badge '+(p.photos.length?'green':'gray')+'">'+p.photos.length+' foto</span></div><div class="card-foot"><span>Diubah '+new Date(p.updatedAt).toLocaleDateString('id-ID')+'</span><button class="btn small primary" data-open-project="'+p.id+'">Buka proyek →</button></div></div></article>').join('')+'</div>'}
+ else {html+='<div class="project-grid" id="project-grid">'+projects.slice().sort((a,b)=>b.updatedAt-a.updatedAt).map(p=>'<article class="project-card" data-project-card="'+p.id+'"><div class="project-preview">'+projectPreview(p)+'</div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(p.name)+'</h3><div class="card-meta">'+esc(p.eventDate||'Tanggal belum diatur')+'</div></div><span class="badge '+(p.photos.length?'green':'gray')+'">'+p.photos.length+' foto</span></div><div class="card-foot"><span>Diubah '+new Date(p.updatedAt).toLocaleDateString('id-ID')+'</span><div class="card-foot-actions"><button class="btn small danger" data-delete-project="'+p.id+'">Hapus</button><button class="btn small primary" data-open-project="'+p.id+'">Buka proyek →</button></div></div></div></article>').join('')+'</div>'}
  $('#main').innerHTML=html;
  $('#new-project')?.addEventListener('click',()=>showProjectModal());$('#new-project-empty')?.addEventListener('click',()=>showProjectModal());
  $('#project-search')?.addEventListener('input',e=>$$('[data-project-card]').forEach(c=>c.classList.toggle('hidden',!c.innerText.toLowerCase().includes(e.target.value.toLowerCase()))));
- $$('[data-open-project]').forEach(b=>b.addEventListener('click',()=>openProject(b.dataset.openProject)));
+ $('[data-open-project]').forEach(b=>b.addEventListener('click',()=>openProject(b.dataset.openProject)));
+ $('[data-delete-project]').forEach(b=>b.addEventListener('click',event=>{event.stopPropagation();const id=b.dataset.deleteProject;const target=projects.find(item=>item.id===id);if(!target)return;confirmModal('Hapus proyek?','Proyek “'+target.name+'” beserta '+(target.photos||[]).length+' foto dan semua hasil editnya akan dihapus permanen dari perangkat ini.',async()=>{await dbDelete('projects',id);projects=projects.filter(item=>item.id!==id);if(activeProjectId===id){activeProjectId=null;activePhotoIndex=0}renderProjects();toast('Proyek dihapus.')})}));
 }
 function renderTools(){
  let html=head('AI WORKSPACE','Alat foto','Enam alat AI terhubung langsung ke fal.ai. Masukkan API key di Pengaturan → AI & fal.ai; mode tanpa backend tetap memiliki risiko key diekstrak dari aplikasi.','');
@@ -385,13 +417,14 @@ function renderTemplates(){
  else html+='<div class="background-library-grid">'+backgrounds.map(bg=>'<article class="background-library-card"><img src="'+esc(bg.src)+'" alt="'+esc(bg.name)+'"><div class="background-library-card-body"><b>'+esc(bg.name)+'</b><button class="btn small danger" data-delete-background="'+bg.id+'">Hapus</button></div></article>').join('')+'</div>';
  html+='</section>';
  if(!templates.length)html+='<div class="empty-state"><div class="big">▧</div><h3>Buat template sesuai kebutuhan cetak</h3><p>Mulai dari kanvas A3, tambahkan PNG bingkai, logo, dan elemen desain.</p><button class="btn primary" id="new-template-empty">＋ Buat template</button></div>';
- else html+='<div class="project-grid">'+templates.map(t=>'<article class="project-card"><div class="project-preview template-library-preview"><img class="template-library-thumb" data-template-library-thumb="'+esc(t.id)+'" alt="Pratinjau '+esc(t.name)+'" loading="lazy"></div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(t.name)+'</h3><div class="card-meta">'+esc(t.sizeName)+' · '+t.widthCm+' × '+t.heightCm+' cm</div></div><span class="badge">'+t.layers.length+' layer</span></div><div class="card-foot"><span>Template tersimpan</span><button class="btn small primary" data-edit-template="'+t.id+'">Edit template →</button></div></div></article>').join('')+'</div>';
+ else html+='<div class="project-grid">'+templates.map(t=>'<article class="project-card"><div class="project-preview template-library-preview"><img class="template-library-thumb" data-template-library-thumb="'+esc(t.id)+'" alt="Pratinjau '+esc(t.name)+'" loading="lazy"></div><div class="card-body"><div class="card-title-row"><div><h3>'+esc(t.name)+'</h3><div class="card-meta">'+esc(t.sizeName)+' · '+t.widthCm+' × '+t.heightCm+' cm</div></div><span class="badge">'+t.layers.length+' layer</span></div><div class="card-foot"><span>Template tersimpan</span><div class="card-foot-actions"><button class="btn small danger" data-delete-template="'+t.id+'">Hapus</button><button class="btn small primary" data-edit-template="'+t.id+'">Edit template →</button></div></div></div></article>').join('')+'</div>';
  $('#main').innerHTML=html;
  paintTemplateThumbnails('[data-template-library-thumb]');
  $('#back-to-template-project')?.addEventListener('click',()=>{page='photo-editor';renderPhotoEditor()});
  $('#new-template')?.addEventListener('click',()=>showTemplateModal());
  $('#new-template-empty')?.addEventListener('click',()=>showTemplateModal());
- $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>openTemplate(b.dataset.editTemplate)));
+ $('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>openTemplate(b.dataset.editTemplate)));
+ $('[data-delete-template]').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.deleteTemplate;const target=templates.find(item=>item.id===id);if(!target)return;const refs=projects.filter(item=>item.templateId===id).length;confirmModal('Hapus template?','Template “'+target.name+'” akan dihapus. '+(refs?refs+' proyek yang memakai template ini akan dilepas dari template tersebut.':'')+' Tindakan ini tidak dapat dibatalkan.',async()=>{await dbDelete('templates',id);templates=templates.filter(item=>item.id!==id);for(const project of projects.filter(item=>item.templateId===id)){project.templateId=null;project.updatedAt=Date.now();await dbPut('projects',project)}if(activeTemplateId===id){activeTemplateId=null;page='templates'}renderTemplates();toast('Template dihapus.')})}));
  $('#add-backgrounds')?.addEventListener('click',()=>$('#background-library-files').click());
  $('#background-library-files')?.addEventListener('change',async e=>{
   const files=Array.from(e.target.files||[]).filter(file=>file.type.startsWith('image/'));
@@ -407,7 +440,7 @@ function renderTemplates(){
   renderTemplates();if(added)toast(added+' background ditambahkan.');
  });
  $$('[data-delete-background]').forEach(button=>button.addEventListener('click',()=>confirmModal('Hapus background?','Background ini akan dihapus dari daftar pilihan proyek.',async()=>{
-  const id=button.dataset.deleteBackground;await dbDelete('backgrounds',id);backgrounds=backgrounds.filter(item=>item.id!==id);renderTemplates();toast('Background dihapus.')
+  const id=button.dataset.deleteBackground;await dbDelete('backgrounds',id);backgrounds=backgrounds.filter(item=>item.id!==id);for(const project of projects.filter(item=>item.backgroundId===id)){project.backgroundId=null;project.templateBackgroundPlacement={x:-20,y:-20,w:140,h:140};project.updatedAt=Date.now();await dbPut('projects',project)}renderTemplates();toast('Background dihapus.')
  })));
 }
 function renderSettings(){
@@ -511,7 +544,7 @@ function ensureTemplateEventDateLayer(template,project){
  let layer=template.layers.find(item=>item.id===template.simpleDateLayerId&&item.type==='text');
  if(!layer)layer=template.layers.find(item=>item.type==='text'&&(/TANGGAL ACARA/i.test(String(item.text||''))||/tanggal otomatis/i.test(String(item.name||''))));
  if(!layer){
-  layer={id:uid(),name:'Tanggal acara otomatis',type:'text',text:'TANGGAL ACARA',x:8,y:89,w:84,h:7,fontSize:14,color:'#ffffff',bold:true,align:'center',visible:true,locked:false,opacity:1,eventDateAuto:true};
+  layer={id:uid(),name:'Tanggal acara otomatis',type:'text',text:'TANGGAL ACARA',x:8,y:6,w:84,h:9,fontSize:32,color:'#ffffff',bold:true,align:'center',visible:true,locked:false,opacity:1,eventDateAuto:true};
   template.layers.push(layer);
  }
  layer.type='text';layer.text='TANGGAL ACARA';layer.name=layer.name||'Tanggal acara otomatis';layer.visible=true;layer.locked=false;layer.align='center';layer.bold=true;
@@ -522,7 +555,7 @@ function ensureTemplateEventDateLayer(template,project){
  layer.color=layer.color||'#ffffff';
  layer.opacity=Number.isFinite(Number(layer.opacity))?Number(layer.opacity):1;
  layer.eventDateAuto=true;
- layer.fontSize=Math.max(8,Math.min(16,Number(layer.fontSize)||14));
+ layer.fontSize=Math.max(28,Math.min(64,Number(layer.fontSize)||32));
  template.simpleDateLayerId=layer.id;
  template.eventDate=project?projectEventDate(project):(template.eventDate||localDateInputValue());
  return layer;
@@ -537,7 +570,7 @@ function sizeForTemplate(t){let w=t.widthCm||29.7,h=t.heightCm||42;return{w,h,dp
 function normalizedToSize(n,size){return n/100*size}
 function paintTemplateThumbnails(selector){
  Array.from(document.querySelectorAll(selector)).forEach(async image=>{
-  const id=image.dataset.templateThumb||image.dataset.templateLibraryThumb;
+  const id=image.dataset.templateThumb||image.dataset.templateLibraryThumb||image.dataset.stageTemplateThumb;
   const template=templates.find(item=>item.id===id);
   if(!template)return;
   try{const canvas=await renderComposite(null,null,template,220);if(image.isConnected)image.src=canvas.toDataURL('image/jpeg',.82)}catch(error){console.warn('Thumbnail template gagal dirender',error)}
@@ -1338,7 +1371,7 @@ function renderProjectGallery(){
  }else{
   html+='<div class="pf-photo-grid">'+photos.map((ph,i)=>{
    ensurePhotoWorkflow(ph);const count=photoStageCount(ph);const selected=selectedPhotoIds.has(ph.id);
-   return '<button class="pf-photo-card '+(selected?'selected':'')+'" data-pf-photo="'+i+'" aria-label="'+esc(ph.name)+'"><div class="pf-photo-image"><img loading="lazy" src="'+esc(ph.finalThumb||ph.workflowResults?.face||ph.workflowResults?.cutout||ph.src)+'" alt="'+esc(ph.name)+'"><span class="pf-photo-progress '+(count===5?'complete':'')+'">'+(count===5?'✓ ':'')+count+'/5</span>'+(gallerySelectMode?'<span class="pf-select-mark">'+(selected?'✓':'＋')+'</span>':'')+'</div><span class="pf-photo-name">'+esc(ph.name)+'</span></button>';
+   return '<div class="pf-photo-card-wrap"><button class="pf-photo-card '+(selected?'selected':'')+'" data-pf-photo="'+i+'" aria-label="'+esc(ph.name)+'"><div class="pf-photo-image"><img loading="lazy" src="'+esc(ph.finalThumb||ph.workflowResults?.face||ph.workflowResults?.cutout||ph.src)+'" alt="'+esc(ph.name)+'"><span class="pf-photo-progress '+(count===5?'complete':'')+'">'+(count===5?'✓ ':'')+count+'/5</span>'+(gallerySelectMode?'<span class="pf-select-mark">'+(selected?'✓':'＋')+'</span>':'')+'</div><span class="pf-photo-name">'+esc(ph.name)+'</span></button><button type="button" class="pf-photo-delete" data-delete-photo="'+esc(ph.id)+'" aria-label="Hapus foto '+esc(ph.name)+'">×</button></div>';
   }).join('')+'</div>';
  }
  html+='</section>';
@@ -1355,12 +1388,13 @@ function renderProjectGallery(){
    p.photos=p.photos.filter(ph=>!selectedPhotoIds.has(ph.id));selectedPhotoIds.clear();gallerySelectMode=false;p.updatedAt=Date.now();await dbPut('projects',p);renderProjectGallery();toast('Foto terpilih dihapus.')
   });
  });
- $$('[data-pf-photo]').forEach(b=>b.addEventListener('click',()=>{
+ $('[data-pf-photo]').forEach(b=>b.addEventListener('click',()=>{
   const i=Number(b.dataset.pfPhoto);const ph=p.photos[i];if(!ph)return;
   if(gallerySelectMode){if(selectedPhotoIds.has(ph.id))selectedPhotoIds.delete(ph.id);else selectedPhotoIds.add(ph.id);renderProjectGallery();return}
   activePhotoIndex=i;
   page='photo-editor';render();
  }));
+ $('[data-delete-photo]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();const id=button.dataset.deletePhoto;const target=p.photos.find(item=>item.id===id);if(!target)return;confirmModal('Hapus foto?','Foto “'+target.name+'” beserta hasil editnya akan dihapus dari proyek ini.',async()=>{p.photos=p.photos.filter(item=>item.id!==id);selectedPhotoIds.delete(id);p.updatedAt=Date.now();await dbPut('projects',p);activePhotoIndex=Math.min(activePhotoIndex,Math.max(0,p.photos.length-1));renderProjectGallery();toast('Foto dihapus.')})}));
 }
 async function advanceWorkflowPhoto(p,ph,key){
  ensurePhotoWorkflow(ph);ph.workflow[key]=true;p.updatedAt=Date.now();
@@ -1751,10 +1785,10 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   const currentCutoutModel=['rmbg','birefnet','bria'].includes(settings.models.remove)?settings.models.remove:'bria';
   html+='<div class="pf-stage-panel pf-cutout-panel"><span class="pf-stage-eyebrow">TAHAP 2 DARI 5</span><h2>Cutout / Latar foto</h2><p>Pilih hasil yang Anda inginkan. Semua diproses langsung di proyek ini dan foto sumber tetap aman.</p><div class="pf-cutout-modes"><button type="button" class="pf-cutout-mode '+(projectCutoutMode==='cutout'?'active':'')+'" data-cutout-mode="cutout">✂ Cutout<small>Transparan</small></button><button type="button" class="pf-cutout-mode '+(projectCutoutMode==='generate'?'active':'')+'" data-cutout-mode="generate">✧ Background AI<small>Latar baru</small></button><button type="button" class="pf-cutout-mode '+(projectCutoutMode==='blur'?'active':'')+'" data-cutout-mode="blur">◉ Blur bokeh<small>Latar lembut</small></button></div><div class="field"><label for="pf-cutout-model">Model pemisahan subjek</label><select id="pf-cutout-model"><option value="rmbg" '+(currentCutoutModel==='rmbg'?'selected':'')+'>Ekonomis & cepat — RMBG</option><option value="birefnet" '+(currentCutoutModel==='birefnet'?'selected':'')+'>Seimbang — BiRefNet</option><option value="bria" '+(currentCutoutModel==='bria'?'selected':'')+'>Kualitas tinggi — Bria RMBG 2.0</option></select><small>Tarif mengikuti akun fal.ai dan model yang dipilih.</small></div><div id="pf-cutout-extra" class="pf-cutout-extra '+(projectCutoutMode==='generate'?'':'hidden')+'"><div class="field"><label for="pf-cutout-background-prompt">Deskripsi background AI</label><textarea id="pf-cutout-background-prompt" placeholder="Contoh: taman bunga elegan, cahaya sore lembut, latar realistis, subjek dan wajah tetap sama."></textarea></div></div><div id="pf-cutout-blur-options" class="pf-cutout-extra '+(projectCutoutMode==='blur'?'':'hidden')+'"><div class="field"><label for="pf-cutout-blur-strength">Kekuatan blur bokeh <span id="pf-cutout-blur-value">12</span></label><input type="range" id="pf-cutout-blur-strength" min="1" max="30" value="12"></div><div class="field"><label for="pf-cutout-blur-style">Gaya bokeh</label><select id="pf-cutout-blur-style"><option value="soft">Lembut</option><option value="circle">Lingkaran</option><option value="strong">Kuat</option></select><small>Subjek tetap tajam; latar foto diburamkan.</small></div></div><button class="btn primary workflow-primary" id="pf-run-cutout">✂ '+(workflowDone(ph,'cutout')?'Proses ulang':'Proses pilihan')+'</button><div id="pf-cutout-status" class="pf-note">'+(workflowDone(ph,'cutout')?'✓ Hasil tersimpan pada proyek.':'Pilih Cutout, Background AI, atau Blur bokeh.')+'</div><div class="pf-cutout-brush-tools '+(projectCutoutMode==='cutout'?'':'hidden')+'" id="pf-cutout-brush-tools"><h3>Koreksi manual dengan kuas</h3><p>Setelah cutout transparan selesai, gunakan kuas untuk memulihkan subjek atau menghapus sisa latar.</p><button type="button" class="btn '+(cutoutBrushEnabledPhotoId===ph.id?'primary':'')+'" id="pf-cutout-brush-toggle">'+(cutoutBrushEnabledPhotoId===ph.id?'✓ Kuas aktif':'Aktifkan kuas koreksi')+'</button><div class="'+(cutoutBrushEnabledPhotoId===ph.id?'':'hidden')+'" id="pf-cutout-brush-options"><div class="field"><label for="pf-cutout-brush-mode">Mode kuas</label><select id="pf-cutout-brush-mode"><option value="add" '+(cutoutBrushMode==='add'?'selected':'')+'>Tambah subjek / pulihkan</option><option value="remove" '+(cutoutBrushMode==='remove'?'selected':'')+'>Hapus / transparan</option></select></div><div class="field"><label for="pf-cutout-brush-size">Ukuran kuas <span id="pf-cutout-brush-size-value">4%</span></label><input type="range" id="pf-cutout-brush-size" min="1" max="12" step="1" value="4"></div><button type="button" class="btn small" id="pf-cutout-brush-done">Selesai mengoreksi</button></div></div><p class="pf-note">Hasil akan disimpan terpisah dari foto sumber.</p></div>';
  }else if(stageIndex===2){
-  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 3 DARI 5</span><h2>Template proyek</h2><p>Pilih desain dan background dari thumbnail. Geser objek pada pratinjau tanpa garis panduan yang menutupi foto.</p><div class="field"><label>Template desain</label><div class="pf-template-picker" id="pf-template-picker"><button type="button" class="pf-template-choice '+(!p.templateId?'selected':'')+'" data-pf-template-clear><span class="pf-template-choice-preview pf-template-empty-preview">Tanpa template</span><span class="pf-template-choice-name">Tanpa template</span></button>'+
-  templates.map(t=>'<button type="button" class="pf-template-choice '+(p.templateId===t.id?'selected':'')+'" data-pf-template="'+esc(t.id)+'"><span class="pf-template-choice-preview"><img data-template-thumb="'+esc(t.id)+'" alt="'+esc(t.name)+'"></span><span class="pf-template-choice-name">'+esc(t.name)+'</span><small>'+esc(t.sizeName)+'</small></button>').join('')+'</div></div><div class="field"><div class="pf-picker-heading"><label>Background</label><button type="button" class="btn small" id="pf-manage-backgrounds">Kelola gambar</button></div><div class="pf-background-picker" id="pf-background-picker"><button type="button" class="pf-background-choice '+(!p.backgroundId?'selected':'')+'" data-pf-background-clear><span class="pf-background-choice-preview pf-background-empty-preview">Bawaan template</span><span>Bawaan template</span></button>'+
-  backgrounds.map(bg=>'<button type="button" class="pf-background-choice '+(p.backgroundId===bg.id?'selected':'')+'" data-pf-background="'+esc(bg.id)+'"><span class="pf-background-choice-preview"><img src="'+esc(bg.src)+'" alt="'+esc(bg.name)+'"></span><span>'+esc(bg.name)+'</span></button>').join('')+'</div><div class="hint">'+(backgrounds.length?'Ketuk gambar untuk memilih background yang akan dipasang di belakang objek karnaval.':'Belum ada background. Tekan Kelola gambar untuk menambahkan thumbnail background.')+'</div></div><div class="pf-template-target-switch"><button type="button" id="pf-adjust-background" class="'+((p.templateAdjustTarget||'subject')==='background'?'active':'')+'">Atur background</button><button type="button" id="pf-adjust-subject" class="'+((p.templateAdjustTarget||'subject')==='subject'?'active':'')+'">Atur objek karnaval</button></div><p class="pf-template-adjust-help" id="pf-template-adjust-help">'+((p.templateAdjustTarget||'subject')==='background'?'Geser untuk memindahkan background, cubit dua jari untuk memperbesar atau memperkecil.':'Geser objek karnaval dengan satu jari. Cubit dua jari untuk mengubah ukurannya.')+'</p><button class="btn primary workflow-primary" id="pf-apply-template">Terapkan template & lanjut</button></div>';
- }else if(stageIndex===3){
+  const stageTemplate=templates.find(item=>item.id===p.templateId)||null;
+  const stageBackground=backgrounds.find(item=>item.id===p.backgroundId)||null;
+  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 3 DARI 5</span><h2>Template proyek</h2><p>Pilih template dan background melalui menu. Atur posisi objek dan latar langsung pada foto.</p><div class="pf-stage-picker-block"><label>Template desain</label><div class="pf-stage-picker-current">'+(stageTemplate?'<span class="pf-stage-picker-thumb"><img data-stage-template-thumb="'+esc(stageTemplate.id)+'" alt="'+esc(stageTemplate.name)+'"></span><span class="pf-stage-picker-info"><b>'+esc(stageTemplate.name)+'</b><small>'+esc(stageTemplate.sizeName)+'</small></span>':'<span class="pf-stage-picker-thumb empty">▧</span><span class="pf-stage-picker-info"><b>Tanpa template</b><small>Pilih desain untuk proyek ini</small></span>')+'<button type="button" class="btn small" id="pf-open-template-menu">Pilih</button></div></div><div class="pf-stage-picker-block"><label>Background</label><div class="pf-stage-picker-current">'+(stageBackground?'<span class="pf-stage-picker-thumb"><img src="'+esc(stageBackground.src)+'" alt="'+esc(stageBackground.name)+'"></span><span class="pf-stage-picker-info"><b>'+esc(stageBackground.name)+'</b><small>Background proyek</small></span>':'<span class="pf-stage-picker-thumb empty">▧</span><span class="pf-stage-picker-info"><b>Bawaan template</b><small>Pilih background tambahan</small></span>')+'<button type="button" class="btn small" id="pf-open-background-menu">Pilih</button></div></div><div class="pf-template-target-switch"><button type="button" id="pf-adjust-background" class="'+((p.templateAdjustTarget||'subject')==='background'?'active':'')+'">Atur background</button><button type="button" id="pf-adjust-subject" class="'+((p.templateAdjustTarget||'subject')==='subject'?'active':'')+'">Atur objek karnaval</button></div><p class="pf-template-adjust-help" id="pf-template-adjust-help">'+((p.templateAdjustTarget||'subject')==='background'?'Geser untuk memindahkan background, cubit dua jari untuk memperbesar atau memperkecil.':'Geser objek karnaval dengan satu jari. Cubit dua jari untuk mengubah ukurannya.')+'</p><button class="btn primary workflow-primary" id="pf-apply-template">Terapkan template & lanjut</button></div>';
+}else if(stageIndex===3){
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 4 DARI 5</span><h2>Wajah</h2><p>Perbaiki arah pandangan mata menggunakan AI. Periksa hasil sebelum menggunakannya.</p><button class="btn primary workflow-primary" id="pf-run-face">✧ Proses Wajah dengan AI</button><p class="pf-note">'+(workflowDone(ph,'face')?'✓ Hasil Wajah sudah tersimpan untuk foto ini.':'Hasil akan digunakan pada tahap Ekspor.')+'</p></div>';
  }else{
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 5 DARI 5</span><h2>Ekspor foto</h2><p>Ekspor foto ini dengan seluruh penyesuaian dan template yang dipilih.</p><button class="btn primary workflow-primary" id="pf-export-this">⇩ Ekspor foto ini</button><button class="btn workflow-primary" id="pf-export-all">Ekspor semua foto</button></div>';
@@ -1762,6 +1796,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
  html+='</div></div><div class="pf-thumbnails">'+p.photos.map((photo,i)=>'<button class="pf-thumb '+(i===activePhotoIndex?'active':'')+'" data-pf-thumb="'+i+'"><img loading="lazy" src="'+esc(photo.finalThumb||photo.workflowResults?.face||photo.workflowResults?.cutout||photo.src)+'"><span class="'+(photoStageCount(photo)===5?'complete':'')+'"></span></button>').join('')+'</div>';
  html+=workflowProgressMarkup(stageIndex,p)+'</section>';
  $('#main').innerHTML=html;
+ if(stageIndex===2)paintTemplateThumbnails('[data-stage-template-thumb]');
  bindThumbOnlyRanges();
  scheduleColorMixPreview(ph);
  document.body.classList.add('photo-flow-active','photo-editor-active');
@@ -1948,30 +1983,38 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   if(cutoutBrushEnabledPhotoId===ph.id)bindProjectCutoutBrush(p,ph).catch(error=>{console.warn(error);toast(error.message||'Kuas cutout tidak dapat dimulai.')});
  }
  if(stageIndex===2){
-  const syncTemplatePicker=()=>Array.from(document.querySelectorAll('[data-pf-template],[data-pf-template-clear]')).forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-template-clear')?!p.templateId:button.dataset.pfTemplate===p.templateId));
-  const syncBackgroundPicker=()=>Array.from(document.querySelectorAll('[data-pf-background],[data-pf-background-clear]')).forEach(button=>button.classList.toggle('selected',button.hasAttribute('data-pf-background-clear')?!p.backgroundId:button.dataset.pfBackground===p.backgroundId));
   const chooseTemplate=async chosen=>{
-   const previousTemplate=p.templateId||null;
-   if(previousTemplate!==chosen){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.export=false}}
+   const previous=p.templateId||null;
+   if(previous!==chosen){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.export=false}}
    p.templateId=chosen;
    const selectedTemplate=templates.find(item=>item.id===chosen);
    if(selectedTemplate){ensureTemplateEventDateLayer(selectedTemplate,p);await dbPut('templates',selectedTemplate)}
-   await dbPut('projects',p);syncTemplatePicker();await refreshTemplateStagePreview(p,ph);
+   await dbPut('projects',p);closeModal();renderPhotoEditor();await refreshTemplateStagePreview(p,ph);
   };
-  Array.from(document.querySelectorAll('[data-pf-template]')).forEach(button=>button.addEventListener('click',()=>chooseTemplate(button.dataset.pfTemplate||null)));
-  $('[data-pf-template-clear]')?.addEventListener('click',()=>chooseTemplate(null));
   const chooseBackground=async chosen=>{
-   p.backgroundId=chosen;
-   p.templateBackgroundPlacement={x:0,y:0,w:100,h:100};
-   await dbPut('projects',p);syncBackgroundPicker();await refreshTemplateStagePreview(p,ph);
+   p.backgroundId=chosen;p.templateBackgroundPlacement={x:-20,y:-20,w:140,h:140};
+   await dbPut('projects',p);closeModal();renderPhotoEditor();await refreshTemplateStagePreview(p,ph);
   };
-  Array.from(document.querySelectorAll('[data-pf-background]')).forEach(button=>button.addEventListener('click',()=>chooseBackground(button.dataset.pfBackground||null)));
-  $('[data-pf-background-clear]')?.addEventListener('click',()=>chooseBackground(null));
-  paintTemplateThumbnails('[data-template-thumb]');
-  $('#pf-manage-backgrounds').onclick=async()=>{await dbPut('projects',p);page='templates';renderTemplates()};
+  $('#pf-open-template-menu').onclick=()=>{
+   const cards=templates.map(item=>'<button type="button" class="pf-modal-picker-card" data-stage-template="'+esc(item.id)+'"><span class="pf-modal-picker-thumb"><img data-stage-template-thumb="'+esc(item.id)+'" alt="'+esc(item.name)+'"></span><b>'+esc(item.name)+'</b><small>'+esc(item.sizeName)+'</small></button>').join('');
+   const body='<div class="pf-modal-picker-grid"><button type="button" class="pf-modal-picker-card" data-stage-template-clear><span class="pf-modal-picker-thumb empty">▧</span><b>Tanpa template</b><small>Tanpa bingkai</small></button>'+cards+'</div>'+(templates.length?'':'<p class="pf-note">Belum ada template. Buat template melalui halaman Template.</p>');
+   showModal('Pilih template desain',body,'<button class="btn" id="pf-picker-cancel">Tutup</button>');
+   $('#pf-picker-cancel').onclick=closeModal;paintTemplateThumbnails('[data-stage-template-thumb]');
+   Array.from(document.querySelectorAll('[data-stage-template]')).forEach(button=>button.addEventListener('click',()=>chooseTemplate(button.dataset.stageTemplate)));
+   $('[data-stage-template-clear]')?.addEventListener('click',()=>chooseTemplate(null));
+  };
+  $('#pf-open-background-menu').onclick=()=>{
+   const cards=backgrounds.map(item=>'<button type="button" class="pf-modal-picker-card" data-stage-background="'+esc(item.id)+'"><span class="pf-modal-picker-thumb"><img src="'+esc(item.src)+'" alt="'+esc(item.name)+'"></span><b>'+esc(item.name)+'</b><small>Background</small></button>').join('');
+   const body='<div class="pf-modal-picker-grid"><button type="button" class="pf-modal-picker-card" data-stage-background-clear><span class="pf-modal-picker-thumb empty">▧</span><b>Bawaan template</b><small>Gunakan background pada desain</small></button>'+cards+'</div>'+(backgrounds.length?'':'<p class="pf-note">Belum ada background. Tambahkan gambar melalui Kelola gambar.</p>');
+   showModal('Pilih background',body,'<button class="btn" id="pf-picker-manage-backgrounds">Kelola gambar</button><button class="btn" id="pf-picker-cancel">Tutup</button>');
+   $('#pf-picker-cancel').onclick=closeModal;
+   $('#pf-picker-manage-backgrounds').onclick=async()=>{closeModal();await dbPut('projects',p);page='templates';renderTemplates()};
+   Array.from(document.querySelectorAll('[data-stage-background]')).forEach(button=>button.addEventListener('click',()=>chooseBackground(button.dataset.stageBackground)));
+   $('[data-stage-background-clear]')?.addEventListener('click',()=>chooseBackground(null));
+  };
   $('#pf-adjust-background').onclick=async()=>{p.templateAdjustTarget='background';await dbPut('projects',p);setTemplateAdjustTargetButtons(p,ph)};
   $('#pf-adjust-subject').onclick=async()=>{p.templateAdjustTarget='subject';await dbPut('projects',p);setTemplateAdjustTargetButtons(p,ph)};
-  $('#pf-apply-template').onclick=async()=>{const chosen=p.templateId||null;if(!p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}const selectedTemplate=templates.find(item=>item.id===chosen);if(selectedTemplate){ensureTemplateEventDateLayer(selectedTemplate,p);await dbPut('templates',selectedTemplate)}await applyProjectTemplate(p)};
+  $('#pf-apply-template').onclick=async()=>{if(!p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}const selectedTemplate=templates.find(item=>item.id===p.templateId);if(selectedTemplate){ensureTemplateEventDateLayer(selectedTemplate,p);await dbPut('templates',selectedTemplate)}await applyProjectTemplate(p)};
  }
  if(stageIndex===3)$('#pf-run-face').onclick=async()=>{
   try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'face'};toolFileData=await photoDataWithLight(ph);if(ph.workflowResults.cutout)toolFileData=ph.workflowResults.cutout;toolKey='gaze';page='tool-runner';render()}
@@ -1987,7 +2030,7 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
  }
 }
 function templateSubjectRect(photo){photo.subject=photo.subject||{x:9,y:13,w:82,h:79};return photo.subject}
-function templateBackgroundRect(project){project.templateBackgroundPlacement=project.templateBackgroundPlacement||{x:0,y:0,w:100,h:100};return project.templateBackgroundPlacement}
+function templateBackgroundRect(project){const rect=project.templateBackgroundPlacement||(project.templateBackgroundPlacement={x:-20,y:-20,w:140,h:140});if(Number(rect.w||100)<=100&&Number(rect.h||100)<=100){rect.x=-20;rect.y=-20;rect.w=140;rect.h=140}return rect}
 function setTemplateAdjustTargetButtons(project,photo){
  const target=project.templateAdjustTarget||'subject';
  const bg=$('#pf-adjust-background'),subject=$('#pf-adjust-subject'),help=$('#pf-template-adjust-help');
@@ -2012,7 +2055,9 @@ async function refreshTemplateStagePreview(project,photo){
 }
 function bindTemplateStageGestures(project,photo){
  const overlay=$('#pf-template-adjust-overlay'),stage=$('#pf-image-stage');
- if(!overlay||!stage)return;
+ if(!stage)return;
+ if(overlay)overlay.style.pointerEvents='none';
+ stage.style.pointerEvents='auto';stage.style.touchAction='none';
  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
  const getRect=()=>target()==='background'?templateBackgroundRect(project):templateSubjectRect(photo);
  const target=()=>project.templateAdjustTarget||'subject';
@@ -2020,10 +2065,10 @@ function bindTemplateStageGestures(project,photo){
  const point=e=>({x:e.clientX,y:e.clientY});
  const distance=pts=>Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y));
  updateTemplateAdjustOverlay(project,photo);setTemplateAdjustTargetButtons(project,photo);
- overlay.addEventListener('pointerdown',event=>{
+ stage.addEventListener('pointerdown',event=>{
   event.preventDefault();event.stopPropagation();
   pointers.set(event.pointerId,point(event));
-  try{overlay.setPointerCapture(event.pointerId)}catch(error){}
+  try{stage.setPointerCapture(event.pointerId)}catch(error){}
   const rect=getRect(),kind=target();
   if(pointers.size===1)drag={kind,x:event.clientX,y:event.clientY,startX:Number(rect.x??0),startY:Number(rect.y??0)};
   if(pointers.size===2){
@@ -2031,7 +2076,7 @@ function bindTemplateStageGestures(project,photo){
    pinch={kind,distance:distance(pts),w:Number(rect.w??100),h:Number(rect.h??100),cx:Number(rect.x??0)+Number(rect.w??100)/2,cy:Number(rect.y??0)+Number(rect.h??100)/2};
   }
  },{passive:false});
- overlay.addEventListener('pointermove',event=>{
+ stage.addEventListener('pointermove',event=>{
   if(!pointers.has(event.pointerId))return;
   pointers.set(event.pointerId,point(event));
   const rect=getRect(),kind=target(),bounds=stage.getBoundingClientRect();
@@ -2049,7 +2094,7 @@ function bindTemplateStageGestures(project,photo){
   if(pointers.size===1&&drag&&drag.kind===kind){
    const dx=(event.clientX-drag.x)/Math.max(1,bounds.width)*100,dy=(event.clientY-drag.y)/Math.max(1,bounds.height)*100;
    if(kind==='subject'){rect.x=clamp(drag.startX+dx,0,100-Number(rect.w??82));rect.y=clamp(drag.startY+dy,0,100-Number(rect.h??79))}
-   else {rect.x=clamp(drag.startX+dx,100-Number(rect.w??100),0);rect.y=clamp(drag.startY+dy,100-Number(rect.h??100),0)}
+   else {rect.x=clamp(drag.startX+dx,100-Number(rect.w??140),0);rect.y=clamp(drag.startY+dy,100-Number(rect.h??140),0)}
    updateTemplateAdjustOverlay(project,photo);
   }
  },{passive:false});
@@ -2064,9 +2109,9 @@ function bindTemplateStageGestures(project,photo){
    drag={kind:target(),x:remaining.x,y:remaining.y,startX:Number(rect.x??0),startY:Number(rect.y??0)};pinch=null;
   }
  };
- overlay.addEventListener('pointerup',finish);
- overlay.addEventListener('pointercancel',finish);
- overlay.addEventListener('lostpointercapture',finish);
+ stage.addEventListener('pointerup',finish);
+ stage.addEventListener('pointercancel',finish);
+ stage.addEventListener('lostpointercapture',finish);
 }
 async function applyProjectTemplate(p){
  for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}
@@ -2162,7 +2207,7 @@ function bindSimpleDateGestures(t){
   handle.style.top=clamp(Number(layer.y??84),0,100)+'%';
   handle.style.width=clamp(Number(layer.w??60),12,100)+'%';
   handle.style.height=clamp(Number(layer.h??10),5,35)+'%';
-  handle.style.fontSize=Math.max(10,Number(layer.fontSize||14)*stage.clientWidth/650)+'px';
+  handle.style.fontSize=Math.max(12,Number(layer.fontSize||32)*stage.clientWidth/650)+'px';
   handle.textContent=dateValue()?fmtDate(dateValue()):'PILIH TANGGAL';
  };
  paint();
