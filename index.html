@@ -147,6 +147,15 @@ body.photo-flow-active .pf-editor-page{height:100dvh;min-height:0;display:flex;f
 .pf-stage-panel h2{font-size:18px;margin:8px 0}.pf-stage-panel p{font-size:13px;line-height:1.55;color:var(--muted)}
 .pf-stage-eyebrow{font-size:10px;letter-spacing:1.2px;font-weight:800;color:#e27c2e}
 .pf-stage-panel .field select{min-height:44px}
+.pf-carnival-target-note{display:grid;gap:4px;padding:10px 12px;margin:12px 0;border:1px solid #e5e7ef;border-radius:11px;background:#f8f8fc}.pf-carnival-target-note b{font-size:12px}.pf-carnival-target-note span{font-size:11px;color:var(--muted)}
+.pf-carnival-model-note{display:block;margin-top:6px;font-size:10px;line-height:1.45;color:var(--muted)}
+.pf-carnival-strength{display:grid;gap:6px;padding:10px 12px;margin:12px 0;border:1px solid #e5e7ef;border-radius:11px;background:#fff}
+.pf-carnival-strength label{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:800}.pf-carnival-strength label b{color:#6654d8}
+.pf-carnival-strength input{width:100%;touch-action:pan-y}
+.pf-carnival-strength small{font-size:10px;line-height:1.4;color:var(--muted)}
+.pf-carnival-actions{display:grid;gap:8px}.pf-carnival-actions .btn{width:100%}
+.pf-carnival-cost-note{font-size:10px!important;color:#8a91a0!important}
+#pf-face-status.error{color:#b54747!important}
 .pf-thumbnails{flex:0 0 69px;display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-top:1px solid #e9ebf0;overflow-x:auto;overscroll-behavior-x:contain}
 .pf-thumb{position:relative;flex:0 0 58px;height:50px;border:2px solid transparent;border-radius:9px;padding:0;overflow:hidden;background:#eef0f5}
 .pf-thumb.active{border-color:#e9822f}
@@ -598,7 +607,7 @@ const workflowStages=[
  {key:'light',title:'Cahaya',desc:'Atur cahaya foto satu per satu. Setelah foto terakhir selesai, semua foto beralih ke Cutout.'},
  {key:'cutout',title:'Cutout',desc:'Hapus latar foto satu per satu menggunakan AI.'},
  {key:'template',title:'Template',desc:'Pilih satu template untuk diterapkan ke seluruh foto proyek.'},
- {key:'face',title:'Wajah',desc:'Perbaiki detail/arah pandangan wajah untuk setiap foto.'},
+ {key:'face',title:'Wajah',desc:'Tingkatkan detail layer objek karnaval hasil Cutout tanpa mengubah background atau template.'},
  {key:'export',title:'Ekspor',desc:'Ekspor foto satu per satu atau seluruh foto yang telah selesai.'}
 ];
 let gallerySelectMode=false;
@@ -1434,6 +1443,113 @@ async function useWorkflowResult(localSource){
  activeProjectId=p.id;activePhotoIndex=index;page='photo-editor';workflowReturn=null;
  await advanceWorkflowPhoto(p,ph,context.stageKey);
 }
+async function prepareCarnivalEnhancementCrop(source){
+ const image=await loadCanvasImage(source);
+ const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+ if(!width||!height)throw new Error('Ukuran objek Cutout tidak valid.');
+ const scanScale=Math.min(1,1400/Math.max(width,height));
+ const scan=document.createElement('canvas');scan.width=Math.max(1,Math.round(width*scanScale));scan.height=Math.max(1,Math.round(height*scanScale));
+ const scanCtx=scan.getContext('2d',{willReadFrequently:true});scanCtx.drawImage(image,0,0,scan.width,scan.height);
+ const pixels=scanCtx.getImageData(0,0,scan.width,scan.height).data;
+ let minX=scan.width,minY=scan.height,maxX=-1,maxY=-1,visible=0;
+ for(let y=0;y<scan.height;y++)for(let x=0;x<scan.width;x++){
+  if(pixels[(y*scan.width+x)*4+3]>18){visible++;if(x<minX)minX=x;if(y<minY)minY=y;if(x>maxX)maxX=x;if(y>maxY)maxY=y;}
+ }
+ const total=scan.width*scan.height;
+ if(!visible||maxX<minX||maxY<minY)throw new Error('Objek karnaval tidak ditemukan pada hasil Cutout. Ulangi tahap Cutout.');
+ if(visible/total>.995)throw new Error('Hasil Cutout belum memiliki latar transparan. Ulangi Cutout dengan mode Hapus Background, bukan Blur.');
+ const inv=1/scanScale;
+ let x=Math.max(0,Math.floor(minX*inv)),y=Math.max(0,Math.floor(minY*inv));
+ let right=Math.min(width,Math.ceil((maxX+1)*inv)),bottom=Math.min(height,Math.ceil((maxY+1)*inv));
+ const margin=Math.max(8,Math.round(Math.max(right-x,bottom-y)*.025));
+ x=Math.max(0,x-margin);y=Math.max(0,y-margin);right=Math.min(width,right+margin);bottom=Math.min(height,bottom+margin);
+ const cropWidth=right-x,cropHeight=bottom-y;
+ let maxSide=1800,cropCanvas,cropData;
+ for(let attempt=0;attempt<4;attempt++){
+  const scale=Math.min(1,maxSide/Math.max(cropWidth,cropHeight));
+  cropCanvas=document.createElement('canvas');cropCanvas.width=Math.max(1,Math.round(cropWidth*scale));cropCanvas.height=Math.max(1,Math.round(cropHeight*scale));
+  cropCanvas.getContext('2d').drawImage(image,x,y,cropWidth,cropHeight,0,0,cropCanvas.width,cropCanvas.height);
+  cropData=cropCanvas.toDataURL('image/png');
+  if(cropData.length<11*1024*1024)break;
+  maxSide=Math.round(maxSide*.72);
+ }
+ if(!cropData||cropData.length>=11*1024*1024)throw new Error('Area objek terlalu besar untuk dikirim dengan aman. Coba foto berukuran lebih kecil atau potong area objek.');
+ return {image,width,height,crop:{x,y,w:cropWidth,h:cropHeight},cropWidth:cropCanvas.width,cropHeight:cropCanvas.height,imageData:cropData};
+}
+async function mergeCarnivalEnhancement(prepared,enhancedSource,strength){
+ const enhanced=await loadCanvasImage(enhancedSource);
+ const enhancedWidth=enhanced.naturalWidth||enhanced.width,enhancedHeight=enhanced.naturalHeight||enhanced.height;
+ if(!enhancedWidth||!enhancedHeight)throw new Error('Model AI tidak mengembalikan gambar peningkatan yang valid.');
+ const ratioX=enhancedWidth/prepared.cropWidth,ratioY=enhancedHeight/prepared.cropHeight;
+ const scale=Math.min(ratioX,ratioY,Math.max(1,6000/Math.max(prepared.width,prepared.height)));
+ const outWidth=Math.max(1,Math.round(prepared.width*scale)),outHeight=Math.max(1,Math.round(prepared.height*scale));
+ const canvas=document.createElement('canvas');canvas.width=outWidth;canvas.height=outHeight;
+ const ctx=canvas.getContext('2d');
+ ctx.drawImage(prepared.image,0,0,outWidth,outHeight);
+ const amount=Math.max(0,Math.min(1,Number(strength)/100));
+ if(amount>0){
+  ctx.save();ctx.globalAlpha=amount;
+  ctx.drawImage(enhanced,prepared.crop.x*scale,prepared.crop.y*scale,prepared.crop.w*scale,prepared.crop.h*scale);
+  ctx.restore();
+ }
+ ctx.globalCompositeOperation='destination-in';
+ ctx.drawImage(prepared.image,0,0,outWidth,outHeight);
+ ctx.globalCompositeOperation='source-over';
+ return canvas.toDataURL('image/png');
+}
+async function runProjectCarnivalEnhancement(p,ph){
+ const button=$('#pf-run-face'),status=$('#pf-face-status'),modelSelect=$('#pf-carnival-model'),strengthSelect=$('#pf-carnival-strength'),scaleSelect=$('#pf-carnival-scale');
+ const apiKey=(apiKeySession||'').trim();
+ const report=(message,isError=false)=>{if(status){status.textContent=message;status.classList.toggle('error',!!isError)}};
+ if(!apiKey){report('API key fal.ai belum tersedia. Buka Pengaturan → AI & fal.ai, masukkan API key, lalu kembali ke tahap ini.',true);return}
+ if(!ph.workflowResults?.cutout){report('Hasil Cutout belum tersedia. Selesaikan tahap Cutout terlebih dahulu.',true);return}
+ const modelChoice=modelSelect?.value||'topaz',strength=Math.max(0,Math.min(100,Number(strengthSelect?.value??70))),scale=Math.max(2,Math.min(4,Number(scaleSelect?.value||2)));
+ ph.carnivalEnhanceSettings={model:modelChoice,strength,scale};
+ await dbPut('projects',p);
+ if(button){button.disabled=true;button.textContent='Menyiapkan objek karnaval…'}
+ const progress=(title,detail)=>{if(button)button.textContent=title;report(detail)};
+ try{
+  if(strength===0){
+   ph.workflowResults.face=ph.workflowResults.cutout;ph.workflow.face=true;ph.workflow.export=false;p.updatedAt=Date.now();
+   await dbPut('projects',p);renderPhotoEditor();toast('Objek dipertahankan seperti Cutout asli (kekuatan 0%).');return;
+  }
+  progress('Memisahkan area objek…','Membaca layer transparan hasil Cutout. Background dan template tidak dikirim ke model.');
+  const prepared=await prepareCarnivalEnhancementCrop(ph.workflowResults.cutout);
+  let model,input,label;
+  if(modelChoice==='esrgan'){
+   model='fal-ai/esrgan';
+   input={image_url:prepared.imageData,scale,model:scale===4?'RealESRGAN_x4plus':'RealESRGAN_x2plus',face:false,output_format:'png'};
+   label='Real-ESRGAN Natural';
+  }else if(modelChoice==='recraft'){
+   model='fal-ai/recraft/upscale/crisp';
+   input={image_url:prepared.imageData,enable_safety_checker:true};
+   label='Recraft Crisp';
+  }else{
+   model='topaz/upscale/image/precision';
+   input={image_url:prepared.imageData,model:'Standard V2',upscale_factor:scale,output_format:'png',subject_detection:'Foreground',face_enhancement:false,sharpen:.35,denoise:.18,enable_safety_checker:true};
+   label='Topaz Precision Standard V2';
+  }
+  progress('Mengirim objek ke '+label+'…','Hanya crop transparan objek karnaval yang dikirim. Penggunaan saldo fal.ai mengikuti tarif model.');
+  const result=await falQueueRun(model,input,apiKey,(state,n)=>progress('AI memproses objek…','Model: '+label+' · Status: '+(state||'menunggu')+' · '+(n*2)+' detik.'));
+  const outputUrl=falImageUrl(result);
+  if(!outputUrl)throw new Error('Model '+label+' tidak mengembalikan file gambar.');
+  progress('Menggabungkan hasil…','Menerapkan kekuatan '+strength+'% dan mengembalikan alpha Cutout asli supaya background tetap aman.');
+  const enhancedData=await falImageToDataURL(outputUrl);
+  const merged=await mergeCarnivalEnhancement(prepared,enhancedData,strength);
+  ph.workflowResults.face=merged;ph.workflow.face=true;ph.workflow.export=false;
+  ph.carnivalEnhanceSettings={model:modelChoice,strength,scale};
+  p.updatedAt=Date.now();
+  await dbPut('projects',p);
+  renderPhotoEditor();
+  toast('Objek karnaval berhasil ditingkatkan. Background dan template tidak diubah.');
+ }catch(error){
+  console.error('Peningkatan objek karnaval gagal',error);
+  report('Peningkatan gagal: '+String(error?.message||error)+' Periksa API key, koneksi, saldo fal.ai, dan mode Cutout.',true);
+ }finally{
+  const current=$('#pf-run-face');
+  if(current){current.disabled=false;current.textContent=workflowDone(ph,'face')?'✧ Tingkatkan ulang objek':'✧ Tingkatkan objek karnaval'}
+ }
+}
 async function runProjectCutout(p,ph){
  const button=$('#pf-run-cutout'),status=$('#pf-cutout-status'),select=$('#pf-cutout-model');
  const apiKey=(apiKeySession||'').trim();
@@ -1846,7 +1962,11 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   const stageBackground=backgrounds.find(item=>item.id===p.backgroundId)||null;
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 3 DARI 5</span><h2>Template proyek</h2><p>Pilih template dan background melalui menu. Atur posisi objek dan latar langsung pada foto.</p><div class="pf-stage-picker-block"><label>Template desain</label><div class="pf-stage-picker-current">'+(stageTemplate?'<span class="pf-stage-picker-thumb"><img data-stage-template-thumb="'+esc(stageTemplate.id)+'" alt="'+esc(stageTemplate.name)+'"></span><span class="pf-stage-picker-info"><b>'+esc(stageTemplate.name)+'</b><small>'+esc(stageTemplate.sizeName)+'</small></span>':'<span class="pf-stage-picker-thumb empty">▧</span><span class="pf-stage-picker-info"><b>Tanpa template</b><small>Pilih desain untuk proyek ini</small></span>')+'<button type="button" class="btn small" id="pf-open-template-menu">Pilih</button></div></div><div class="pf-stage-picker-block"><label>Background</label><div class="pf-stage-picker-current">'+(stageBackground?'<span class="pf-stage-picker-thumb"><img src="'+esc(stageBackground.src)+'" alt="'+esc(stageBackground.name)+'"></span><span class="pf-stage-picker-info"><b>'+esc(stageBackground.name)+'</b><small>Background proyek</small></span>':'<span class="pf-stage-picker-thumb empty">▧</span><span class="pf-stage-picker-info"><b>Bawaan template</b><small>Pilih background tambahan</small></span>')+'<button type="button" class="btn small" id="pf-open-background-menu">Pilih</button></div></div><div class="pf-template-target-switch"><button type="button" id="pf-adjust-background" class="'+((p.templateAdjustTarget||'subject')==='background'?'active':'')+'">Atur background</button><button type="button" id="pf-adjust-subject" class="'+((p.templateAdjustTarget||'subject')==='subject'?'active':'')+'">Atur objek karnaval</button></div><p class="pf-template-adjust-help" id="pf-template-adjust-help">'+((p.templateAdjustTarget||'subject')==='background'?'Geser untuk memindahkan background, cubit dua jari untuk memperbesar atau memperkecil.':'Geser objek karnaval dengan satu jari. Cubit dua jari untuk mengubah ukurannya.')+'</p><button class="btn primary workflow-primary" id="pf-apply-template">Terapkan template & lanjut</button></div>';
 }else if(stageIndex===3){
-  html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 4 DARI 5</span><h2>Wajah</h2><p>Perbaiki arah pandangan mata menggunakan AI. Periksa hasil sebelum menggunakannya.</p><button class="btn primary workflow-primary" id="pf-run-face">✧ Proses Wajah dengan AI</button><p class="pf-note">'+(workflowDone(ph,'face')?'✓ Hasil Wajah sudah tersimpan untuk foto ini.':'Hasil akan digunakan pada tahap Ekspor.')+'</p></div>';
+  const faceCfg=ph.carnivalEnhanceSettings||{model:'topaz',strength:70,scale:2};
+  const faceModel=faceCfg.model||'topaz',faceStrength=Math.max(0,Math.min(100,Number(faceCfg.strength??70)));
+  const faceDone=workflowDone(ph,'face');
+  const hasCutout=!!ph.workflowResults?.cutout;
+  html+='<div class="pf-stage-panel pf-carnival-enhance-panel"><span class="pf-stage-eyebrow">TAHAP 4 DARI 5 · OBJEK KARNAVAL</span><h2>Peningkatan objek karnaval</h2><p>Proses langsung di tahap ini. Yang dikirim ke AI hanya layer foreground hasil Cutout; background, template, dan foto sumber tidak ikut ditingkatkan.</p><div class="pf-carnival-target-note"><b>Area yang ditingkatkan</b><span>Objek/subjek karnaval dari hasil Cutout</span></div><div class="field"><label for="pf-carnival-model">Model peningkatan</label><select id="pf-carnival-model"><option value="topaz" '+(faceModel==='topaz'?'selected':'')+'>Topaz Precision Standard V2 · Rekomendasi</option><option value="esrgan" '+(faceModel==='esrgan'?'selected':'')+'>Real-ESRGAN · Natural / hemat</option><option value="recraft" '+(faceModel==='recraft'?'selected':'')+'>Recraft Crisp · Detail murah</option></select><small class="pf-carnival-model-note" id="pf-carnival-model-note">'+(faceModel==='topaz'?'Paling saya rekomendasikan untuk ornamen karnaval: detail tetap setia pada sumber, tanpa face enhancement. Perkiraan $0.08 per 24 MP output.':faceModel==='esrgan'?'Hasil natural dan non-generatif. Biaya fal.ai dihitung berdasarkan waktu komputasi.':'Mempertajam detail kecil dengan biaya tetap $0.004 per gambar.')+'</small></div><div class="field" id="pf-carnival-scale-wrap"><label for="pf-carnival-scale">Resolusi peningkatan</label><select id="pf-carnival-scale"><option value="2" '+(Number(faceCfg.scale||2)===2?'selected':'')+'>2× · Disarankan</option><option value="4" '+(Number(faceCfg.scale||2)===4?'selected':'')+'>4× · Resolusi lebih tinggi</option></select><small class="pf-carnival-model-note">Recraft Crisp menentukan ukuran hasil secara otomatis.</small></div><div class="pf-carnival-strength"><label for="pf-carnival-strength"><span>Kekuatan peningkatan</span><b id="pf-carnival-strength-value">'+faceStrength+'%</b></label><input id="pf-carnival-strength" type="range" min="0" max="100" step="1" value="'+faceStrength+'" data-reang-reset="70"><small>0% = tetap asli · 100% = hasil AI penuh. Background dan template tidak berubah.</small></div><div class="pf-carnival-actions"><button class="btn primary workflow-primary" id="pf-run-face" '+(!hasCutout?'disabled':'')+'>'+(faceDone?'✧ Tingkatkan ulang objek':'✧ Tingkatkan objek karnaval')+'</button>'+(faceDone?'<button class="btn" id="pf-face-restore">Kembalikan objek asli</button>':'')+'</div><p class="pf-note" id="pf-face-status">'+(faceDone?'✓ Hasil peningkatan objek tersimpan. Tekan “Selesai — lanjut foto” untuk meneruskan.':(!hasCutout?'Selesaikan tahap Cutout dengan mode Hapus Background agar objek karnaval memiliki transparansi.':'Hanya layer objek hasil Cutout yang diproses. Foto asli dan background tetap aman.'))+'</p><p class="pf-carnival-cost-note">Pemrosesan memakai saldo API fal.ai sesuai model yang dipilih. Periksa saldo sebelum menjalankan.</p></div>';
  }else{
   html+='<div class="pf-stage-panel"><span class="pf-stage-eyebrow">TAHAP 5 DARI 5</span><h2>Ekspor foto</h2><p>Ekspor foto ini dengan seluruh penyesuaian dan template yang dipilih.</p><button class="btn primary workflow-primary" id="pf-export-this">⇩ Ekspor foto ini</button><button class="btn workflow-primary" id="pf-export-all">Ekspor semua foto</button></div>';
  }
@@ -2073,10 +2193,26 @@ html+='<div class="pf-color-mix"><label>Campur warna (per warna)</label><div cla
   $('#pf-adjust-subject').onclick=async()=>{p.templateAdjustTarget='subject';await dbPut('projects',p);setTemplateAdjustTargetButtons(p,ph)};
   $('#pf-apply-template').onclick=async()=>{if(!p.templateId){for(const photo of p.photos){ensurePhotoWorkflow(photo);photo.workflow.template=true}p.workflowStage=3;activePhotoIndex=0;await dbPut('projects',p);renderPhotoEditor();toast('Tahap Template dilewati. Lanjut ke Wajah.');return}const selectedTemplate=templates.find(item=>item.id===p.templateId);if(selectedTemplate){ensureTemplateEventDateLayer(selectedTemplate,p);await dbPut('templates',selectedTemplate)}await applyProjectTemplate(p)};
  }
- if(stageIndex===3)$('#pf-run-face').onclick=async()=>{
-  try{workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'face'};toolFileData=await photoDataWithLight(ph);if(ph.workflowResults.cutout)toolFileData=ph.workflowResults.cutout;toolKey='gaze';page='tool-runner';render()}
-  catch(error){workflowReturn=null;toast(error.message||'Gagal menyiapkan foto untuk Wajah.')}
- };
+ if(stageIndex===3){
+  const faceModel=$('#pf-carnival-model'),faceScale=$('#pf-carnival-scale'),faceStrength=$('#pf-carnival-strength');
+  const persistFaceSettings=async()=>{ph.carnivalEnhanceSettings={model:faceModel?.value||'topaz',scale:Number(faceScale?.value||2),strength:Number(faceStrength?.value??70)};await dbPut('projects',p)};
+  const updateFaceModelNote=()=>{
+   const model=faceModel?.value||'topaz',note=$('#pf-carnival-model-note'),scaleWrap=$('#pf-carnival-scale-wrap');
+   if(note)note.textContent=model==='topaz'?'Paling saya rekomendasikan untuk ornamen karnaval: detail tetap setia pada sumber, tanpa face enhancement. Perkiraan $0.08 per 24 MP output.':model==='esrgan'?'Hasil natural dan non-generatif. Biaya fal.ai dihitung berdasarkan waktu komputasi.':'Mempertajam detail kecil dengan biaya tetap $0.004 per gambar.';
+   if(scaleWrap)scaleWrap.classList.toggle('hidden',model==='recraft');
+  };
+  faceModel?.addEventListener('change',async()=>{updateFaceModelNote();await persistFaceSettings()});
+  faceScale?.addEventListener('change',()=>persistFaceSettings().catch(error=>console.warn(error)));
+  faceStrength?.addEventListener('input',e=>{const label=$('#pf-carnival-strength-value');if(label)label.textContent=e.target.value+'%'});
+  faceStrength?.addEventListener('change',()=>persistFaceSettings().catch(error=>console.warn(error)));
+  updateFaceModelNote();
+  $('#pf-run-face')?.addEventListener('click',()=>runProjectCarnivalEnhancement(p,ph));
+  $('#pf-face-restore')?.addEventListener('click',async()=>{
+   confirmModal('Kembalikan objek asli?','Hasil peningkatan akan dilepas. Objek akan kembali memakai hasil Cutout awal.',async()=>{
+    delete ph.workflowResults.face;ph.workflow.face=false;ph.workflow.export=false;p.updatedAt=Date.now();await dbPut('projects',p);renderPhotoEditor();toast('Objek asli dari Cutout dipulihkan.');
+   });
+  });
+ }
  if(stageIndex===4){
   $('#pf-export-this').onclick=async()=>{try{await exportCurrentPhoto();await advanceWorkflowPhoto(p,ph,'export')}catch(error){toast(error.message||'Ekspor gagal.')}};
   $('#pf-export-all').onclick=async()=>{

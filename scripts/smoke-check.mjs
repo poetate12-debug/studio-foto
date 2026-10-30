@@ -204,3 +204,12 @@ requireSource(html.includes("handle.querySelector('#template-date-text')") && ht
 
 requireSource(sw.includes("reang-studio-foto-v22"), "service worker cache version updated for the date scaling fix");
 requireSource(html.includes("glyph.style.setProperty('transform','scale('+(previewFontSize/36)+')','important')") && html.includes("glyph.style.setProperty('transform','scale('+(previewSize/36)+')','important')"), "date font scaling bypasses Android minimum font-size in slider, pinch and redraw previews");
+
+requireSource(html.includes("Peningkatan objek karnaval") && html.includes("pf-carnival-model") && html.includes("pf-carnival-strength") && html.includes("pf-carnival-scale"), "Wajah workflow stage presents object enhancement controls directly");
+requireSource(html.includes("runProjectCarnivalEnhancement(p,ph)") && !html.includes("toolKey='gaze';page='tool-runner';render()"), "Wajah stage does not redirect to the global AI Tools page");
+requireSource(html.includes("prepareCarnivalEnhancementCrop(ph.workflowResults.cutout)") && html.includes("const prepared=await prepareCarnivalEnhancementCrop(ph.workflowResults.cutout)"), "AI receives only the transparent Cutout foreground layer");
+requireSource(html.includes("face_enhancement:false") && html.includes("face:false"), "enhancement models do not enable dedicated face restoration");
+requireSource(html.includes("fal-ai/esrgan") && html.includes("fal-ai/recraft/upscale/crisp") && html.includes("topaz/upscale/image/precision"), "Natural, low-cost and professional enhancement models are available");
+requireSource(html.includes("ctx.globalCompositeOperation='destination-in'") && html.includes("ctx.globalAlpha=amount"), "enhanced subject is blended by strength while original Cutout transparency protects the background");
+requireSource(html.includes("ph.workflowResults.face=merged;ph.workflow.face=true") && html.includes("delete ph.workflowResults.face"), "enhancement result is saved to the workflow and can be restored to original Cutout");
+requireSource(sw.includes("reang-studio-foto-v23"), "service worker cache version is updated for carnival object enhancement");
