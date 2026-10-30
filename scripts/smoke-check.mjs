@@ -103,7 +103,7 @@ requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixe
 requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
 requireSource(androidWorkflow.includes("id.reang.studiofoto.v2") && androidWorkflow.includes("Verify APK can coexist with the old installation") && androidWorkflow.includes("dump badging"), "recovery APK uses a different package ID and is verified before publishing");
 requireSource(androidWorkflow.includes('storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")') && androidWorkflow.includes("debug { signingConfig signingConfigs.debug }") && androidWorkflow.includes("verify --print-certs") && androidWorkflow.includes("APK signature does not match the persistent repository signing key"), "generated Gradle debug signing is explicitly pinned and APK certificates are checked before publish");
-requireSource(sw.includes("reang-studio-foto-v9") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
+requireSource(sw.includes("reang-studio-foto-v10") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
@@ -118,6 +118,11 @@ requireSource(html.includes('id="template-zoom-in"') && html.includes('id="templ
 requireSource(html.includes("position:sticky;top:82px") && html.includes(".canvas-wrap{order:-1;top:65px"), "template canvas stays at the top on mobile while scrolling layer controls");
 requireSource(html.includes('data-cutout-mode="cutout"') && html.includes('data-cutout-mode="generate"') && html.includes('data-cutout-mode="blur"'), "project cutout offers transparent cutout, AI background, and bokeh blur modes");
 requireSource(html.includes("fal-ai/bria/background/replace") && html.includes("makeBlurredBackgroundComposite(source,url") && html.includes("pf-cutout-background-prompt"), "AI background replacement and local bokeh modes are wired to project processing");
+requireSource(html.includes('id="layer-zoom-in"') && html.includes('id="layer-zoom-out"') && html.includes("function scaleSelectedLayer(factor)"), "zoom controls scale only the selected template layer");
+requireSource(html.includes('id="fit-background-layer"') && html.includes("selected.x=0;selected.y=0;selected.w=100;selected.h=100"), "background layer has a fit-to-frame action");
+requireSource(html.includes('id="template-add-date"') && html.includes("text:'TANGGAL ACARA'") && html.includes("project?.eventDate?fmtDate(project.eventDate)"), "automatic event-date layer follows the project event date");
+requireSource(html.includes("renderComposite(project,null,t,650)"), "template preview resolves dynamic event text using the active project");
+
 
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
 // Service-worker cache invalidation is checked alongside the new brush regression assertions above.
