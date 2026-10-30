@@ -181,17 +181,17 @@ requireSource(inlineSyntaxValid, "inline application JavaScript parses without s
 if (process.exitCode) process.exit(process.exitCode);
 console.log("[smoke-check] All static checks passed.");
 
-requireSource(html.includes("layer.fontSize=Math.max(4,Math.min(64") && html.includes("fontSize=clamp(pinch.font*factor,4,64)") && html.includes("Math.max(5,Number(layer.fontSize||24)"), "date text can be reduced to a small readable size");
+requireSource(html.includes("layer.fontSize=Math.max(1,Math.min(64") && html.includes("fontSize=clamp(pinch.font*factor,1,64)") && html.includes("Math.max(1,Number(layer.fontSize||24)"), "date text can be reduced to a small readable size");
 requireSource(html.includes("open-background-library") && html.includes("open-template-library") && html.includes("menu-add-backgrounds"), "template settings page opens collections through separate menus");
 requireSource(html.includes("openProject(card.dataset.projectCard)"), "clicking a project card opens the project");
 
 requireSource(html.includes("function installCenteredRangeControls(root=document)") && html.includes("input.min='-100';input.max='100';input.step='1'") && html.includes("reangNativeRangeValue.get.call(this)"), "all range sliders use a centered baseline while preserving their underlying values");
 requireSource(html.includes("startReangCenteredRangeObserver()") && html.includes("setReangRangeOffset(input,0,true)"), "all newly rendered sliders support double-tap reset to their center baseline");
-requireSource(html.includes("simple-date-size") && html.includes("dateLayer.fontSize=Math.max(4,Math.min(64,Number(event.target.value)||4))"), "template event date has a direct size slider");
+requireSource(html.includes("simple-date-size") && html.includes("dateLayer.fontSize=Math.max(1,Math.min(64,Number(event.target.value)||1))"), "template event date has a direct size slider");
 requireSource(simpleGestureSource.includes("stage.addEventListener('pointerdown'") && simpleGestureSource.includes("stage.setPointerCapture(e.pointerId)") && simpleGestureSource.includes("stage.addEventListener('pointermove'"), "template date pinch captures both pointers on the preview stage");
 requireSource(html.includes("reangRangeOffset(input)") && html.includes("const offset=active.min+fraction*(active.max-active.min)"), "custom thumb-only controls honor the centered slider position");
 
-requireSource(html.includes("min<0&&max>0?0") && html.includes("'pf-slider-color-sat'"), "zero-neutral photo adjustments always center on zero regardless of saved slider value");
+requireSource(html.includes("min<0&&max>0?0") && html.includes("'brightness':100") && html.includes("'contrast':100"), "zero-neutral photo adjustments always center on zero regardless of saved slider value");
 requireSource(html.includes("background:linear-gradient(to right,#dfe4ed 0,#dfe4ed calc(50% - 1px)") && html.includes("::-moz-range-progress{height:7px;border-radius:99px;background:transparent}"), "centered sliders show a neutral midpoint marker instead of a misleading half-filled track");
 requireSource(html.includes("min=\"1\" max=\"64\" step=\"1\" value=\"'+(dateLayer.fontSize||24)+'\" data-reang-reset=\"32\"") && html.includes("Math.max(1,Math.min(64,Number(event.target.value)||1))") && html.includes("layer.fontSize=clamp(pinch.font*factor,1,64)"), "template date can be reduced to 1px by slider or pinch");
 requireSource(html.includes(".pf-slider-row{padding:6px 0 9px") && html.includes("margin-bottom:6px"), "photo adjustment sliders use compact, consistent vertical spacing");
