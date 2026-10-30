@@ -1940,6 +1940,9 @@ function renderTemplateEditor(){
  $('#fit-background-layer')?.addEventListener('click',async()=>{if(!selected)return;selected.locked=false;selected.x=0;selected.y=0;selected.w=100;selected.h=100;await dbPut('templates',t);renderTemplateEditor();toast('Background memenuhi seluruh bingkai.')});
  function updateLayerControlValues(){['x','y','w','h'].forEach(k=>{const el=$('#layer-'+k),lab=$('#layer-'+k+'-val');if(el)el.value=selected[k];if(lab)lab.textContent=Math.round(selected[k])+'%'})}
  function scaleSelectedLayer(factor){if(!selected||selected.locked)return;const w=Number(selected.w??100),h=Number(selected.h??100),cx=Number(selected.x??0)+w/2,cy=Number(selected.y??0)+h/2;selected.defaultW??=w;selected.defaultH??=h;selected.defaultX??=Number(selected.x??0);selected.defaultY??=Number(selected.y??0);const nw=Math.max(1,Math.min(200,w*factor)),nh=Math.max(1,Math.min(200,h*factor));selected.w=nw;selected.h=nh;selected.x=cx-nw/2;selected.y=cy-nh/2;if(selected.type==='text'){selected.defaultFontSize??=Number(selected.fontSize||24);selected.fontSize=Math.max(8,Math.min(300,Number(selected.fontSize||24)*factor));const font=$('#layer-font'),fontLabel=$('#layer-font-val');if(font)font.value=Math.min(100,selected.fontSize);if(fontLabel)fontLabel.textContent=Math.round(selected.fontSize)+' px'}updateLayerControlValues();dbPut('templates',t);drawTemplateCanvas(t)}
+ const quickLayerZoom=async factor=>{if(!selected)return;selected.locked=false;scaleSelectedLayer(factor);await dbPut('templates',t);renderTemplateEditor()};
+ $('#template-selected-zoom-in')?.addEventListener('click',()=>quickLayerZoom(1.15));
+ $('#template-selected-zoom-out')?.addEventListener('click',()=>quickLayerZoom(1/1.15));
  $('#layer-zoom-in')?.addEventListener('click',()=>scaleSelectedLayer(1.15));$('#layer-zoom-out')?.addEventListener('click',()=>scaleSelectedLayer(1/1.15));
  $('#layer-zoom-reset')?.addEventListener('click',()=>{if(!selected||selected.locked)return;selected.w=selected.defaultW??(selected.type==='background'?100:80);selected.h=selected.defaultH??(selected.type==='background'?100:80);selected.x=selected.defaultX??(selected.type==='background'?0:10);selected.y=selected.defaultY??(selected.type==='background'?0:10);if(selected.type==='text'&&selected.defaultFontSize)selected.fontSize=selected.defaultFontSize;updateLayerControlValues();const font=$('#layer-font'),fontLabel=$('#layer-font-val');if(font)font.value=Math.min(100,selected.fontSize||24);if(fontLabel)fontLabel.textContent=Math.round(selected.fontSize||24)+' px';dbPut('templates',t);drawTemplateCanvas(t)});
  async function moveLayer(dir){const i=t.layers.findIndex(l=>l.id===activeLayerId);if(i<0)return;const j=i+dir;if(j<0||j>=t.layers.length)return;const [v]=t.layers.splice(i,1);t.layers.splice(j,0,v);await dbPut('templates',t);renderTemplateEditor()}
@@ -1964,35 +1967,63 @@ function bindTemplateCanvasZoom(){
  $('#template-zoom-out').onclick=()=>zoomTo(templateZoom/1.2);
  $('#template-zoom-reset').onclick=()=>{templateZoom=1;templatePanX=0;templatePanY=0;applyTemplateCanvasTransform()};
  $('#template-pan-reset').onclick=()=>{templatePanX=0;templatePanY=0;applyTemplateCanvasTransform()};
- const pointers=new Map();let drag=null,pan=null,pinchDistance=0,pinchZoom=1,redrawFrame=0,saveTimer=0;
+ const pointers=new Map();
+ let drag=null,pan=null,viewportPinch=null,layerPinch=null,redrawTimer=0,lastPreviewDraw=0;
  const canvasPoint=e=>{const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)/Math.max(1,r.width)*canvas.width,y:(e.clientY-r.top)/Math.max(1,r.height)*canvas.height}};
  const selectedRect=l=>({x:normalizedToSize(l.x??0,canvas.width),y:normalizedToSize(l.y??0,canvas.height),w:normalizedToSize(l.w??100,canvas.width),h:normalizedToSize(l.h??100,canvas.height)});
+ const inside=(p,r)=>p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h;
  const distance=()=>{const a=[...pointers.values()];return a.length<2?0:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)};
- const refreshSliders=l=>{['x','y','w','h'].forEach(k=>{const input=$('#layer-'+k),label=$('#layer-'+k+'-val');if(input)input.value=l[k];if(label)label.textContent=Math.round(l[k])+'%'})};
- let lastPreviewDraw=0;const queueDraw=()=>{if(redrawFrame)return;const delay=Math.max(0,40-(Date.now()-lastPreviewDraw));redrawFrame=window.setTimeout(()=>{redrawFrame=0;lastPreviewDraw=Date.now();drawTemplateCanvas(t)},delay)};
+ const refreshSliders=l=>{['x','y','w','h'].forEach(k=>{const input=$('#layer-'+k),label=$('#layer-'+k+'-val');if(input)input.value=l[k];if(label)label.textContent=Math.round(l[k])+'%'});const font=$('#layer-font'),fontLabel=$('#layer-font-val');if(font&&l.type==='text'){font.value=Math.min(100,l.fontSize||24);if(fontLabel)fontLabel.textContent=Math.round(l.fontSize||24)+' px'}};
+ const queueDraw=()=>{if(redrawTimer)return;const delay=Math.max(0,45-(Date.now()-lastPreviewDraw));redrawTimer=window.setTimeout(()=>{redrawTimer=0;lastPreviewDraw=Date.now();drawTemplateCanvas(t)},delay)};
+ const saveSelectedLayer=async layer=>{await dbPut('templates',t);refreshSliders(layer);drawTemplateCanvas(t)};
  frame.addEventListener('pointerdown',e=>{
-  e.preventDefault();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  e.preventDefault();
+  const point=canvasPoint(e);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,point});
   try{frame.setPointerCapture(e.pointerId)}catch(_){}
-  if(pointers.size===2){drag=null;pan=null;pinchDistance=distance();pinchZoom=templateZoom;return}
-  if(pointers.size!==1)return;
-  const point=canvasPoint(e),layer=currentLayer();
-  if(layer&&layer.visible!==false&&!layer.locked){
-   const r=selectedRect(layer);
-   if(point.x>=r.x&&point.x<=r.x+r.w&&point.y>=r.y&&point.y<=r.y+r.h){
-    drag={pointerId:e.pointerId,layer,startX:point.x,startY:point.y,layerX:Number(layer.x||0),layerY:Number(layer.y||0)};
-    return;
+  if(pointers.size===2){
+   drag=null;pan=null;
+   const active=currentLayer(),a=[...pointers.values()];
+   const layerRect=active?selectedRect(active):null;
+   const canScaleLayer=!!(active&&active.visible!==false&&!active.locked&&layerRect&&inside(a[0].point,layerRect)&&inside(a[1].point,layerRect));
+   const initialDistance=Math.max(1,distance());
+   if(canScaleLayer){
+    layerPinch={layer:active,distance:initialDistance,x:Number(active.x??0),y:Number(active.y??0),w:Number(active.w??100),h:Number(active.h??100),fontSize:Number(active.fontSize||24),cx:Number(active.x??0)+Number(active.w??100)/2,cy:Number(active.y??0)+Number(active.h??100)/2};
+    viewportPinch=null;
+   }else{
+    viewportPinch={distance:initialDistance,zoom:templateZoom};
+    layerPinch=null;
    }
-  }else if(layer?.locked){
-   toast('Layer terkunci. Pilih Buka kunci layer sebelum menggeser atau zoom.');
+   return;
+  }
+  if(pointers.size!==1)return;
+  const layer=currentLayer();
+  if(layer&&layer.visible!==false){
+   const r=selectedRect(layer);
+   if(inside(point,r)){
+    if(layer.locked){toast('Layer terkunci. Tekan Buka kunci layer atau gunakan tombol +/− Layer di atas.');}
+    else{drag={pointerId:e.pointerId,layer,startX:point.x,startY:point.y,layerX:Number(layer.x||0),layerY:Number(layer.y||0)};return}
+   }
   }
   if(templateZoom>1)pan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,px:templatePanX,py:templatePanY};
  },{passive:false});
  frame.addEventListener('pointermove',e=>{
   if(!pointers.has(e.pointerId))return;
-  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pointers.size>=2&&pinchDistance>0){zoomTo(pinchZoom*(distance()/pinchDistance));return}
+  const point=canvasPoint(e);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,point});
+  if(pointers.size>=2){
+   const factor=distance()/(layerPinch?.distance||viewportPinch?.distance||1);
+   if(layerPinch){
+    const state=layerPinch,layer=state.layer;
+    const nw=clamp(state.w*factor,1,200),nh=clamp(state.h*factor,1,200);
+    layer.w=nw;layer.h=nh;layer.x=state.cx-nw/2;layer.y=state.cy-nh/2;
+    if(layer.type==='text')layer.fontSize=clamp(state.fontSize*factor,8,300);
+    refreshSliders(layer);queueDraw();
+   }else if(viewportPinch){zoomTo(viewportPinch.zoom*factor)}
+   return;
+  }
   if(drag&&drag.pointerId===e.pointerId){
-   const point=canvasPoint(e),layer=drag.layer;
+   const layer=drag.layer;
    layer.x=clamp(drag.layerX+(point.x-drag.startX)/canvas.width*100,-100,200);
    layer.y=clamp(drag.layerY+(point.y-drag.startY)/canvas.height*100,-100,200);
    refreshSliders(layer);queueDraw();
@@ -2001,10 +2032,14 @@ function bindTemplateCanvasZoom(){
   }
  },{passive:false});
  const finish=e=>{
+  if(!pointers.has(e.pointerId))return;
   pointers.delete(e.pointerId);
-  if(drag&&drag.pointerId===e.pointerId){dbPut('templates',t);drag=null;drawTemplateCanvas(t)}
+  if(layerPinch){
+   const layer=layerPinch.layer;layerPinch=null;viewportPinch=null;drag=null;pan=null;
+   saveSelectedLayer(layer);
+  }else if(viewportPinch&&pointers.size<2){viewportPinch=null}
+  if(drag&&drag.pointerId===e.pointerId){const layer=drag.layer;drag=null;dbPut('templates',t);drawTemplateCanvas(t)}
   if(pan&&pan.pointerId===e.pointerId)pan=null;
-  if(pointers.size<2)pinchDistance=0;
  };
  frame.addEventListener('pointerup',finish);
  frame.addEventListener('pointercancel',finish);
