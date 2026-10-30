@@ -103,7 +103,7 @@ requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixe
 requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
 requireSource(androidWorkflow.includes("id.reang.studiofoto.v2") && androidWorkflow.includes("Verify APK can coexist with the old installation") && androidWorkflow.includes("dump badging"), "recovery APK uses a different package ID and is verified before publishing");
 requireSource(androidWorkflow.includes('storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")') && androidWorkflow.includes("debug { signingConfig signingConfigs.debug }") && androidWorkflow.includes("verify --print-certs") && androidWorkflow.includes("APK signature does not match the persistent repository signing key"), "generated Gradle debug signing is explicitly pinned and APK certificates are checked before publish");
-requireSource(sw.includes("reang-studio-foto-v12") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
+requireSource(sw.includes("reang-studio-foto-v13") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
@@ -114,26 +114,25 @@ requireSource(html.includes("touch-action:pan-y") && html.includes("--pf-range-f
 requireSource(html.includes("function stageCanBeOpened(p,targetIndex)") && html.includes("Selesaikan minimal satu foto pada tahap"), "next stage can open after at least one eligible photo");
 requireSource(html.includes("pf-finish-button.next") && html.includes("pf-finish-button.complete"), "continue and completed status use different colors");
 requireSource(html.includes("async function saveCanvasToDevice("), "export has a device-save path");
-requireSource(html.includes('id="template-zoom-in"') && html.includes('id="template-zoom-out"') && html.includes("function bindTemplateCanvasZoom()"), "template canvas has working zoom controls and pan handlers");
-requireSource(html.includes("position:sticky;top:82px") && html.includes(".canvas-wrap{order:-1;top:65px"), "template canvas stays at the top on mobile while scrolling layer controls");
-requireSource(html.includes('data-cutout-mode="cutout"') && html.includes('data-cutout-mode="generate"') && html.includes('data-cutout-mode="blur"'), "project cutout offers transparent cutout, AI background, and bokeh blur modes");
-requireSource(html.includes("fal-ai/bria/background/replace") && html.includes("makeBlurredBackgroundComposite(source,url") && html.includes("pf-cutout-background-prompt"), "AI background replacement and local bokeh modes are wired to project processing");
-requireSource(html.includes('id="layer-zoom-in"') && html.includes('id="layer-zoom-out"') && html.includes("function scaleSelectedLayer(factor)"), "zoom controls scale only the selected template layer");
-requireSource(html.includes('id="fit-background-layer"') && html.includes("selected.x=0;selected.y=0;selected.w=100;selected.h=100"), "background layer has a fit-to-frame action");
-requireSource(html.includes('id="template-add-date"') && html.includes("text:'TANGGAL ACARA'") && html.includes("project?.eventDate||template?.eventDate"), "automatic event-date layer follows the project event date");
-requireSource(html.includes("frame.addEventListener('pointerdown'") && html.includes("frame.addEventListener('pointermove'") && html.includes("touch-action:none"), "template canvas supports touch and pointer gestures without browser scrolling hijacking them");
-requireSource(html.includes("if(pointers.size===2)") && html.includes("viewportPinch.zoom*factor") && html.includes("templatePanX=pan.px+e.clientX-pan.x"), "template canvas supports pinch zoom and panning gestures");
-requireSource(html.includes("drag={pointerId:e.pointerId,layer,startX:point.x,startY:point.y") && html.includes("layer.x=clamp(drag.layerX") && html.includes("layer.y=clamp(drag.layerY"), "dragging an unlocked layer updates only that layer's position");
-requireSource(html.includes("selected.fontSize=Math.max(8,Math.min(300,Number(selected.fontSize||24)*factor))"), "per-layer zoom also scales text font size");
-requireSource(html.includes("const bgRect=rectForLayer(bg);await drawCover(bg.src,bgRect.x,bgRect.y,bgRect.w,bgRect.h") && html.includes("id=\"fit-background-layer\""), "background image respects its layer bounds and has a fit-to-frame control");
-requireSource(html.includes("dateLayer.locked=false;dateLayer.visible=true") && html.includes("t.layers=t.layers.filter(l=>l.id!==dateLayer.id);t.layers.push(dateLayer)"), "automatic date button unlocks the existing date layer and explains project date setup");
-
-requireSource(html.includes("renderComposite(project,null,t,650)"), "template preview resolves dynamic event text using the active project");
-requireSource(html.includes('id="template-selected-zoom-in"') && html.includes('id="template-selected-zoom-out"') && html.includes("const quickLayerZoom=async factor"), "visible top toolbar has distinct controls for zooming only the selected layer");
-requireSource(html.includes("layerPinch={layer:active") && html.includes("layer.w=nw;layer.h=nh;layer.x=state.cx-nw/2;layer.y=state.cy-nh/2"), "two-finger pinch inside the selected layer resizes only that layer");
-requireSource(html.includes('id="template-event-date"') && html.includes("t.eventDate=value") && html.includes("project?.eventDate||template?.eventDate"), "event date can be entered in the template and rendered from project or template metadata");
-requireSource(html.includes("t.layers=t.layers.filter(l=>l.id!==dateLayer.id);t.layers.push(dateLayer)"), "automatic date layer is promoted above image layers to remain visible");
-requireSource(html.includes("const fontScale=outW/650") && html.includes("fontSize+'px sans-serif'"), "text layer font size scales consistently from preview to full-resolution export");
+const simpleEditorStart = html.indexOf("function renderTemplateEditor(){");
+const simpleEditorEnd = html.indexOf("function bindSimpleDateGestures", simpleEditorStart);
+const simpleEditorSource = simpleEditorStart >= 0 && simpleEditorEnd > simpleEditorStart ? html.slice(simpleEditorStart, simpleEditorEnd) : "";
+const simpleGestureStart = html.indexOf("function bindSimpleDateGestures(t){");
+const simpleGestureEnd = html.indexOf("function applyTemplateCanvasTransform", simpleGestureStart);
+const simpleGestureSource = simpleGestureStart >= 0 && simpleGestureEnd > simpleGestureStart ? html.slice(simpleGestureStart, simpleGestureEnd) : "";
+const compositeStart = html.indexOf("function renderComposite(");
+const compositeEnd = html.indexOf("async function refreshFinalThumb", compositeStart);
+const compositeSource = compositeStart >= 0 && compositeEnd > compositeStart ? html.slice(compositeStart, compositeEnd) : "";
+requireSource(simpleEditorSource.includes("simple-template-editor") && simpleEditorSource.includes("simple-upload-png") && simpleEditorSource.includes("simple-png-input") && simpleEditorSource.includes(".png,image/png"), "simple template editor exposes one PNG upload control");
+requireSource(simpleEditorSource.includes("file.type!=='image/png'") && simpleEditorSource.includes("t.simpleArtworkLayerId=layer.id") && simpleEditorSource.includes("layer.x=0;layer.y=0;layer.w=100;layer.h=100;layer.visible=true;layer.locked=true"), "uploaded PNG is fixed to the full frame and locked against date gestures");
+requireSource(simpleEditorSource.includes("simple-event-date") && simpleEditorSource.includes("t.eventDate=value") && simpleEditorSource.includes("p.eventDate=value"), "event date input persists to template and active project");
+requireSource(simpleEditorSource.includes("simple-add-date") && simpleEditorSource.includes("t.simpleDateLayerId=layer.id") && simpleEditorSource.includes("t.layers.push(layer)"), "one automatic date layer can be added and saved");
+requireSource(simpleGestureSource.includes("handle.addEventListener('pointerdown'") && simpleGestureSource.includes("handle.addEventListener('pointermove'") && simpleGestureSource.includes("pointers.size===1") && simpleGestureSource.includes("layer.x=clamp(move.startX+dx") && simpleGestureSource.includes("layer.y=clamp(move.startY+dy"), "one-finger drag moves only the date layer");
+requireSource(simpleGestureSource.includes("if(pointers.size===2)") && simpleGestureSource.includes("factor=d/pinch.distance") && simpleGestureSource.includes("layer.fontSize=clamp(pinch.font*factor") && simpleGestureSource.includes("layer.w=clamp(pinch.w*factor") && simpleGestureSource.includes("layer.h=clamp(pinch.h*factor"), "two-finger pinch changes only the date layer size");
+requireSource(simpleEditorSource.includes("template-date-handle") && html.includes("function drawTemplateCanvas(t)") && html.includes("handle.textContent=date?fmtDate(date):'PILIH TANGGAL'"), "date overlay appears on the PNG preview and follows the selected event date");
+requireSource(compositeSource.includes("template?.simpleMode?allLayers.filter(l=>l.id===template.simpleArtworkLayerId||l.id===template.simpleDateLayerId):allLayers") && compositeSource.includes("replace(/TANGGAL ACARA/g,eventDate?fmtDate(eventDate):'')"), "simple export includes only the PNG artwork and dynamic date text");
+requireSource(simpleEditorSource.includes("renderComposite(p,null,t,tw)") && simpleEditorSource.includes("downloadCanvas(can,slug(t.name)+'.png','image/png')"), "template export downloads the rendered PNG with the event date");
+requireSource(compositeSource.includes("const fontScale=outW/650") && compositeSource.includes("ctx.fillText(textValue"), "date font scales consistently from preview to full-resolution export");
 
 
 
