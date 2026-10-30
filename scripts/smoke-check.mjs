@@ -26,12 +26,12 @@ requireSource(renderSource.includes("setActivePageNav(page)"), "render() uses th
 requireSource(navSource.includes("setActivePageNav(page)"), "navTo() uses the shared safe navigation helper");
 requireSource(html.includes("function renderErrorScreen("), "render errors have an in-app recovery screen");
 requireSource(renderSource.includes("catch(error)") && renderSource.includes("renderErrorScreen(error,requestedPage)"), "render() catches synchronous page-render errors");
-requireSource(html.includes("Promise.allSettled([dbGetAll('projects'),dbGetAll('templates')])"), "project/template storage loading fails independently");
+requireSource(html.includes("Promise.allSettled([dbGetAll('projects'),dbGetAll('templates'),dbGetAll('backgrounds')])"), "project/template/background storage loading fails independently");
 requireSource(html.includes("function renderProjects()") && html.includes("function renderProjectGallery()") && html.includes("function renderPhotoEditor()"), "main list, project photo gallery and editor are separate pages");
 requireSource(html.includes("key:'light'") && html.includes("key:'cutout'") && html.includes("key:'template'") && html.includes("key:'face'") && html.includes("key:'export'"), "five editing stages are present in order");
 requireSource(html.includes("function runProjectCutout(p,ph)") && html.includes("fal-ai/imageutils/rembg") && html.includes("fal-ai/birefnet") && html.includes("fal-ai/bria/background/remove"), "project cutout offers economy, balanced, and high-quality AI model choices");
 const cutoutHandlerStart = html.indexOf("if(stageIndex===1){\n  $$('[data-cutout-mode]')", html.indexOf("function renderPhotoEditor"));
-const cutoutHandlerEnd = html.indexOf("if(stageIndex===2)$('#pf-template')", cutoutHandlerStart);
+const cutoutHandlerEnd = html.indexOf("if(stageIndex===2){", cutoutHandlerStart);
 const cutoutHandlerSource = cutoutHandlerStart >= 0 && cutoutHandlerEnd > cutoutHandlerStart ? html.slice(cutoutHandlerStart, cutoutHandlerEnd) : "";
 requireSource(cutoutHandlerSource.includes("runProjectCutout(p,ph)") && !cutoutHandlerSource.includes("page='tool-runner'") && !cutoutHandlerSource.includes("workflowReturn={projectId:p.id,photoId:ph.id,stageKey:'cutout'}"), "cutout runs inside the project editor without navigating to the separate AI tool page");
 requireSource(html.includes("function bindProjectCutoutBrush(p,ph)") && html.includes("Tambah subjek / pulihkan") && html.includes("Hapus / transparan") && html.includes("destination-out"), "cutout result supports manual add-subject and remove-transparent brush corrections");
@@ -103,7 +103,7 @@ requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixe
 requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
 requireSource(androidWorkflow.includes("id.reang.studiofoto.v2") && androidWorkflow.includes("Verify APK can coexist with the old installation") && androidWorkflow.includes("dump badging"), "recovery APK uses a different package ID and is verified before publishing");
 requireSource(androidWorkflow.includes('storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")') && androidWorkflow.includes("debug { signingConfig signingConfigs.debug }") && androidWorkflow.includes("verify --print-certs") && androidWorkflow.includes("APK signature does not match the persistent repository signing key"), "generated Gradle debug signing is explicitly pinned and APK certificates are checked before publish");
-requireSource(sw.includes("reang-studio-foto-v13") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
+requireSource(sw.includes("reang-studio-foto-v14") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
@@ -136,6 +136,15 @@ requireSource(compositeSource.includes("const fontScale=outW/650") && compositeS
 
 
 
+requireSource(html.includes("DB_VERSION=2") && html.includes("createObjectStore('backgrounds',{keyPath:'id'})"), "background images use a dedicated IndexedDB store with migration");
+requireSource(html.includes("Daftar background") && html.includes("background-library-files") && html.includes("data-delete-background"), "template workspace manages a reusable background image library");
+requireSource(html.includes("file.type.startsWith('image/')") && html.includes("dbPut('backgrounds',item)") && html.includes("backgrounds.push(item)"), "uploaded background images are saved for later projects");
+requireSource(html.includes('id="pf-background"') && html.includes("backgrounds.map(bg=>") && html.includes("p.backgroundId=e.target.value||null"), "project Template stage allows selecting a saved background");
+requireSource(html.includes("Atur background") && html.includes("Atur objek karnaval") && html.includes("templateBackgroundPlacement"), "Template stage exposes separate background and carnival-object adjustment targets");
+requireSource(html.includes("function bindTemplateStageGestures(project,photo)") && html.includes("overlay.addEventListener('pointerdown'") && html.includes("overlay.addEventListener('pointermove'") && html.includes("pointers.size>=2"), "Template stage supports one-finger dragging and two-finger pinch adjustments");
+requireSource(html.includes("function refreshTemplateStagePreview(project,photo)") && html.includes("await dbPut('projects',project)"), "template position changes persist and refresh the project preview");
+requireSource(html.includes("function drawPanCover") && html.includes("project?.templateBackgroundPlacement") && html.includes("chosenBackground.src"), "selected background is positioned and rendered behind the carnival subject");
+requireSource(html.includes("stageIndex===2?'':'") && html.includes('class="pf-zoom-controls"') && html.includes("if(stageIndex===2)bindTemplateStageGestures(p,ph);else bindPhotoZoomControls(ph)"), "floating photo zoom controls are removed from the Template stage");
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
 // Service-worker cache invalidation is checked alongside the new brush regression assertions above.
 
