@@ -103,7 +103,7 @@ requireSource(blendUnitTestPassed, "masked-light blend preserves unselected pixe
 requireSource(androidWorkflow.includes("secrets.ANDROID_DEBUG_KEYSTORE_BASE64") && androidWorkflow.includes("base64 --decode") && androidWorkflow.includes("Missing repository Actions secret"), "Android APK publishing requires the same persistent signing key for upgrades");
 requireSource(androidWorkflow.includes("id.reang.studiofoto.v2") && androidWorkflow.includes("Verify APK can coexist with the old installation") && androidWorkflow.includes("dump badging"), "recovery APK uses a different package ID and is verified before publishing");
 requireSource(androidWorkflow.includes('storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")') && androidWorkflow.includes("debug { signingConfig signingConfigs.debug }") && androidWorkflow.includes("verify --print-certs") && androidWorkflow.includes("APK signature does not match the persistent repository signing key"), "generated Gradle debug signing is explicitly pinned and APK certificates are checked before publish");
-requireSource(sw.includes("reang-studio-foto-v22") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
+requireSource(sw.includes("reang-studio-foto-v23") && sw.includes("const isAppShell"), "service worker cache is bumped and app shell remains network-first");
 requireSource(html.includes("globalControls.classList.toggle('hidden',!!localMode)"), "local scope hides global sliders and global scope restores them");
 requireSource(html.includes("localScopeSelectedInUi=!!document.getElementById('pf-light-scope-local')?.classList.contains('active')"), "finishing a photo is guarded by the visible local-selection mode");
 requireSource(html.includes("paintLightBrushSegment(target,point,point") && html.includes("brush.masks[stroke.mode]=lightBrushCanvasHasPaint(canvas)?canvas.toDataURL('image/png'):null"), "brush strokes render and persist selection masks");
@@ -145,10 +145,11 @@ requireSource(html.includes("f.type.startsWith('image/')") && html.includes("dbP
 requireSource(html.includes("pf-open-background-menu") && html.includes("data-stage-background") && html.includes("Pilih background"), "project Template stage keeps backgrounds inside an on-demand menu");
 requireSource(html.includes("pf-open-template-menu") && html.includes("data-stage-template") && html.includes("Pilih template desain"), "project Template stage keeps templates inside an on-demand menu");
 requireSource(html.includes("data-template-library-thumb") && html.includes("template-library-preview") && html.includes("paintTemplateThumbnails('[data-template-library-thumb]')"), "Template library renders actual design previews as image thumbnails");
-requireSource(!html.includes("OBJEK KARNAVAL</span>") && !html.includes('class="pf-template-adjust-box'), "Template stage has no carnival label or yellow selection border");
+const templateStageForOverlayCheck=html.slice(html.indexOf("}else if(stageIndex===2){"),html.indexOf("}else if(stageIndex===3){"));
+requireSource(!templateStageForOverlayCheck.includes("OBJEK KARNAVAL") && !templateStageForOverlayCheck.includes('class="pf-template-adjust-box'), "Template stage has no carnival label or yellow selection border");
 requireSource(html.includes("function updateTemplateAdjustOverlay(project,photo)") && html.includes("Gesture surface remains active, but no selection box") && html.includes("x:-20,y:-20,w:140,h:140"), "template drag/pinch remains active without visible outlines and background has movable overscan");
 requireSource(html.includes("data-delete-project") && html.includes("data-delete-photo") && html.includes("data-menu-delete-template") && html.includes("data-menu-delete-background"), "projects, photos, templates and backgrounds each have delete actions");
-requireSource(sw.includes("reang-studio-foto-v22"), "service worker cache version is updated for the UI changes");
+requireSource(sw.includes("reang-studio-foto-v23"), "service worker cache version is updated for the UI changes");
 requireSource(html.includes("Atur background") && html.includes("Atur objek karnaval") && html.includes("templateBackgroundPlacement"), "Template stage exposes separate background and carnival-object adjustment targets");
 requireSource(html.includes("function bindTemplateStageGestures(project,photo)") && html.includes("stage.addEventListener('pointerdown'") && html.includes("stage.addEventListener('pointermove'") && html.includes("pointers.size>=2") && html.includes("stage.style.pointerEvents='auto'"), "Template stage uses the image stage as a hit-testable drag/pinch surface");
 requireSource(html.includes("function refreshTemplateStagePreview(project,photo)") && html.includes("await dbPut('projects',project)"), "template position changes persist and refresh the project preview");
@@ -202,7 +203,7 @@ requireSource(html.includes("const applyDateFontSize=()=>") && html.includes("ap
 
 requireSource(html.includes("handle.querySelector('#template-date-text')") && html.includes("if(!glyph){glyph=document.createElement('span')") && html.includes("handle.replaceChildren(glyph)"), "date canvas redraw restores the visible text span only when missing and never replaces it with plain container text");
 
-requireSource(sw.includes("reang-studio-foto-v22"), "service worker cache version updated for the date scaling fix");
+requireSource(sw.includes("reang-studio-foto-v23"), "service worker cache version updated for the date scaling fix");
 requireSource(html.includes("glyph.style.setProperty('transform','scale('+(previewFontSize/36)+')','important')") && html.includes("glyph.style.setProperty('transform','scale('+(previewSize/36)+')','important')"), "date font scaling bypasses Android minimum font-size in slider, pinch and redraw previews");
 
 requireSource(html.includes("Peningkatan objek karnaval") && html.includes("pf-carnival-model") && html.includes("pf-carnival-strength") && html.includes("pf-carnival-scale"), "Wajah workflow stage presents object enhancement controls directly");
