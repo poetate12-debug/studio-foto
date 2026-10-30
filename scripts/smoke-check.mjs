@@ -118,6 +118,11 @@ requireSource(html.includes('id="template-zoom-in"') && html.includes('id="templ
 requireSource(html.includes("position:sticky;top:82px") && html.includes(".canvas-wrap{order:-1;top:65px"), "template canvas stays at the top on mobile while scrolling layer controls");
 requireSource(html.includes('data-cutout-mode="cutout"') && html.includes('data-cutout-mode="generate"') && html.includes('data-cutout-mode="blur"'), "project cutout offers transparent cutout, AI background, and bokeh blur modes");
 requireSource(html.includes("fal-ai/bria/background/replace") && html.includes("makeBlurredBackgroundComposite(source,url") && html.includes("pf-cutout-background-prompt"), "AI background replacement and local bokeh modes are wired to project processing");
+requireSource(html.includes('id="layer-zoom-in"') && html.includes('id="layer-zoom-out"') && html.includes("function scaleSelectedLayer(factor)"), "zoom controls scale only the selected template layer");
+requireSource(html.includes('id="fit-background-layer"') && html.includes("selected.x=0;selected.y=0;selected.w=100;selected.h=100"), "background layer has a fit-to-frame action");
+requireSource(html.includes('id="template-add-date"') && html.includes("text:'TANGGAL ACARA'") && html.includes("project?.eventDate?fmtDate(project.eventDate)"), "automatic event-date layer follows the project event date");
+requireSource(html.includes("renderComposite(project,null,t,650)"), "template preview resolves dynamic event text using the active project");
+
 
 requireSource(html.includes("native-download.bundle.js"), "native download bridge is referenced");
 // Service-worker cache invalidation is checked alongside the new brush regression assertions above.
