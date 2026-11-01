@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
@@ -131,7 +132,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.HomeRounded, contentDescription = null) },
+                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
                     label = { Text("Beranda") },
                     colors = navColors()
                 )
