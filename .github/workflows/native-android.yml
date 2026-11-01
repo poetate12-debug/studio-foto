@@ -36,13 +36,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build native debug APK
+      - name: Restore permanent signing key
+        env:
+          REANG_KEYSTORE_BASE64: ${{ secrets.REANG_KEYSTORE_BASE64 }}
+          REANG_KEYSTORE_PASSWORD: ${{ secrets.REANG_KEYSTORE_PASSWORD }}
+          REANG_KEY_ALIAS: ${{ secrets.REANG_KEY_ALIAS }}
+        run: |
+          test -n "$REANG_KEYSTORE_BASE64" || (echo "Missing GitHub secret REANG_KEYSTORE_BASE64" && exit 1)
+          test -n "$REANG_KEYSTORE_PASSWORD" || (echo "Missing GitHub secret REANG_KEYSTORE_PASSWORD" && exit 1)
+          test -n "$REANG_KEY_ALIAS" || (echo "Missing GitHub secret REANG_KEY_ALIAS" && exit 1)
+          echo "$REANG_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/reang-upload.p12"
+          echo "REANG_KEYSTORE_PATH=$RUNNER_TEMP/reang-upload.p12" >> "$GITHUB_ENV"
+          echo "REANG_KEY_ALIAS=$REANG_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "REANG_KEYSTORE_PASSWORD=$REANG_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build signed native release APK
         working-directory: native-android
-        run: gradle assembleDebug --stacktrace
-      - name: Upload APK
+        run: gradle assembleRelease --stacktrace
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: reang-studio-foto-native-preview
-          path: native-android/app/build/outputs/apk/debug/app-debug.apk
+          name: reang-studio-foto-native-signed
+          path: native-android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
