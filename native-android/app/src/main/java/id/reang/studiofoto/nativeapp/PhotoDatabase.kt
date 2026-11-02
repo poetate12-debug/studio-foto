@@ -69,7 +69,8 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "NULL") val localAdjustmentPath: String? = null,
     @ColumnInfo(defaultValue = "0") val texture: Float = 0f,
     @ColumnInfo(defaultValue = "0") val sharpen: Float = 0f,
-    @ColumnInfo(defaultValue = "0") val whites: Float = 0f
+    @ColumnInfo(defaultValue = "0") val whites: Float = 0f,
+    @ColumnInfo(defaultValue = "'Asli'") val lightPreset: String = "Asli"
 )
 
 @Dao
@@ -93,7 +94,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 5, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 6, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -151,9 +152,14 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN whites REAL NOT NULL DEFAULT 0")
             }
         }
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN lightPreset TEXT NOT NULL DEFAULT 'Asli'")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { INSTANCE = it }
         }
     }
