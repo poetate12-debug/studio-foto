@@ -67,6 +67,8 @@ fun PhotoWorkflowScreen(
     var objectPrompt by rememberSaveable(photo.id) { mutableStateOf("") }
     var format by rememberSaveable(photo.id) { mutableStateOf(photo.exportFormat) }
     var dpi by rememberSaveable(photo.id) { mutableIntStateOf(photo.exportDpi) }
+    var customWidth by rememberSaveable(photo.id) { mutableStateOf(photo.templateWidthCm.toString()) }
+    var customHeight by rememberSaveable(photo.id) { mutableStateOf(photo.templateHeightCm.toString()) }
     var brushEnabled by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushErase by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
@@ -405,11 +407,24 @@ fun PhotoWorkflowScreen(
                         }
                     }
                     2 -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            FilterChip(edited.templateName == "A3 Landscape", { change { it.copy(templateName = "A3 Landscape", templateWidthCm = 42f, templateHeightCm = 29.7f) } }, label = { Text("A3 Landscape") })
-                            FilterChip(edited.templateName == "A4 Portrait", { change { it.copy(templateName = "A4 Portrait", templateWidthCm = 21f, templateHeightCm = 29.7f) } }, label = { Text("A4 Portrait") })
-                            FilterChip(edited.templateName == "Bebas", { change { it.copy(templateName = "Bebas") } }, label = { Text("Bebas") })
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            item { FilterChip(edited.templateName == "A3 Landscape", { change { it.copy(templateName = "A3 Landscape", templateWidthCm = 42f, templateHeightCm = 29.7f) }; customWidth = "42"; customHeight = "29.7" }, label = { Text("A3 Landscape") }) }
+                            item { FilterChip(edited.templateName == "A3 Portrait", { change { it.copy(templateName = "A3 Portrait", templateWidthCm = 29.7f, templateHeightCm = 42f) }; customWidth = "29.7"; customHeight = "42" }, label = { Text("A3 Portrait") }) }
+                            item { FilterChip(edited.templateName == "A4 Portrait", { change { it.copy(templateName = "A4 Portrait", templateWidthCm = 21f, templateHeightCm = 29.7f) }; customWidth = "21"; customHeight = "29.7" }, label = { Text("A4 Portrait") }) }
+                            item { FilterChip(edited.templateName == "A4 Landscape", { change { it.copy(templateName = "A4 Landscape", templateWidthCm = 29.7f, templateHeightCm = 21f) }; customWidth = "29.7"; customHeight = "21" }, label = { Text("A4 Landscape") }) }
+                            item { FilterChip(edited.templateName == "Bebas", { change { it.copy(templateName = "Bebas") } }, label = { Text("Bebas") }) }
                         }
+                        Text("Ukuran khusus (cm)", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(value = customWidth, onValueChange = { customWidth = it }, label = { Text("Lebar") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(value = customHeight, onValueChange = { customHeight = it }, label = { Text("Tinggi") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
+                        OutlinedButton(onClick = {
+                            val w = customWidth.replace(",", ".").toFloatOrNull()
+                            val h = customHeight.replace(",", ".").toFloatOrNull()
+                            if (w == null || h == null || w !in 5f..200f || h !in 5f..250f) status = "Ukuran harus 5–200 cm untuk lebar dan 5–250 cm untuk tinggi."
+                            else { change { it.copy(templateName = "Custom", templateWidthCm = w, templateHeightCm = h) }; status = "Ukuran khusus diterapkan." }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Terapkan ukuran khusus") }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { pickBackground.launch(arrayOf("image/*")) }, modifier = Modifier.weight(1f)) { Text("Pilih background") }
                             OutlinedButton(onClick = { pickOverlay.launch(arrayOf("image/png")) }, modifier = Modifier.weight(1f)) { Text("Template PNG") }
