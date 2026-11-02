@@ -2,6 +2,8 @@ package id.reang.studiofoto.nativeapp
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "projects")
@@ -36,8 +38,8 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "0") val objectX: Float = 0f,
     @ColumnInfo(defaultValue = "0") val objectY: Float = 0f,
     @ColumnInfo(defaultValue = "1") val objectScale: Float = 1f,
-    @ColumnInfo(defaultValue = "29.7") val templateWidthCm: Float = 29.7f,
-    @ColumnInfo(defaultValue = "42") val templateHeightCm: Float = 42f,
+    @ColumnInfo(defaultValue = "42") val templateWidthCm: Float = 42f,
+    @ColumnInfo(defaultValue = "29.7") val templateHeightCm: Float = 29.7f,
     @ColumnInfo(defaultValue = "300") val exportDpi: Int = 300,
     @ColumnInfo(defaultValue = "'A3 Landscape'") val templateName: String = "A3 Landscape",
     @ColumnInfo(defaultValue = "''") val eventText: String = "",
@@ -79,8 +81,8 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN objectX REAL NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE photos ADD COLUMN objectY REAL NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE photos ADD COLUMN objectScale REAL NOT NULL DEFAULT 1")
-                db.execSQL("ALTER TABLE photos ADD COLUMN templateWidthCm REAL NOT NULL DEFAULT 29.7")
-                db.execSQL("ALTER TABLE photos ADD COLUMN templateHeightCm REAL NOT NULL DEFAULT 42")
+                db.execSQL("ALTER TABLE photos ADD COLUMN templateWidthCm REAL NOT NULL DEFAULT 42")
+                db.execSQL("ALTER TABLE photos ADD COLUMN templateHeightCm REAL NOT NULL DEFAULT 29.7")
                 db.execSQL("ALTER TABLE photos ADD COLUMN exportDpi INTEGER NOT NULL DEFAULT 300")
                 db.execSQL("ALTER TABLE photos ADD COLUMN templateName TEXT NOT NULL DEFAULT 'A3 Landscape'")
                 db.execSQL("ALTER TABLE photos ADD COLUMN eventText TEXT NOT NULL DEFAULT ''")
