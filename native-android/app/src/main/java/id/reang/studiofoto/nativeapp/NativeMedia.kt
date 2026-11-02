@@ -52,6 +52,13 @@ object NativeFiles {
             file.absolutePath
         }
 
+    fun deletePrivatePhotoFiles(photo: PhotoEntity) {
+        listOf(photo.localPath, photo.cutoutPath, photo.enhancedPath, photo.aiCompositePath)
+            .filterNotNull()
+            .distinct()
+            .forEach { path -> runCatching { File(path).delete() } }
+    }
+
     suspend fun imageDataUri(path: String, maxSide: Int = 2400, forcePng: Boolean = false): String = withContext(Dispatchers.IO) {
         val bitmap = NativeImageEngine.decode(path, maxSide) ?: error("Foto tidak dapat dibaca.")
         val output = ByteArrayOutputStream()
