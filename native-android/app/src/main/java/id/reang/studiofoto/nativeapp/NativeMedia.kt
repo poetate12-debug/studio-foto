@@ -338,6 +338,13 @@ object NativeImageEngine {
         })
     }
 
+    fun renderPhotoPreview(photo: PhotoEntity, maxSide: Int = 1600): Bitmap {
+        val sourcePath = photo.localAdjustmentPath ?: photo.enhancedPath ?: photo.localPath
+        val bitmap = decode(sourcePath, maxSide) ?: error("Foto asli tidak dapat dibaca.")
+        applyAdvancedLightAdjustments(bitmap, photo)
+        return bitmap
+    }
+
     fun render(photo: PhotoEntity, width: Int, height: Int): Bitmap {
         val out = Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
