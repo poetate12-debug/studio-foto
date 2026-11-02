@@ -1,27 +1,27 @@
-# Reang Studio Foto — Native Android foundation
+# Reang Studio Foto — Android packaging
 
-A new Android application implemented with Kotlin and Jetpack Compose. It is isolated from the existing Capacitor/PWA app so the current application remains untouched.
+The Android APK packages the existing Reang Studio Foto editor from the repository's `index.html` through Capacitor. This is the compatibility path used to bring the existing editor workflow onto Android without leaving its tools behind.
 
-## Included in this first foundation
-- Native Kotlin + Jetpack Compose application shell.
-- Native project list and project creation.
-- Multi-image import using Android Storage Access Framework.
-- Persisted project/photo metadata in Room.
-- Native photo preview and local brightness, contrast, saturation controls.
-- Adjustment values persisted per photo.
+## Editor features carried into the APK
+- Project creation, project list, multiple photo import and on-device project data.
+- Per-photo lighting controls, local adjustments and brush-based selections.
+- Cutout/background removal workflow, Keep/Remove brush refinement and object tools.
+- Template sizes, saved templates, background library, text/logo/ornament layers, layer order and placement controls.
+- AI tools for background removal/replacement, object removal, background blur, enhancement/upscale and face-related refinement where the selected fal.ai model is available.
+- JPEG/PNG output, print dimensions/DPI settings and sequential export.
+- Native Android image saving through `NativeDownloaderPlugin` to `Download/ReangStudioFoto`.
 
-## Build locally
-Requirements: JDK 17, Android SDK 35, Gradle 8.9.
+## Build
 
-```bash
-cd native-android
-gradle assembleDebug
-```
+The GitHub Actions workflow `.github/workflows/native-android.yml` installs the Capacitor dependencies, validates the editor with `npm test`, bundles `native-download.js`, generates the Android project and builds a signed release APK.
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
+Required GitHub Actions secrets:
+- `REANG_KEYSTORE_BASE64`
+- `REANG_KEYSTORE_PASSWORD`
+- `REANG_KEY_ALIAS`
 
-## Next phases
-This is Phase 1, not a complete replacement for the old editor. RAW development, GPU/C++ image engine, masking/brushes, cutout, template layers, fal.ai workflows, face/object enhancement, batch export, and print-size export are not included yet.
+The APK application ID is `id.reang.studiofoto.nativeapp`, preserving update compatibility with the currently installed native preview. The previous Kotlin/Compose foundation source remains in this folder's source tree as a separate native implementation base; it is not the active UI host in this compatibility build.
 
-## Package identity
-The preview uses `id.reang.studiofoto.nativeapp` so it can install side-by-side with the existing Capacitor app. Keep the old app ID and signing setup unchanged.
+## Important limits
+
+This packaging reuses the existing editor code; it does not mean every AI model is guaranteed to work for every account or image. AI processing requires a valid fal.ai key, network access, model availability/permissions and sufficient account balance. Results must be checked manually, especially face-related edits. The editor stores its projects and templates locally in the app WebView data; uninstalling the app or clearing app data can remove that local data. The 30 MB limit applies to each image written by the native downloader.
