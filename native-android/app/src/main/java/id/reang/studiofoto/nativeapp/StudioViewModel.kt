@@ -14,6 +14,7 @@ data class ImportedPhoto(val originalUri: String, val localPath: String, val nam
 class StudioViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = PhotoDatabase.get(application).studioDao()
     val projects = dao.observeProjects()
+    val assets = dao.observeAssets()
     private val copyingIds = ConcurrentHashMap.newKeySet<Long>()
 
     suspend fun ensureStarterProject() {
@@ -44,6 +45,17 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun savePhoto(photo: PhotoEntity) {
         viewModelScope.launch { dao.updatePhoto(photo) }
+    }
+
+    fun addAsset(name: String, localPath: String, kind: String) {
+        val cleanName = name.trim().ifBlank { kind.replaceFirstChar { it.uppercase() } }
+        viewModelScope.launch {
+            dao.insertAsset(StudioAssetEntity(name = cleanName, localPath = localPath, kind = kind))
+        }
+    }
+
+    fun deleteAsset(assetId: Long) {
+        viewModelScope.launch { dao.deleteAsset(assetId) }
     }
 
     fun ensureLocalCopies(photos: List<PhotoEntity>) {
