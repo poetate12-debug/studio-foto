@@ -42,10 +42,12 @@ import kotlin.math.roundToInt
 @Composable
 fun PhotoWorkflowScreen(
     photo: PhotoEntity,
+    assets: List<StudioAssetEntity>,
     falApiKey: String,
     onFalApiKeyChange: (String) -> Unit,
     onBack: () -> Unit,
     onSave: (PhotoEntity) -> Unit,
+    onRegisterAsset: (String, String, String) -> Unit,
     onExportAll: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -96,21 +98,21 @@ fun PhotoWorkflowScreen(
     val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "backgrounds").absolutePath }
-                .onSuccess { file -> change { it.copy(backgroundPath = file, aiCompositePath = null) }; persist(); status = "Background tersimpan." }
+                .onSuccess { file -> change { it.copy(backgroundPath = file, aiCompositePath = null) }; onRegisterAsset(uri.lastPathSegment ?: "Background", file, "background"); persist(); status = "Background tersimpan di koleksi dan proyek." }
                 .onFailure { status = it.message ?: "Gagal membaca background." }
         }
     }
     val pickOverlay = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "overlays").absolutePath }
-                .onSuccess { file -> change { it.copy(overlayPath = file) }; persist(); status = "Template PNG terpasang." }
+                .onSuccess { file -> change { it.copy(overlayPath = file) }; onRegisterAsset(uri.lastPathSegment ?: "Template PNG", file, "template"); persist(); status = "Template PNG disimpan ke koleksi." }
                 .onFailure { status = it.message ?: "Gagal membaca template PNG." }
         }
     }
     val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "logos").absolutePath }
-                .onSuccess { file -> change { it.copy(logoPath = file) }; persist(); status = "Logo terpasang." }
+                .onSuccess { file -> change { it.copy(logoPath = file) }; onRegisterAsset(uri.lastPathSegment ?: "Logo", file, "logo"); persist(); status = "Logo disimpan ke koleksi." }
                 .onFailure { status = it.message ?: "Gagal membaca logo." }
         }
     }
@@ -412,6 +414,30 @@ fun PhotoWorkflowScreen(
                             OutlinedButton(onClick = { pickOverlay.launch(arrayOf("image/png")) }, modifier = Modifier.weight(1f)) { Text("Template PNG") }
                         }
                         OutlinedButton(onClick = { pickLogo.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Tambah logo / ornamen") }
+                        if (assets.any { it.kind == "background" }) {
+                            Text("BACKGROUND TERSIMPAN", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(assets.filter { it.kind == "background" }) { asset ->
+                                    FilterChip(edited.backgroundPath == asset.localPath, { change { it.copy(backgroundPath = asset.localPath, aiCompositePath = null) } }, label = { Text(asset.name, maxLines = 1) })
+                                }
+                            }
+                        }
+                        if (assets.any { it.kind == "template" }) {
+                            Text("TEMPLATE PNG TERSIMPAN", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(assets.filter { it.kind == "template" }) { asset ->
+                                    FilterChip(edited.overlayPath == asset.localPath, { change { it.copy(overlayPath = asset.localPath) } }, label = { Text(asset.name, maxLines = 1) })
+                                }
+                            }
+                        }
+                        if (assets.any { it.kind == "logo" }) {
+                            Text("LOGO TERSIMPAN", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(assets.filter { it.kind == "logo" }) { asset ->
+                                    FilterChip(edited.logoPath == asset.localPath, { change { it.copy(logoPath = asset.localPath) } }, label = { Text(asset.name, maxLines = 1) })
+                                }
+                            }
+                        }
                         Text("ATUR BACKGROUND", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Zoom background", edited.backgroundScale, 0.5f..3f) { v -> change { it.copy(backgroundScale = v) } }
                         WorkflowSlider("Geser background X", edited.backgroundX, -100f..100f) { v -> change { it.copy(backgroundX = v) } }
