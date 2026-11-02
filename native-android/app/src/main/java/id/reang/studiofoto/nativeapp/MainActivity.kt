@@ -110,6 +110,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
         val activeProjectPhotos by vm.photos(activePhoto!!.projectId).collectAsState(initial = emptyList())
         PhotoWorkflowScreen(
             photo = activePhoto!!,
+            projectName = activeProject?.name ?: "Studio Editor",
             projectPhotos = activeProjectPhotos,
             onSelectPhoto = { selected -> activePhoto = selected },
             assets = assets,
