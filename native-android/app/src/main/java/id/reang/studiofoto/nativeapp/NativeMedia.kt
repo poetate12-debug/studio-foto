@@ -247,7 +247,16 @@ object NativeImageEngine {
         } else {
             val background = decode(photo.backgroundPath, max(width, height))
             if (background != null) {
-                drawCover(canvas, background, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+                val scale = photo.backgroundScale.coerceIn(0.5f, 3f)
+                val offsetX = photo.backgroundX.coerceIn(-100f, 100f) * width / 100f
+                val offsetY = photo.backgroundY.coerceIn(-100f, 100f) * height / 100f
+                val rect = RectF(
+                    -width * (scale - 1f) / 2f + offsetX,
+                    -height * (scale - 1f) / 2f + offsetY,
+                    width * (1f + scale) / 2f + offsetX,
+                    height * (1f + scale) / 2f + offsetY
+                )
+                drawCover(canvas, background, rect)
                 background.recycle()
             } else {
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -268,23 +277,41 @@ object NativeImageEngine {
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            val sat = photo.saturation.coerceIn(0f, 2f)
-                val inv = 1f - sat
-                val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
-                val contrast = photo.contrast.coerceIn(.5f, 1.8f)
-                val offset = photo.brightness.coerceIn(-.6f, .6f) * 255f
-                val warm = photo.warmth.coerceIn(-100f, 100f) * 0.55f
-                paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
-                    contrast * (r + sat), contrast * g, contrast * b, 0f, offset + warm,
-                    contrast * r, contrast * (g + sat), contrast * b, 0f, offset,
-                    contrast * r, contrast * g, contrast * (b + sat), 0f, offset - warm,
-                    0f, 0f, 0f, 1f, 0f
-                )))
+            val sat = (photo.saturation + photo.vibrance * 0.004f).coerceIn(0f, 2f)
+            val inv = 1f - sat
+            val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
+            val contrast = (photo.contrast * (1f + photo.dehaze.coerceIn(-100f, 100f) * 0.002f + photo.clarity.coerceIn(-100f, 100f) * 0.0015f)).coerceIn(0.35f, 2.2f)
+            val exposureOffset = photo.brightness.coerceIn(-0.6f, 0.6f) * 255f
+            val shadowOffset = photo.shadows.coerceIn(-100f, 100f) * 0.28f
+            val blackOffset = photo.blacks.coerceIn(-100f, 100f) * 0.22f
+            val highlightOffset = photo.highlights.coerceIn(-100f, 100f) * 0.16f
+            val offset = exposureOffset + shadowOffset + blackOffset + highlightOffset
+            val warm = photo.warmth.coerceIn(-100f, 100f) * 0.55f
+            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+                contrast * (r + sat), contrast * g, contrast * b, 0f, offset + warm,
+                contrast * r, contrast * (g + sat), contrast * b, 0f, offset,
+                contrast * r, contrast * g, contrast * (b + sat), 0f, offset - warm,
+                0f, 0f, 0f, 1f, 0f
+            )))
             canvas.save()
             canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawBitmap(subject, null, fitRect(subject.width, subject.height, rect), paint)
             canvas.restore()
             subject.recycle()
+        }
+
+        if (photo.vignette > 0f) {
+            val amount = photo.vignette.coerceIn(0f, 100f) / 100f
+            val radius = max(width, height) * 0.78f
+            val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = android.graphics.RadialGradient(
+                    width / 2f, height / 2f, radius,
+                    intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.argb((amount * 165).toInt(), 0, 0, 0)),
+                    floatArrayOf(0f, 0.62f, 1f),
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), vignettePaint)
         }
 
         val overlay = decode(photo.overlayPath, max(width, height))
