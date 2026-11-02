@@ -318,10 +318,43 @@ fun PhotoWorkflowScreen(
             }
             IconButton(onClick = { persist(); status = "Perubahan disimpan." }) { Icon(Icons.Default.Save, contentDescription = "Simpan", tint = Color(0xFFF07824)) }
         }
-        Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
-             .clip(RoundedCornerShape(16.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-            val brushPreview = (stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()) || (stage == 0 && brushEnabled)
-            if (brushPreview) {
+        Box(
+            Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
+                .clip(RoundedCornerShape(16.dp)).background(Color.White)
+                .pointerInput(stage, brushEnabled) {
+                    if (stage == 0 && !brushEnabled) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val releasedBeforeDelay = withTimeoutOrNull(1000L) {
+                                waitForUpOrCancellation()
+                                true
+                            }
+                            if (releasedBeforeDelay == null) {
+                                showBefore = true
+                                waitForUpOrCancellation()
+                                showBefore = false
+                            }
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            val brushPreview = !showBefore && ((stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()) || (stage == 0 && brushEnabled))
+            if (showBefore && stage == 0) {
+                AsyncImage(
+                    model = edited.localPath?.let { File(it) } ?: edited.uri,
+                    contentDescription = "Before · foto asli",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else if (brushPreview && stage == 0 && previewBitmap != null) {
+                androidx.compose.foundation.Image(
+                    previewBitmap!!.asImageBitmap(),
+                    contentDescription = "Pratinjau kuas lokal",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else if (brushPreview) {
                 AsyncImage(model = brushSourcePath?.let { File(it) }, contentDescription = "Area kuas",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             } else {
@@ -414,7 +447,7 @@ fun PhotoWorkflowScreen(
                 }
             }
             Surface(Modifier.align(Alignment.BottomCenter).padding(9.dp), color = Color(0xB3080D17), shape = RoundedCornerShape(16.dp)) {
-                Text(edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
+                Text(if (showBefore) "BEFORE · FOTO ASLI" else edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
             }
         }
         Surface(color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
