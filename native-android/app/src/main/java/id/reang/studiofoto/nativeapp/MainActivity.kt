@@ -74,6 +74,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showNewProject by rememberSaveable { mutableStateOf(false) }
     var projectName by rememberSaveable { mutableStateOf("") }
+    var falApiKey by remember { mutableStateOf("") }
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -82,27 +83,36 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
 
     val importPhotos = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         val project = activeProject ?: return@rememberLauncherForActivityResult
-        val rows = uris.map { uri ->
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        scope.launch {
+            val rows = uris.mapNotNull { uri ->
+                runCatching {
+                    val name = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                    } ?: "Foto"
+                    val local = NativeFiles.importUri(context, uri)
+                    ImportedPhoto(uri.toString(), local.absolutePath, name)
+                }.onFailure { error ->
+                    snackbar.showSnackbar("Gagal mengimpor foto: ${error.message ?: "file tidak dapat dibaca"}")
+                }.getOrNull()
             }
-            val name = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
-            } ?: "Foto"
-            uri.toString() to name
+            if (rows.isNotEmpty()) {
+                vm.addPhotos(project.id, rows)
+                snackbar.showSnackbar("${rows.size} foto disalin ke penyimpanan aplikasi.")
+            }
         }
-        vm.addPhotos(project.id, rows)
     }
 
     if (activePhoto != null) {
         PhotoWorkflowScreen(
             photo = activePhoto!!,
+            falApiKey = falApiKey,
+            onFalApiKeyChange = { falApiKey = it },
             onBack = { activePhoto = null },
-            onSave = { b, c, s ->
-                vm.saveAdjustments(activePhoto!!, b, c, s)
-                activePhoto = activePhoto!!.copy(brightness = b, contrast = c, saturation = s)
-                scope.launch { snackbar.showSnackbar("Pengaturan cahaya tersimpan") }
+            onSave = { updated ->
+                vm.savePhoto(updated)
+                activePhoto = updated
+                scope.launch { snackbar.showSnackbar("Perubahan foto tersimpan.") }
             }
         )
         return
