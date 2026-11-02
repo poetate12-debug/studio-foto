@@ -251,12 +251,43 @@ object NativeImageEngine {
         saturation: Float,
         texture: Float
     ): String = withContext(Dispatchers.IO) {
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture)
+        val bytes = ByteArrayOutputStream()
+        output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+        output.recycle()
+        NativeFiles.writeBytes(context, bytes.toByteArray(), "local-adjustments", "png")
+    }
+
+    suspend fun previewLocalBrush(
+        context: Context,
+        basePath: String,
+        strokes: List<CutoutBrushStroke>,
+        exposure: Float,
+        warmth: Float,
+        saturation: Float,
+        texture: Float,
+        photo: PhotoEntity
+    ): Bitmap = withContext(Dispatchers.IO) {
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture)
+        applyAdvancedLightAdjustments(output, photo)
+        output
+    }
+
+    private fun createLocalBrushBitmap(
+        basePath: String,
+        strokes: List<CutoutBrushStroke>,
+        exposure: Float,
+        warmth: Float,
+        saturation: Float,
+        texture: Float
+    ): Bitmap {
+        require(strokes.isNotEmpty()) { "Sapukan kuas pada area foto terlebih dahulu." }
         val source = decode(basePath, 2800) ?: error("Foto untuk kuas tidak dapat dibaca.")
-        require(strokes.isNotEmpty()) { "Sapukan kuas pada area yang ingin diubah." }
         val width = source.width
         val height = source.height
         val mask = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val maskCanvas = Canvas(mask)
+
         strokes.forEach { stroke ->
             if (stroke.points.isEmpty()) return@forEach
             val path = Path()
@@ -266,21 +297,27 @@ object NativeImageEngine {
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             val strokeWidth = (stroke.widthFraction.coerceIn(0.003f, 0.15f) * min(width, height)).coerceAtLeast(4f)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
                 this.strokeWidth = strokeWidth
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
                 maskFilter = BlurMaskFilter((strokeWidth * 0.12f).coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
-                if (stroke.erase) xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+                if (stroke.erase) {
+                    // Subtractive brush clears previously painted mask coverage.
+                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+                }
             }
             if (stroke.points.size == 1) {
                 val point = stroke.points.first()
                 paint.style = Paint.Style.FILL
                 maskCanvas.drawCircle(point.first * width, point.second * height, strokeWidth / 2f, paint)
-            } else maskCanvas.drawPath(path, paint)
+            } else {
+                maskCanvas.drawPath(path, paint)
+            }
         }
+
         val output = source.copy(Bitmap.Config.ARGB_8888, true)
         val srcRow = IntArray(width)
         val maskRow = IntArray(width)
@@ -288,40 +325,44 @@ object NativeImageEngine {
         val warm = warmth.coerceIn(-100f, 100f) / 100f * 0.16f
         val sat = 1f + saturation.coerceIn(-100f, 100f) / 100f
         val detail = texture.coerceIn(-100f, 100f) / 100f * 0.28f
+
         for (y in 0 until height) {
             source.getPixels(srcRow, 0, width, 0, y, width, 1)
             mask.getPixels(maskRow, 0, width, 0, y, width, 1)
             for (x in 0 until width) {
                 val amount = Color.alpha(maskRow[x]) / 255f
                 if (amount <= 0f) continue
-                val px = srcRow[x]
-                if (Color.alpha(px) == 0) continue
-                val gray = (0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px)) / 255f
-                var red = Color.red(px) / 255f
-                var green = Color.green(px) / 255f
-                var blue = Color.blue(px) / 255f
-                val originalR = red; val originalG = green; val originalB = blue
-                red = red * exp + warm
-                green *= exp
-                blue = blue * exp - warm
-                val luma = (red * 0.2126f + green * 0.7152f + blue * 0.0722f).coerceIn(0f, 1f)
-                red = luma + (red - luma) * sat
-                green = luma + (green - luma) * sat
-                blue = luma + (blue - luma) * sat
-                red += (originalR - gray) * detail
-                green += (originalG - gray) * detail
-                blue += (originalB - gray) * detail
+                val pixel = srcRow[x]
+                if (Color.alpha(pixel) == 0) continue
+                val originalR = Color.red(pixel) / 255f
+                val originalG = Color.green(pixel) / 255f
+                val originalB = Color.blue(pixel) / 255f
+                val gray = 0.2126f * originalR + 0.7152f * originalG + 0.0722f * originalB
+
+                var red = originalR * exp + warm
+                var green = originalG * exp
+                var blue = originalB * exp - warm
+                val luma = (0.2126f * red + 0.7152f * green + 0.0722f * blue).coerceIn(0f, 1f)
+                red = luma + (red - luma) * sat + (originalR - gray) * detail
+                green = luma + (green - luma) * sat + (originalG - gray) * detail
+                blue = luma + (blue - luma) * sat + (originalB - gray) * detail
+
                 red = originalR + (red - originalR) * amount
                 green = originalG + (green - originalG) * amount
                 blue = originalB + (blue - originalB) * amount
-                srcRow[x] = Color.argb(Color.alpha(px), (red.coerceIn(0f, 1f) * 255f).toInt(), (green.coerceIn(0f, 1f) * 255f).toInt(), (blue.coerceIn(0f, 1f) * 255f).toInt())
+                srcRow[x] = Color.argb(
+                    Color.alpha(pixel),
+                    (red.coerceIn(0f, 1f) * 255f).toInt(),
+                    (green.coerceIn(0f, 1f) * 255f).toInt(),
+                    (blue.coerceIn(0f, 1f) * 255f).toInt()
+                )
             }
             output.setPixels(srcRow, 0, width, 0, y, width, 1)
         }
-        val bytes = ByteArrayOutputStream()
-        output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
-        source.recycle(); mask.recycle(); output.recycle()
-        NativeFiles.writeBytes(context, bytes.toByteArray(), "local-adjustments", "png")
+
+        source.recycle()
+        mask.recycle()
+        return output
     }
 
     fun decode(path: String?, maxSide: Int = 3200): Bitmap? {
