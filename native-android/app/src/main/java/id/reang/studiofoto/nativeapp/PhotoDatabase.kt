@@ -88,6 +88,7 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "0") val localBrushWarmth: Float = 0f,
     @ColumnInfo(defaultValue = "0") val localBrushSaturation: Float = 0f,
     @ColumnInfo(defaultValue = "0") val localBrushTexture: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val localBrushRedReduction: Float = 0f,
     @ColumnInfo(defaultValue = "NULL") val lightcraftPhotoId: Long? = null,
     @ColumnInfo(defaultValue = "NULL") val lightcraftRenderedPath: String? = null
 )
@@ -117,7 +118,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class, LightPresetEntity::class], version = 9, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class, LightPresetEntity::class], version = 10, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -205,9 +206,14 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN lightcraftRenderedPath TEXT DEFAULT NULL")
             }
         }
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushRedReduction REAL NOT NULL DEFAULT 0")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .build().also { INSTANCE = it }
         }
     }
