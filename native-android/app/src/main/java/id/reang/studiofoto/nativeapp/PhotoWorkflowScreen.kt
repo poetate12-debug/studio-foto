@@ -106,12 +106,15 @@ fun PhotoWorkflowScreen(
 
     fun persist() = onSave(edited)
     fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
+    fun changeLight(block: (PhotoEntity) -> PhotoEntity) {
+        edited = block(edited).copy(lightPreset = "Kustom")
+    }
     fun colorValue(component: String): Float =
         runCatching { JSONObject(edited.colorMixJson).optDouble(selectedColor + component, 0.0).toFloat() }.getOrDefault(0f)
     fun updateColorValue(component: String, value: Float) {
         val json = runCatching { JSONObject(edited.colorMixJson) }.getOrDefault(JSONObject())
         json.put(selectedColor + component, value.toDouble())
-        change { it.copy(colorMixJson = json.toString()) }
+        changeLight { it.copy(colorMixJson = json.toString()) }
     }
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
@@ -491,7 +494,26 @@ fun PhotoWorkflowScreen(
                 Spacer(Modifier.height(10.dp))
                 when (stage) {
                     0 -> {
-                        WorkflowSlider("Brightness", edited.brightness, -0.5f..0.5f) { v -> change { it.copy(brightness = v) } }
+                        Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            items(BUILT_IN_LIGHT_PRESETS) { preset ->
+                                FilterChip(
+                                    selected = edited.lightPreset == preset,
+                                    onClick = {
+                                        change { applyBuiltInLightPreset(it, preset) }
+                                        persist()
+                                        status = "Preset $preset diterapkan."
+                                    },
+                                    label = { Text(preset) }
+                                )
+                            }
+                        }
+                        Text(
+                            if (edited.lightPreset == "Kustom") "Preset: Kustom · pengaturan manual" else "Preset aktif: ${edited.lightPreset}",
+                            color = Color(0xFF64748B),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        WorkflowSlider("Brightness", edited.brightness, -0.5f..0.5f) { v -> changeLight { it.copy(brightness = v) } }
                         WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f, resetValue = 1f) { v -> change { it.copy(contrast = v) } }
                         WorkflowSlider("Saturation", edited.saturation, 0f..2f, resetValue = 1f) { v -> change { it.copy(saturation = v) } }
                         WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> change { it.copy(warmth = v) } }
