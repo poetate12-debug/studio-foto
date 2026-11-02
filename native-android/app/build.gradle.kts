@@ -51,6 +51,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Bundled face-contour model keeps face masking available offline after installation.
+    implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
