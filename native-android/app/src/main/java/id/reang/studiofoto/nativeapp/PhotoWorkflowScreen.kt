@@ -870,7 +870,10 @@ fun PhotoWorkflowScreen(
                             }
                             val color = if (stroke.erase) Color(0xAAFF5555) else Color(0xAA55E7B5)
                             val lineWidth = stroke.widthFraction * minOf(contentW, contentH)
-                            if (stroke.points.size == 1) {
+                            if (stroke.filled) {
+                                path.close()
+                                drawPath(path, color)
+                            } else if (stroke.points.size == 1) {
                                 drawCircle(color, lineWidth / 2f, Offset(left + stroke.points[0].first * contentW, top + stroke.points[0].second * contentH))
                             } else {
                                 drawPath(path, color, style = Stroke(width = lineWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
