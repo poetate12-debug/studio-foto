@@ -181,7 +181,8 @@ object FalAiClient {
 data class CutoutBrushStroke(
     val points: List<Pair<Float, Float>>,
     val erase: Boolean,
-    val widthFraction: Float
+    val widthFraction: Float,
+    val softness: Float = 0.65f
 )
 
 object NativeImageEngine {
@@ -219,6 +220,10 @@ object NativeImageEngine {
                 strokeWidth = (stroke.widthFraction.coerceIn(0.003f, 0.15f) * min(width, height)).coerceAtLeast(4f)
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
+                maskFilter = BlurMaskFilter(
+                    (strokeWidth * stroke.softness.coerceIn(0f, 1f) * 0.72f).coerceAtLeast(0.1f),
+                    BlurMaskFilter.Blur.NORMAL
+                )
             }
             if (stroke.erase) {
                 paint.color = Color.BLACK
@@ -303,7 +308,10 @@ object NativeImageEngine {
                 this.strokeWidth = strokeWidth
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
-                maskFilter = BlurMaskFilter((strokeWidth * 0.12f).coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurMaskFilter(
+                    (strokeWidth * stroke.softness.coerceIn(0f, 1f) * 0.72f).coerceAtLeast(0.1f),
+                    BlurMaskFilter.Blur.NORMAL
+                )
                 if (stroke.erase) {
                     // Subtractive brush clears previously painted mask coverage.
                     xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)

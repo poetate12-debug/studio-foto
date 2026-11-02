@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -47,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import org.json.JSONArray
 import kotlin.math.roundToInt
 
 @Composable
@@ -89,7 +92,14 @@ fun PhotoWorkflowScreen(
     var brushEnabled by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushErase by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
+    var brushSoftness by rememberSaveable(photo.id) { mutableFloatStateOf(0.65f) }
     var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
+    var savedLocalBrushStrokes by remember(photo.id) { mutableStateOf(brushStrokesFromJson(photo.localBrushHistoryJson)) }
+    var savedCutoutBrushStrokes by remember(photo.id) { mutableStateOf(brushStrokesFromJson(photo.cutoutBrushHistoryJson)) }
+    var lightPanel by rememberSaveable(photo.id) { mutableStateOf("cahaya") }
+    var photoZoom by rememberSaveable(photo.id) { mutableFloatStateOf(1f) }
+    var photoPanX by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
+    var photoPanY by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var showBefore by remember(photo.id) { mutableStateOf(false) }
     var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
@@ -98,9 +108,17 @@ fun PhotoWorkflowScreen(
     var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
     val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
-    val lightBrushBase = edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
-    val brushSourcePath = if (stage == 1) edited.cutoutPath else lightBrushBase
+    val lightBrushBase = edited.localBrushBasePath ?: edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
+    val brushSourcePath = if (stage == 1) (edited.cutoutBrushBasePath ?: edited.cutoutPath) else lightBrushBase
+    val zoomModifier = Modifier.graphicsLayer {
+        scaleX = photoZoom
+        scaleY = photoZoom
+        translationX = photoPanX
+        translationY = photoPanY
+    }
     val latestBrushStrokes by rememberUpdatedState(brushStrokes)
+    val latestSavedLocalBrushStrokes by rememberUpdatedState(savedLocalBrushStrokes)
+    val latestSavedCutoutBrushStrokes by rememberUpdatedState(savedCutoutBrushStrokes)
     val latestLightBrushBase by rememberUpdatedState(lightBrushBase)
     val latestEditedPhoto by rememberUpdatedState(edited)
     val latestStage by rememberUpdatedState(stage)
@@ -146,7 +164,7 @@ fun PhotoWorkflowScreen(
                     stage == 0 && brushEnabled && brushStrokes.isNotEmpty() ->
                         NativeImageEngine.previewLocalBrush(
                             context, lightBrushBase ?: error("Foto sumber tidak ditemukan."),
-                            brushStrokes, localExposure, localWarmth, localSaturation, localTexture, edited
+                            savedLocalBrushStrokes + brushStrokes, localExposure, localWarmth, localSaturation, localTexture, edited
                         )
                     stage == 0 -> NativeImageEngine.renderPhotoPreview(edited, 1600)
                     else -> NativeImageEngine.render(edited, previewWidth, previewHeight)
@@ -266,7 +284,9 @@ fun PhotoWorkflowScreen(
                         if (cutoutModel == "birefnet") input.put("model", "Portrait").put("operating_resolution", "2048x2048").put("refine_foreground", true).put("output_format", "png")
                         val result = FalAiClient.run(context, model, input, key) { status = it }
                         if (action == "cutout") {
-                            change { it.copy(cutoutPath = result.localPath, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
+                            change { it.copy(cutoutPath = result.localPath, cutoutBrushBasePath = null, cutoutBrushHistoryJson = "[]", enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
+                            savedCutoutBrushStrokes = emptyList()
+                            brushStrokes = emptyList()
                             status = "Cutout berhasil. File transparan tersimpan."
                         } else {
                             val blurred = NativeImageEngine.makeBokeh(context, source, result.localPath, blurStrength.roundToInt())
@@ -293,8 +313,10 @@ fun PhotoWorkflowScreen(
                             .put("num_images", 1).put("aspect_ratio", ratio)
                         val bg = FalAiClient.run(context, "fal-ai/bria/text-to-image/base", bgInput, key) { status = it }
                         onRegisterAsset("Background AI", bg.localPath, "background")
-                        change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
+                        change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, cutoutBrushBasePath = null, cutoutBrushHistoryJson = "[]", enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
                         persist()
+                        savedCutoutBrushStrokes = emptyList()
+                        brushStrokes = emptyList()
                         status = "Background selesai. Objek asli tetap terpisah agar wajah tidak digambar ulang; atur posisinya di tahap Template."
                     }
                     "enhance" -> {
@@ -372,6 +394,23 @@ fun PhotoWorkflowScreen(
         Box(
             Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
                 .clip(RoundedCornerShape(16.dp)).background(Color.White)
+                .pointerInput(photo.id) {
+                    detectTransformGestures { centroid, _, zoom, _ ->
+                        if (zoom != 1f) {
+                            val previous = photoZoom
+                            val updated = (previous * zoom).coerceIn(1f, 4.5f)
+                            val factor = updated / previous
+                            photoPanX = (photoPanX - centroid.x) * factor + centroid.x
+                            photoPanY = (photoPanY - centroid.y) * factor + centroid.y
+                            photoZoom = updated
+                            if (updated <= 1.01f) {
+                                photoZoom = 1f
+                                photoPanX = 0f
+                                photoPanY = 0f
+                            }
+                        }
+                    }
+                }
                 .pointerInput(stage, brushEnabled) {
                     if (stage == 0 && !brushEnabled) {
                         awaitEachGesture {
@@ -395,7 +434,7 @@ fun PhotoWorkflowScreen(
                 AsyncImage(
                     model = edited.localPath?.let { File(it) } ?: edited.uri,
                     contentDescription = "Before · foto asli",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(zoomModifier),
                     contentScale = ContentScale.Fit
                 )
             } else if (brushPreview && stage == 0 && previewBitmap != null) {
@@ -406,15 +445,15 @@ fun PhotoWorkflowScreen(
                     contentScale = ContentScale.Fit
                 )
             } else if (brushPreview) {
-                AsyncImage(model = brushSourcePath?.let { File(it) }, contentDescription = "Area kuas",
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                AsyncImage(model = (if (stage == 1) edited.cutoutPath else brushSourcePath)?.let { File(it) }, contentDescription = "Area kuas",
+                    modifier = Modifier.fillMaxSize().then(zoomModifier), contentScale = ContentScale.Fit)
             } else {
                 val composedPreview = previewBitmap
                 if (composedPreview != null) {
                     androidx.compose.foundation.Image(
                         composedPreview.asImageBitmap(),
                         contentDescription = edited.name,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().then(zoomModifier),
                         contentScale = ContentScale.Fit
                     )
                 } else {
@@ -425,7 +464,7 @@ fun PhotoWorkflowScreen(
             }
             if (brushPreview) {
                 Canvas(
-                    modifier = Modifier.fillMaxSize().pointerInput(stage, brushErase, brushSize, brushAspect, working, edited.cutoutPath) {
+                    modifier = Modifier.fillMaxSize().then(zoomModifier).pointerInput(stage, brushErase, brushSize, brushSoftness, brushAspect, working, edited.cutoutPath) {
                         fun normalized(point: Offset): Pair<Float, Float>? {
                             val viewW = size.width.toFloat()
                             val viewH = size.height.toFloat()
@@ -447,40 +486,49 @@ fun PhotoWorkflowScreen(
                         }
                         if (!working) detectDragGestures(
                             onDragEnd = {
-                                val strokesToSave = latestBrushStrokes
+                                val pendingStrokes = latestBrushStrokes
                                 val stageToSave = latestStage
                                 val photoToSave = latestEditedPhoto
-                                if (strokesToSave.isNotEmpty()) {
+                                if (pendingStrokes.isNotEmpty()) {
                                     scope.launch {
                                         working = true
-                                        status = "Menyimpan hasil kuas ke proyek…"
-                                        val saved = runCatching {
+                                        status = "Menyimpan kuas dan mempertahankan area sebelumnya…"
+                                        val result = runCatching {
                                             when (stageToSave) {
                                                 0 -> {
-                                                    val base = latestLightBrushBase
-                                                        ?: error("Foto dasar untuk kuas cahaya tidak ditemukan.")
+                                                    val base = latestLightBrushBase ?: error("Foto dasar kuas cahaya tidak ditemukan.")
+                                                    val history = latestSavedLocalBrushStrokes + pendingStrokes
                                                     NativeImageEngine.applyLocalBrush(
-                                                        context, base, strokesToSave,
+                                                        context, base, history,
                                                         latestLocalExposure, latestLocalWarmth,
                                                         latestLocalSaturation, latestLocalTexture
-                                                    )
+                                                    ) to history
                                                 }
                                                 1 -> {
-                                                    val original = photoToSave.localPath
-                                                        ?: error("Foto asli tidak ditemukan.")
-                                                    val cutout = photoToSave.cutoutPath
+                                                    val original = photoToSave.localPath ?: error("Foto asli tidak ditemukan.")
+                                                    val base = photoToSave.cutoutBrushBasePath ?: photoToSave.cutoutPath
                                                         ?: error("Hasil cutout belum tersedia.")
-                                                    NativeImageEngine.applyCutoutBrush(context, original, cutout, strokesToSave)
+                                                    val history = latestSavedCutoutBrushStrokes + pendingStrokes
+                                                    NativeImageEngine.applyCutoutBrush(context, original, base, history) to history
                                                 }
                                                 else -> error("Kuas hanya tersedia pada tahap Cahaya dan Cutout.")
                                             }
                                         }
-                                        saved.onSuccess { savedPath ->
+                                        result.onSuccess { (savedPath, history) ->
                                             val updated = if (stageToSave == 0) {
-                                                photoToSave.copy(localAdjustmentPath = savedPath)
+                                                val base = photoToSave.localBrushBasePath ?: photoToSave.localAdjustmentPath
+                                                    ?: photoToSave.enhancedPath ?: photoToSave.localPath
+                                                photoToSave.copy(
+                                                    localAdjustmentPath = savedPath,
+                                                    localBrushBasePath = base,
+                                                    localBrushHistoryJson = brushStrokesToJson(history)
+                                                )
                                             } else {
+                                                val base = photoToSave.cutoutBrushBasePath ?: photoToSave.cutoutPath
                                                 photoToSave.copy(
                                                     cutoutPath = savedPath,
+                                                    cutoutBrushBasePath = base,
+                                                    cutoutBrushHistoryJson = brushStrokesToJson(history),
                                                     enhancedPath = null,
                                                     aiCompositePath = null,
                                                     localAdjustmentPath = null
@@ -488,11 +536,13 @@ fun PhotoWorkflowScreen(
                                             }
                                             edited = updated
                                             onSave(updated)
+                                            if (stageToSave == 0) savedLocalBrushStrokes = history
+                                            else savedCutoutBrushStrokes = history
                                             brushStrokes = emptyList()
                                             status = if (stageToSave == 0) {
-                                                "Kuas cahaya tersimpan permanen di proyek."
+                                                "Area kuas cahaya tersimpan dan tetap bisa dilanjutkan."
                                             } else {
-                                                "Koreksi cutout tersimpan permanen di proyek."
+                                                "Koreksi cutout tersimpan dan tetap bisa dilanjutkan."
                                             }
                                         }.onFailure { error ->
                                             status = error.message ?: "Gagal menyimpan hasil kuas."
@@ -506,14 +556,14 @@ fun PhotoWorkflowScreen(
                             },
                             onDragStart = { point ->
                                 normalized(point)?.let { uv ->
-                                    brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize)
+                                    brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize, brushSoftness)
                                 }
                             },
                             onDrag = { change, _ ->
                                 change.consume()
                                 normalized(change.position)?.let { uv ->
                                     val last = brushStrokes.lastOrNull()
-                                    if (last != null && last.erase == brushErase && last.widthFraction == brushSize) {
+                                    if (last != null && last.erase == brushErase && last.widthFraction == brushSize && last.softness == brushSoftness) {
                                         brushStrokes = brushStrokes.dropLast(1) + last.copy(points = last.points + uv)
                                     } else {
                                         brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize)
@@ -536,7 +586,7 @@ fun PhotoWorkflowScreen(
                         contentW = viewW; contentH = viewW / brushAspect
                         left = 0f; top = (viewH - contentH) / 2f
                     }
-                    brushStrokes.forEach { stroke ->
+                    (if (stage == 1) savedCutoutBrushStrokes else savedLocalBrushStrokes).plus(brushStrokes).forEach { stroke ->
                         if (stroke.points.isNotEmpty()) {
                             val path = Path()
                             stroke.points.forEachIndexed { index, uv ->
@@ -552,6 +602,13 @@ fun PhotoWorkflowScreen(
                                 drawPath(path, color, style = Stroke(width = lineWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                             }
                         }
+                    }
+                }
+            }
+            if (photoZoom > 1.01f) {
+                Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), color = Color(0xB3080D17), shape = CircleShape) {
+                    TextButton(onClick = { photoZoom = 1f; photoPanX = 0f; photoPanY = 0f }) {
+                        Text("1×", color = Color.White)
                     }
                 }
             }
@@ -590,7 +647,14 @@ fun PhotoWorkflowScreen(
                 Spacer(Modifier.height(10.dp))
                 when (stage) {
                     0 -> {
-                        Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(selected = lightPanel == "cahaya", onClick = { lightPanel = "cahaya"; brushEnabled = false }, modifier = Modifier.weight(1f), label = { Text("Cahaya") })
+                            FilterChip(selected = lightPanel == "warna", onClick = { lightPanel = "warna"; brushEnabled = false }, modifier = Modifier.weight(1f), label = { Text("Warna") })
+                            FilterChip(selected = lightPanel == "kuas", onClick = { lightPanel = "kuas" }, modifier = Modifier.weight(1f), label = { Text("Kuas") })
+                        }
+                        when (lightPanel) {
+                            "cahaya" -> {
+Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         Box(Modifier.fillMaxWidth()) {
                             OutlinedButton(
                                 onClick = { presetMenuExpanded = true },
@@ -604,22 +668,13 @@ fun PhotoWorkflowScreen(
                                 onDismissRequest = { presetMenuExpanded = false },
                                 modifier = Modifier.heightIn(max = 420.dp)
                             ) {
-                                BUILT_IN_LIGHT_PRESETS.forEach { preset ->
+                                if (lightPresets.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text(preset) },
-                                        onClick = {
-                                            change { applyBuiltInLightPreset(it, preset) }
-                                            persist()
-                                            presetMenuExpanded = false
-                                            status = "Preset $preset diterapkan."
-                                        },
-                                        trailingIcon = if (edited.lightPreset == preset) {
-                                            { Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF249B62)) }
-                                        } else null
+                                        text = { Text("Belum ada preset. Buat preset sendiri.") },
+                                        enabled = false,
+                                        onClick = {}
                                     )
-                                }
-                                if (lightPresets.isNotEmpty()) {
-                                    Divider()
+                                } else {
                                     lightPresets.forEach { preset ->
                                         DropdownMenuItem(
                                             text = { Text("★ ${preset.name}") },
@@ -672,7 +727,15 @@ fun PhotoWorkflowScreen(
                         WorkflowSlider("Vibrance", edited.vibrance, -100f..100f) { v -> changeLight { it.copy(vibrance = v) } }
                         WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> changeLight { it.copy(vignette = v) } }
                         Divider()
-                        Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = {
+                            change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f, dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f, vibrance = 0f, vignette = 0f, colorMixJson = "{}", localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]") }
+                            savedLocalBrushStrokes = emptyList()
+                            brushStrokes = emptyList()
+                            persist()
+                        }) { Text("Reset semua cahaya") }
+                            }
+                            "warna" -> {
+Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             items(colorNames.size) { i ->
                                 FilterChip(selected = selectedColor == colorNames[i], onClick = { selectedColor = colorNames[i] }, label = { Text(colorLabels[i]) })
@@ -687,35 +750,33 @@ fun PhotoWorkflowScreen(
                             changeLight { it.copy(colorMixJson = json.toString()) }
                         }) { Text("Reset warna ${selectedColor}") }
                         Divider()
+                                                    }
+                            else -> {
                         Text("KUAS LOKAL · ATUR AREA TERTENTU", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        Text("Sapukan kuas pada foto. Setelah jari dilepas, perubahan area otomatis diproses dan disimpan ke proyek, tidak hanya menjadi pratinjau sementara.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                        Text("Area kuas tetap ditandai setelah tersimpan. Saat kuas diaktifkan kembali, coretan sebelumnya dilanjutkan, bukan dihapus.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                        Text("Area tersimpan: ${savedLocalBrushStrokes.size} coretan", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilterChip(brushEnabled, { brushEnabled = !brushEnabled; brushStrokes = emptyList() }, label = { Text(if (brushEnabled) "Kuas aktif" else "Aktifkan kuas") })
+                            FilterChip(brushEnabled, { brushEnabled = !brushEnabled }, label = { Text(if (brushEnabled) "Kuas aktif" else "Aktifkan kuas") })
                             FilterChip(!brushErase, { brushErase = false }, label = { Text("Tambah area") })
                             FilterChip(brushErase, { brushErase = true }, label = { Text("Kurangi area") })
                         }
                         WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f, resetValue = 3.5f) { brushSize = it / 100f }
+                        WorkflowSlider("Kelembutan tepi", brushSoftness * 100f, 0f..100f, resetValue = 65f) { brushSoftness = it / 100f }
                         WorkflowSlider("Exposure lokal", localExposure, -100f..100f) { localExposure = it }
                         WorkflowSlider("Warmth lokal", localWarmth, -100f..100f) { localWarmth = it }
                         WorkflowSlider("Saturation lokal", localSaturation, -100f..100f) { localSaturation = it }
                         WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
-                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Button(onClick = {
-                                val base = lightBrushBase
-                                if (base != null && brushStrokes.isNotEmpty()) scope.launch {
-                                    working = true
-                                    status = "Menerapkan penyesuaian lokal…"
-                                    runCatching { NativeImageEngine.applyLocalBrush(context, base, brushStrokes, localExposure, localWarmth, localSaturation, localTexture) }
-                                        .onSuccess { file -> change { it.copy(localAdjustmentPath = file) }; persist(); brushStrokes = emptyList(); brushEnabled = false; status = "Penyesuaian area tersimpan." }
-                                        .onFailure { status = it.message ?: "Penyesuaian area gagal." }
-                                    working = false
-                                }
-                            }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Simpan area sekarang") }
-                            OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan") }
+                        if (edited.localAdjustmentPath != null) {
+                            TextButton(onClick = {
+                                change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]") }
+                                savedLocalBrushStrokes = emptyList()
+                                brushStrokes = emptyList()
+                                persist()
+                                status = "Penyesuaian dan area kuas direset."
+                            }) { Text("Reset area kuas tersimpan") }
                         }
-                        if (edited.localAdjustmentPath != null) TextButton(onClick = { change { it.copy(localAdjustmentPath = null) }; persist(); status = "Penyesuaian lokal direset." }) { Text("Reset penyesuaian lokal") }
-                        TextButton(onClick = { change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f, dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f, vibrance = 0f, vignette = 0f, colorMixJson = "{}", localAdjustmentPath = null) } }) { Text("Reset semua cahaya") }
-                    }
+                            }
+                        }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             FilterChip(cutoutMode == "cutout", { cutoutMode = "cutout" }, label = { Text("Transparan") })
@@ -737,29 +798,11 @@ fun PhotoWorkflowScreen(
                                 FilterChip(brushErase, { brushErase = true; brushEnabled = true }, label = { Text("Hapus") })
                                 FilterChip(brushEnabled, { brushEnabled = !brushEnabled }, label = { Text(if (brushEnabled) "Kuas aktif" else "Kuas mati") })
                             }
+                            Text("Area tersimpan: ${savedCutoutBrushStrokes.size} coretan", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                             WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f) { brushSize = it / 100f }
-                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Button(onClick = {
-                                    val source = edited.localPath
-                                    val cutout = edited.cutoutPath
-                                    if (source != null && cutout != null && brushStrokes.isNotEmpty()) {
-                                        scope.launch {
-                                            working = true
-                                            status = "Menerapkan koreksi kuas…"
-                                            runCatching { NativeImageEngine.applyCutoutBrush(context, source, cutout, brushStrokes) }
-                                                .onSuccess { file ->
-                                                    change { it.copy(cutoutPath = file, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
-                                                    persist()
-                                                    brushStrokes = emptyList()
-                                                    status = "Koreksi kuas tersimpan."
-                                                }
-                                                .onFailure { status = it.message ?: "Koreksi kuas gagal." }
-                                            working = false
-                                        }
-                                    }
-                                }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Simpan kuas sekarang") }
-                                OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan coretan") }
-                            }
+                            WorkflowSlider("Kelembutan tepi", brushSoftness * 100f, 0f..100f, resetValue = 65f) { brushSoftness = it / 100f }
+                            OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Batalkan coretan yang belum tersimpan") }
+
                         }
                     }
                     2 -> {
@@ -1161,6 +1204,46 @@ private fun editorPreviewMatrix(photo: PhotoEntity): ColorMatrix {
     ))
 }
 
+
+private fun brushStrokesFromJson(json: String): List<CutoutBrushStroke> = runCatching {
+    val array = JSONArray(json)
+    buildList {
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            val encodedPoints = item.optJSONArray("points") ?: JSONArray()
+            val points = buildList {
+                for (j in 0 until encodedPoints.length()) {
+                    val point = encodedPoints.optJSONArray(j) ?: continue
+                    if (point.length() >= 2) add(point.optDouble(0).toFloat() to point.optDouble(1).toFloat())
+                }
+            }
+            if (points.isNotEmpty()) add(
+                CutoutBrushStroke(
+                    points = points,
+                    erase = item.optBoolean("erase", false),
+                    widthFraction = item.optDouble("width", 0.035).toFloat(),
+                    softness = item.optDouble("softness", 0.65).toFloat()
+                )
+            )
+        }
+    }
+}.getOrDefault(emptyList())
+
+private fun brushStrokesToJson(strokes: List<CutoutBrushStroke>): String {
+    val array = JSONArray()
+    strokes.forEach { stroke ->
+        val points = JSONArray()
+        stroke.points.forEach { point -> points.put(JSONArray().put(point.first.toDouble()).put(point.second.toDouble())) }
+        array.put(
+            JSONObject()
+                .put("erase", stroke.erase)
+                .put("width", stroke.widthFraction.toDouble())
+                .put("softness", stroke.softness.toDouble())
+                .put("points", points)
+        )
+    }
+    return array.toString()
+}
 
 private fun documentDisplayName(context: android.content.Context, uri: android.net.Uri, fallback: String): String {
     return runCatching {
