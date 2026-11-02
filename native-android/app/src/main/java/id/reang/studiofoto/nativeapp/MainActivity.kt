@@ -184,11 +184,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 onNewProject = { showNewProject = true },
                 onOpenProject = { activeProject = it }
             )
-            else -> WorkspaceScreen(
-                onNotice = { title ->
-                    scope.launch { snackbar.showSnackbar("$title sedang disiapkan untuk versi native berikutnya") }
-                }
-            )
+            else -> WorkspaceScreen(onOpenProjects = { selectedTab = 1 })
         }
     }
 
@@ -316,11 +312,11 @@ private fun HomeScreen(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickTile("Edit foto", "Cahaya & warna", Icons.Default.Tune, Violet, onOpenProjects, Modifier.weight(1f))
-                QuickTile("Template", "Desain acara", Icons.Default.Layers, Cyan, onWorkspace, Modifier.weight(1f))
+                QuickTile("Template", "Desain acara", Icons.Default.Layers, Cyan, onOpenProjects, Modifier.weight(1f))
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                QuickTile("AI Enhance", "Peningkatan foto", Icons.Default.AutoAwesome, Gold, onWorkspace, Modifier.weight(1f))
+                QuickTile("AI Enhance", "Peningkatan foto", Icons.Default.AutoAwesome, Gold, onOpenProjects, Modifier.weight(1f))
                 QuickTile("Pengaturan", "Workspace studio", Icons.Default.Settings, Color(0xFF74B7FF), onWorkspace, Modifier.weight(1f))
             }
         }
@@ -494,7 +490,7 @@ private fun ProjectRow(project: ProjectEntity, onClick: () -> Unit, large: Boole
 }
 
 @Composable
-private fun WorkspaceScreen(onNotice: (String) -> Unit) {
+private fun WorkspaceScreen(onOpenProjects: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(18.dp),
@@ -514,20 +510,20 @@ private fun WorkspaceScreen(onNotice: (String) -> Unit) {
                     Text("CREATIVE TOOLS", color = Color(0xFFD7D0FF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text("Semua alat kreatif dalam satu tempat.", color = White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Modul berikut sedang dipindahkan dari aplikasi Reang versi sebelumnya.", color = Color(0xFFD5DFEF), style = MaterialTheme.typography.bodySmall)
+                    Text("Pilih proyek dan foto untuk membuka seluruh alat editor native.", color = Color(0xFFD5DFEF), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
-        item { WorkspaceRow("Template & layout", "A3, A4, background, layer, teks", Icons.Default.Layers, Violet) { onNotice("Template & layout") } }
-        item { WorkspaceRow("AI Photo Tools", "Enhance, cutout, hapus objek, bokeh", Icons.Default.AutoAwesome, Gold) { onNotice("AI Photo Tools") } }
-        item { WorkspaceRow("Masking & kuas", "Seleksi area dan kontrol lokal", Icons.Default.Brush, Cyan) { onNotice("Masking & kuas") } }
-        item { WorkspaceRow("RAW & ekspor cetak", "Pengembangan RAW dan output resolusi tinggi", Icons.Default.Print, Color(0xFF74B7FF)) { onNotice("RAW & ekspor cetak") } }
+        item { WorkspaceRow("Template & layout", "A3, A4, background, layer, teks", Icons.Default.Layers, Violet, onOpenProjects) }
+        item { WorkspaceRow("AI Photo Tools", "Enhance, cutout, hapus objek, bokeh", Icons.Default.AutoAwesome, Gold, onOpenProjects) }
+        item { WorkspaceRow("Masking & kuas", "Koreksi tepi cutout dengan kuas", Icons.Default.Brush, Cyan, onOpenProjects) }
+        item { WorkspaceRow("Ekspor cetak", "JPEG/PNG dan ukuran A3/A4 dengan DPI", Icons.Default.Print, Color(0xFF74B7FF), onOpenProjects) }
         item {
             Surface(color = Color(0xFF151E2D), shape = RoundedCornerShape(17.dp)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = Muted)
                     Spacer(Modifier.width(10.dp))
-                    Text("Tombol modul ini belum menjalankan proses edit. Fungsinya akan diaktifkan bertahap setelah mesin editor native selesai.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    Text("Buka proyek, pilih foto, lalu gunakan tab Cahaya, Cutout, Template, Enhance, dan Export.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -547,7 +543,7 @@ private fun WorkspaceRow(title: String, detail: String, icon: androidx.compose.u
                 Text(detail, color = Muted, style = MaterialTheme.typography.bodySmall)
             }
             Surface(color = Color(0xFF29243E), shape = RoundedCornerShape(20.dp)) {
-                Text("SEGERA", color = Color(0xFFC8BCFF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+                Text("BUKA EDITOR", color = Color(0xFFC8BCFF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
             }
         }
     }
