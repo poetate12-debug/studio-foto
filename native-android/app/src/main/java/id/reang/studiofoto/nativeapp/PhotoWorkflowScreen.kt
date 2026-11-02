@@ -78,9 +78,11 @@ fun PhotoWorkflowScreen(
     LaunchedEffect(
         edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
-        edited.contrast, edited.saturation, edited.warmth, edited.objectX, edited.objectY,
-        edited.objectScale, edited.eventText, edited.eventDate, edited.templateWidthCm,
-        edited.templateHeightCm
+        edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
+        edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette,
+        edited.objectX, edited.objectY, edited.objectScale, edited.backgroundScale,
+        edited.backgroundX, edited.backgroundY, edited.eventText, edited.eventDate,
+        edited.templateWidthCm, edited.templateHeightCm
     ) {
         delay(160)
         val landscape = edited.templateWidthCm >= edited.templateHeightCm
@@ -341,7 +343,16 @@ fun PhotoWorkflowScreen(
                         WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f) { v -> change { it.copy(contrast = v) } }
                         WorkflowSlider("Saturation", edited.saturation, 0f..2f) { v -> change { it.copy(saturation = v) } }
                         WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> change { it.copy(warmth = v) } }
-                        TextButton(onClick = { change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f) } }) { Text("Reset cahaya & warna") }
+                        Divider()
+                        Text("TONE & DETAIL", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        WorkflowSlider("Highlights", edited.highlights, -100f..100f) { v -> change { it.copy(highlights = v) } }
+                        WorkflowSlider("Shadows", edited.shadows, -100f..100f) { v -> change { it.copy(shadows = v) } }
+                        WorkflowSlider("Blacks", edited.blacks, -100f..100f) { v -> change { it.copy(blacks = v) } }
+                        WorkflowSlider("Dehaze", edited.dehaze, -100f..100f) { v -> change { it.copy(dehaze = v) } }
+                        WorkflowSlider("Clarity", edited.clarity, -100f..100f) { v -> change { it.copy(clarity = v) } }
+                        WorkflowSlider("Vibrance", edited.vibrance, -100f..100f) { v -> change { it.copy(vibrance = v) } }
+                        WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> change { it.copy(vignette = v) } }
+                        TextButton(onClick = { change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, dehaze = 0f, clarity = 0f, vibrance = 0f, vignette = 0f) } }) { Text("Reset semua cahaya") }
                     }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -401,6 +412,12 @@ fun PhotoWorkflowScreen(
                             OutlinedButton(onClick = { pickOverlay.launch(arrayOf("image/png")) }, modifier = Modifier.weight(1f)) { Text("Template PNG") }
                         }
                         OutlinedButton(onClick = { pickLogo.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Tambah logo / ornamen") }
+                        Text("ATUR BACKGROUND", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        WorkflowSlider("Zoom background", edited.backgroundScale, 0.5f..3f) { v -> change { it.copy(backgroundScale = v) } }
+                        WorkflowSlider("Geser background X", edited.backgroundX, -100f..100f) { v -> change { it.copy(backgroundX = v) } }
+                        WorkflowSlider("Geser background Y", edited.backgroundY, -100f..100f) { v -> change { it.copy(backgroundY = v) } }
+                        Divider()
+                        Text("ATUR OBJEK / SUBJEK", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Ukuran objek", edited.objectScale, 0.3f..1.7f) { v -> change { it.copy(objectScale = v) } }
                         WorkflowSlider("Posisi objek X", edited.objectX, -40f..40f) { v -> change { it.copy(objectX = v) } }
                         WorkflowSlider("Posisi objek Y", edited.objectY, -40f..40f) { v -> change { it.copy(objectY = v) } }
