@@ -1,6 +1,7 @@
 package id.reang.studiofoto.nativeapp
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.graphics.Bitmap
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -19,12 +20,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
@@ -55,6 +60,23 @@ fun PhotoWorkflowScreen(
 
     fun persist() = onSave(edited)
     fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
+
+    var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(
+        edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath,
+        edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
+        edited.contrast, edited.saturation, edited.warmth, edited.objectX, edited.objectY,
+        edited.objectScale, edited.eventText, edited.eventDate, edited.templateWidthCm,
+        edited.templateHeightCm
+    ) {
+        delay(160)
+        val landscape = edited.templateWidthCm >= edited.templateHeightCm
+        val previewWidth = if (landscape) 900 else 640
+        val previewHeight = if (landscape) 636 else 900
+        previewBitmap = withContext(Dispatchers.IO) {
+            runCatching { NativeImageEngine.render(edited, previewWidth, previewHeight) }.getOrNull()
+        }
+    }
 
     val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -199,9 +221,19 @@ fun PhotoWorkflowScreen(
         }
         Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
             .clip(RoundedCornerShape(20.dp)).background(Color(0xFF05070D)), contentAlignment = Alignment.Center) {
-            AsyncImage(model = edited.aiCompositePath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath ?: edited.uri,
-                contentDescription = edited.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
+            val composedPreview = previewBitmap
+            if (composedPreview != null) {
+                androidx.compose.foundation.Image(
+                    composedPreview.asImageBitmap(),
+                    contentDescription = edited.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                AsyncImage(model = edited.localPath ?: edited.uri, contentDescription = edited.name,
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
+            }
             Surface(Modifier.align(Alignment.BottomCenter).padding(9.dp), color = Color(0xB3080D17), shape = RoundedCornerShape(16.dp)) {
                 Text(edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
             }
