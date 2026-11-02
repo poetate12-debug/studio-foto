@@ -763,6 +763,87 @@ fun PhotoWorkflowScreen(
     }
 }
 
+private val BUILT_IN_LIGHT_PRESETS = listOf(
+    "Asli", "Natural", "Cerah", "Hangat", "Vivid", "Potret Lembut", "Karnaval", "Dramatis", "Matte", "Hitam Putih"
+)
+
+private fun applyBuiltInLightPreset(photo: PhotoEntity, name: String): PhotoEntity {
+    val base = photo.copy(
+        brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f,
+        highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f,
+        dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f,
+        vibrance = 0f, vignette = 0f, colorMixJson = "{}",
+        lightPreset = name
+    )
+    return when (name) {
+        "Natural" -> base.copy(
+            brightness = 0.05f, contrast = 1.06f, saturation = 1.07f, warmth = 4f,
+            highlights = -14f, shadows = 18f, blacks = -5f, whites = 9f,
+            dehaze = 5f, clarity = 7f, texture = 7f, sharpen = 14f,
+            vibrance = 15f, vignette = 5f
+        )
+        "Cerah" -> base.copy(
+            brightness = 0.15f, contrast = 1.03f, saturation = 1.05f, warmth = 2f,
+            highlights = -18f, shadows = 28f, blacks = -6f, whites = 17f,
+            dehaze = 2f, clarity = 4f, texture = 4f, sharpen = 12f,
+            vibrance = 12f, vignette = 0f
+        )
+        "Hangat" -> base.copy(
+            brightness = 0.04f, contrast = 1.08f, saturation = 1.12f, warmth = 22f,
+            highlights = -20f, shadows = 16f, blacks = -5f, whites = 8f,
+            dehaze = 1f, clarity = 7f, texture = 5f, sharpen = 10f,
+            vibrance = 16f, vignette = 9f
+        )
+        "Vivid" -> base.copy(
+            brightness = 0.02f, contrast = 1.16f, saturation = 1.24f, warmth = 0f,
+            highlights = -12f, shadows = 10f, blacks = -12f, whites = 14f,
+            dehaze = 10f, clarity = 16f, texture = 12f, sharpen = 20f,
+            vibrance = 28f, vignette = 7f,
+            colorMixJson = JSONObject()
+                .put("orangeSaturation", 12).put("greenSaturation", 12)
+                .put("yellowSaturation", 8).toString()
+        )
+        "Potret Lembut" -> base.copy(
+            brightness = 0.08f, contrast = 0.97f, saturation = 0.98f, warmth = 8f,
+            highlights = -24f, shadows = 24f, blacks = 5f, whites = 9f,
+            dehaze = -3f, clarity = -12f, texture = -9f, sharpen = 8f,
+            vibrance = 8f, vignette = 5f,
+            colorMixJson = JSONObject()
+                .put("orangeLuminance", 8).put("orangeSaturation", 4)
+                .put("redSaturation", -4).toString()
+        )
+        "Karnaval" -> base.copy(
+            brightness = 0.04f, contrast = 1.12f, saturation = 1.18f, warmth = 6f,
+            highlights = -18f, shadows = 20f, blacks = -8f, whites = 12f,
+            dehaze = 12f, clarity = 14f, texture = 12f, sharpen = 20f,
+            vibrance = 26f, vignette = 4f,
+            colorMixJson = JSONObject()
+                .put("orangeSaturation", 10).put("orangeLuminance", 5)
+                .put("greenSaturation", 14).put("greenLuminance", 4)
+                .put("redSaturation", 8).put("yellowSaturation", 7).toString()
+        )
+        "Dramatis" -> base.copy(
+            brightness = -0.03f, contrast = 1.25f, saturation = 1.05f, warmth = -4f,
+            highlights = -24f, shadows = -8f, blacks = -18f, whites = 5f,
+            dehaze = 18f, clarity = 19f, texture = 11f, sharpen = 22f,
+            vibrance = 10f, vignette = 22f
+        )
+        "Matte" -> base.copy(
+            brightness = 0.05f, contrast = 0.91f, saturation = 0.95f, warmth = 4f,
+            highlights = -18f, shadows = 15f, blacks = 18f, whites = -5f,
+            dehaze = -3f, clarity = -8f, texture = -5f, sharpen = 7f,
+            vibrance = -5f, vignette = 6f
+        )
+        "Hitam Putih" -> base.copy(
+            brightness = 0.02f, contrast = 1.14f, saturation = 0f, warmth = 0f,
+            highlights = -18f, shadows = 12f, blacks = -10f, whites = 8f,
+            dehaze = 6f, clarity = 12f, texture = 8f, sharpen = 18f,
+            vibrance = 0f, vignette = 12f
+        )
+        else -> base
+    }
+}
+
 @Composable
 private fun WorkflowSlider(
     label: String,
