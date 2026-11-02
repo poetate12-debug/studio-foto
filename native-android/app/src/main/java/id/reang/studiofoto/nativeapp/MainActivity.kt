@@ -1,8 +1,10 @@
 package id.reang.studiofoto.nativeapp
 
 import android.content.Intent
+import android.app.DatePickerDialog
 import java.io.File
 import android.os.Bundle
+import java.util.Calendar
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -78,6 +80,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showNewProject by rememberSaveable { mutableStateOf(false) }
     var projectName by rememberSaveable { mutableStateOf("") }
+    var projectEventDate by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     var falApiKey by remember { mutableStateOf(FalKeyVault.load(context)) }
     val snackbar = remember { SnackbarHostState() }
@@ -227,20 +230,48 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
             containerColor = Panel,
             title = { Text("Buat proyek baru", color = White, fontWeight = FontWeight.Bold) },
             text = {
-                OutlinedTextField(
-                    value = projectName,
-                    onValueChange = { projectName = it },
-                    label = { Text("Nama acara / proyek") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = projectName,
+                        onValueChange = { projectName = it },
+                        label = { Text("Nama acara / proyek") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val today = Calendar.getInstance()
+                            DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    projectEventDate = "%02d/%02d/%04d".format(day, month + 1, year)
+                                },
+                                today.get(Calendar.YEAR),
+                                today.get(Calendar.MONTH),
+                                today.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (projectEventDate.isBlank()) "Pilih tanggal acara" else "Tanggal acara: $projectEventDate")
+                    }
+                    Text(
+                        "Tanggal ini otomatis dicantumkan pada foto yang diimpor dan dapat dipakai pada tahap Template.",
+                        color = Muted,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (projectName.isNotBlank()) {
-                            vm.createProject(projectName)
+                            vm.createProject(projectName, projectEventDate)
                             projectName = ""
+                            projectEventDate = ""
                             showNewProject = false
                             selectedTab = 1
                         }
@@ -273,112 +304,62 @@ private fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 26.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item { BrandHeader() }
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF493A91), Color(0xFF273F68), Color(0xFF14566A))))
-                    .padding(22.dp)
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    Surface(color = Color.White.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-                        Text("CREATIVE PHOTO WORKSPACE", color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Text("Karya terbaik\nberawal dari sini.", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, lineHeight = MaterialTheme.typography.headlineMedium.lineHeight)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Kelola foto acara, sempurnakan warna, dan siapkan desain cetak dalam satu studio.", color = Color(0xFFE3E9FA), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(18.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(
-                            onClick = onOpenProjects,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF26365A)),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("Mulai mengedit", fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(
-                            onClick = onNewProject,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.55f)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(Modifier.width(4.dp))
-                            Text("Proyek")
-                        }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("PROYEK", color = Color(0xFFD7D0FF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                    Text("Daftar proyek", color = White, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
+                }
+                Button(
+                    onClick = onNewProject,
+                    colors = ButtonDefaults.buttonColors(containerColor = Violet),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 13.dp, vertical = 9.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Proyek baru")
+                }
+            }
+        }
+        item {
+            if (projects.isEmpty()) {
+                EmptyState("Belum ada proyek", "Buat proyek pertama untuk mulai mengelola foto.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    projects.take(5).forEach { project ->
+                        ProjectRow(project = project, onClick = { onOpenProject(project) })
                     }
                 }
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(104.dp)
-                        .offset(x = 36.dp, y = (-44).dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.08f))
-                )
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(72.dp)
-                        .offset(x = 24.dp, y = 32.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF70DCEA).copy(alpha = 0.16f))
-                )
+            }
+        }
+        if (projects.size > 5) {
+            item {
+                OutlinedButton(onClick = onOpenProjects, modifier = Modifier.fillMaxWidth()) {
+                    Text("Lihat semua proyek (${projects.size})")
+                }
+            }
+        } else {
+            item {
+                TextButton(onClick = onOpenProjects, modifier = Modifier.fillMaxWidth()) {
+                    Text("Buka halaman proyek", color = Color(0xFFB6A7FF))
+                }
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatCard("PROYEK", projects.size.toString(), Icons.Default.FolderOpen, Violet, Modifier.weight(1f))
-                StatCard("STUDIO", "NATIVE", Icons.Default.PhoneAndroid, Cyan, Modifier.weight(1f))
-                StatCard("MODE", "BETA", Icons.Default.AutoFixHigh, Gold, Modifier.weight(1f))
-            }
-        }
-        item {
-            SectionHeading("Akses cepat", "Pilih alur kerja")
-            Spacer(Modifier.height(12.dp))
+            SectionHeading("Akses cepat", "Alat studio")
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickTile("Edit foto", "Cahaya & warna", Icons.Default.Tune, Violet, onOpenProjects, Modifier.weight(1f))
                 QuickTile("Template", "Desain acara", Icons.Default.Layers, Cyan, onOpenProjects, Modifier.weight(1f))
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickTile("AI Enhance", "Peningkatan foto", Icons.Default.AutoAwesome, Gold, onOpenProjects, Modifier.weight(1f))
                 QuickTile("Pengaturan", "Workspace studio", Icons.Default.Settings, Color(0xFF74B7FF), onWorkspace, Modifier.weight(1f))
-            }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SectionHeading("Proyek terbaru", "Lanjutkan pekerjaan")
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onOpenProjects) { Text("Lihat semua", color = Color(0xFFB6A7FF)) }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (projects.isEmpty()) {
-                EmptyState("Belum ada proyek", "Buat proyek pertama untuk mulai mengelola foto.")
-            } else {
-                projects.take(3).forEach { project ->
-                    ProjectRow(project = project, onClick = { onOpenProject(project) })
-                    Spacer(Modifier.height(9.dp))
-                }
-            }
-        }
-        item {
-            Surface(color = Color(0xFF111B2A), shape = RoundedCornerShape(18.dp)) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = Cyan)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Migrasi native sedang berjalan", color = White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                        Text("Fitur editor lengkap Reang akan dipindahkan bertahap.", color = Muted, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
             }
         }
     }
