@@ -115,11 +115,15 @@ fun PhotoWorkflowScreen(
         val landscape = edited.templateWidthCm >= edited.templateHeightCm
         val previewWidth = if (landscape) 900 else 640
         val previewHeight = if (landscape) 636 else 900
-        previewBitmap = withContext(Dispatchers.IO) {
+        val rendered = withContext(Dispatchers.IO) {
             runCatching {
                 if (stage == 0) NativeImageEngine.renderPhotoPreview(edited, 1600)
                 else NativeImageEngine.render(edited, previewWidth, previewHeight)
-            }.getOrNull()
+            }
+        }
+        previewBitmap = rendered.getOrNull()
+        rendered.exceptionOrNull()?.let { error ->
+            status = "Pratinjau gagal diproses: ${error.message ?: error.javaClass.simpleName}"
         }
     }
     if (showAssetManager) {
