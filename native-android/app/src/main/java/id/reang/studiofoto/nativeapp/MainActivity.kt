@@ -127,6 +127,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
 
     if (activeProject != null) {
         val photos by vm.photos(activeProject!!.id).collectAsState(initial = emptyList())
+        LaunchedEffect(photos) { vm.ensureLocalCopies(photos) }
         ProjectDetailScreen(
             project = activeProject!!,
             photos = photos,
@@ -602,7 +603,7 @@ private fun ProjectDetailScreen(
                 items(photos, key = { it.id }) { photo ->
                     Card(onClick = { onPhotoClick(photo) }, colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(17.dp)) {
                         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(model = photo.uri, contentDescription = photo.name, modifier = Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+                            AsyncImage(model = photo.localPath ?: photo.uri, contentDescription = photo.name, modifier = Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                                 Text(photo.name, color = White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("Buka editor cahaya & warna", color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -646,7 +647,7 @@ private fun EditorScreen(photo: PhotoEntity, onBack: () -> Unit, onSave: (Float,
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = photo.uri,
+                model = photo.localPath ?: photo.uri,
                 contentDescription = photo.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
