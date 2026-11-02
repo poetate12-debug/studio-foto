@@ -11,8 +11,8 @@ android {
         applicationId = "id.reang.studiofoto.nativeapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.2.1-native-editor-fix"
+        versionCode = 9
+        versionName = "1.2.2-native-editor-controls"
     }
     signingConfigs {
         create("release") {
