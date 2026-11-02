@@ -202,6 +202,7 @@ fun PhotoWorkflowScreen(
                             .put("negative_prompt", "person, people, face, body, human, text, watermark, logo, blurry, low quality")
                             .put("num_images", 1).put("aspect_ratio", ratio)
                         val bg = FalAiClient.run(context, "fal-ai/bria/text-to-image/base", bgInput, key) { status = it }
+                        onRegisterAsset("Background AI", bg.localPath, "background")
                         change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null) }
                         persist()
                         status = "Background selesai. Objek asli tetap terpisah agar wajah tidak digambar ulang; atur posisinya di tahap Template."
