@@ -63,3 +63,10 @@ Untuk proses cetak penting, selalu ekspor file akhir ke galeri/penyimpanan ekste
 - fal.ai API key is configured once in Workspace settings and encrypted using Android Keystore AES-GCM. AI stages consume the saved key without showing a credential field in each stage.
 - Room schema version 5 adds local adjustment image path and color-mixer settings. Existing v4 projects migrate automatically.
 - This update is implemented but still requires device testing for slider responsiveness, brush coordinates on different screen ratios, storage migration, API-key persistence and full-resolution exports.
+
+
+## Native editor rendering fix 1.2.1
+
+- Fixed the live image-processing path to decode mutable ARGB_8888 bitmaps before pixel operations. The prior immutable BitmapFactory result caused the native per-pixel adjustment routine to fail; the preview coroutine swallowed that error and fell back to a basic color matrix, so Tone/Detail/Color Mixer values changed while the image did not.
+- Preview rendering errors are now reported in the editor status instead of silently disappearing.
+- Build version is 1.2.1 (versionCode 8). Verify on-device that changing Highlights, Shadows, Whites, Clarity, Texture, Sharpen and individual color mixer channels visibly updates both preview and export.
