@@ -52,3 +52,14 @@ Ini adalah implementasi native bertahap, belum parity 100% terhadap seluruh fitu
 Foto asli yang diimpor disalin ke `filesDir` privat aplikasi. Hasil Cutout, background, overlay, logo, hasil AI, serta metadata proyek juga disimpan secara lokal. Foto sumber tidak ditimpa. Menghapus cache browser tidak memengaruhi penyimpanan native. Penghapusan data aplikasi atau uninstall tetap menghapus basis data dan file privat.
 
 Untuk proses cetak penting, selalu ekspor file akhir ke galeri/penyimpanan eksternal dan simpan salinan cadangan secara terpisah.
+
+
+## Native editor update 1.2.0
+
+- Editor layout refreshed to a light photo-editing workspace with a large image preview, project photo filmstrip, and fixed five-stage navigation.
+- Tone controls now include highlights, shadows, blacks, whites, dehaze, clarity, texture and sharpen. These controls are applied in the native bitmap render pipeline used for preview and export.
+- Color Mixer provides per-color Hue, Saturation and Luminance for red, orange, yellow, green, aqua, blue, purple and magenta.
+- Local Adjustment Brush supports additive and subtractive area masks with soft edges, applying local exposure, warmth, saturation and texture without changing the whole image.
+- fal.ai API key is configured once in Workspace settings and encrypted using Android Keystore AES-GCM. AI stages consume the saved key without showing a credential field in each stage.
+- Room schema version 5 adds local adjustment image path and color-mixer settings. Existing v4 projects migrate automatically.
+- This update is implemented but still requires device testing for slider responsiveness, brush coordinates on different screen ratios, storage migration, API-key persistence and full-resolution exports.
