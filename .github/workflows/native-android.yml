@@ -143,8 +143,8 @@ jobs:
                   raise SystemExit("Could not locate buildTypes in generated Android Gradle file")
               head, tail = source[:build_types], source[build_types:]
               tail, count = re.subn(
-                  r'release\\s*\\{',
-                  'release {\\n            signingConfig signingConfigs.release',
+                  r'release\s*\{,
+                  'release {\n            signingConfig signingConfigs.release',
                   tail,
                   count=1
               )
