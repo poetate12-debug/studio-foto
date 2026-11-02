@@ -963,6 +963,12 @@ fun PhotoWorkflowScreen(
                     }
                 }
                 Spacer(Modifier.height(11.dp))
+                CompositionLocalProvider(
+                    LocalWorkflowSliderHistory provides SliderHistoryCallbacks(
+                        onStart = { beginSliderEdit() },
+                        onFinish = { finishSliderEdit() }
+                    )
+                ) {
                 when (stage) {
                     0 -> {
                         val activePanelIcon = when (lightPanel) {
@@ -1021,12 +1027,6 @@ fun PhotoWorkflowScreen(
                             PremiumEditorTab("Kuas", Icons.Default.Brush, lightPanel == "kuas", Modifier.weight(1f)) { lightPanel = "kuas" }
                             PremiumEditorTab("Wajah", Icons.Default.Face, lightPanel == "wajah", Modifier.weight(1f)) { lightPanel = "wajah"; brushEnabled = false }
                         }
-                        CompositionLocalProvider(
-                            LocalWorkflowSliderHistory provides SliderHistoryCallbacks(
-                                onStart = { beginSliderEdit() },
-                                onFinish = { finishSliderEdit() }
-                            )
-                        ) {
                         when (lightPanel) {
                             "cahaya" -> {
 Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
@@ -1352,7 +1352,6 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                 }
                             }
                         }
-                        }
                     }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1482,6 +1481,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Mengekspor…" else "Ekspor foto ini") }
                         OutlinedButton(onClick = { persist(); onExportAll(edited) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Ekspor semua foto proyek") }
                     }
+                }
                 }
                 Spacer(Modifier.height(9.dp))
                 if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
