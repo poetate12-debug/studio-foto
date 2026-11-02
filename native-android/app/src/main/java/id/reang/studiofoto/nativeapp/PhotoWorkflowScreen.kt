@@ -254,7 +254,7 @@ fun PhotoWorkflowScreen(
         edited.lightcraftPhotoId, edited.lightcraftRenderedPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
         edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
-        edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson,
+        edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson, edited.localBrushColorMixJson,
         edited.objectX, edited.objectY, edited.objectScale, edited.backgroundScale,
         edited.backgroundX, edited.backgroundY, edited.eventText, edited.eventDate,
         edited.templateWidthCm, edited.templateHeightCm
