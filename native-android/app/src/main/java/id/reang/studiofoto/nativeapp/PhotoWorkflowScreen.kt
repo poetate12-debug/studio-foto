@@ -131,7 +131,7 @@ fun PhotoWorkflowScreen(
                     "cutout", "blur" -> {
                         val model = when (cutoutModel) { "birefnet" -> "fal-ai/birefnet"; "rmbg" -> "fal-ai/imageutils/rembg"; else -> "fal-ai/bria/background/remove" }
                         val input = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
-                        if (cutoutModel == "birefnet") input.put("model", "General Use (Heavy)")
+                        if (cutoutModel == "birefnet") input.put("model", "General Use (Light)")
                         val result = FalAiClient.run(context, model, input, key) { status = it }
                         if (action == "cutout") {
                             change { it.copy(cutoutPath = result.localPath, enhancedPath = null, aiCompositePath = null) }
@@ -152,14 +152,13 @@ fun PhotoWorkflowScreen(
                             else -> "fal-ai/bria/background/remove"
                         }
                         val removeInput = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
-                        if (cutoutModel == "birefnet") removeInput.put("model", "General Use (Heavy)")
+                        if (cutoutModel == "birefnet") removeInput.put("model", "General Use (Light)")
                         val cutout = FalAiClient.run(context, removeModel, removeInput, key) { status = it }
                         status = "Membuat background baru…"
                         val ratio = if (edited.templateWidthCm >= edited.templateHeightCm) "3:2" else "2:3"
                         val bgInput = JSONObject().put("prompt", prompt)
                             .put("negative_prompt", "person, people, face, body, human, text, watermark, logo, blurry, low quality")
-                            .put("num_images", 1).put("aspect_ratio", ratio).put("medium", "photography")
-                            .put("prompt_enhancement", true)
+                            .put("num_images", 1).put("aspect_ratio", ratio)
                         val bg = FalAiClient.run(context, "fal-ai/bria/text-to-image/base", bgInput, key) { status = it }
                         change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null) }
                         persist()
@@ -167,7 +166,7 @@ fun PhotoWorkflowScreen(
                     }
                     "enhance" -> {
                         val subject = edited.cutoutPath ?: source
-                        val data = NativeFiles.imageDataUri(subject, 2200)
+                        val data = NativeFiles.imageDataUri(subject, 2200, forcePng = enhanceModel == "recraft")
                         val model: String
                         val input: JSONObject
                         when (enhanceModel) {
