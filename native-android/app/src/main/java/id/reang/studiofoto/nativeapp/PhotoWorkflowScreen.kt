@@ -457,8 +457,8 @@ fun PhotoWorkflowScreen(
                 when (stage) {
                     0 -> {
                         WorkflowSlider("Brightness", edited.brightness, -0.5f..0.5f) { v -> change { it.copy(brightness = v) } }
-                        WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f) { v -> change { it.copy(contrast = v) } }
-                        WorkflowSlider("Saturation", edited.saturation, 0f..2f) { v -> change { it.copy(saturation = v) } }
+                        WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f, resetValue = 1f) { v -> change { it.copy(contrast = v) } }
+                        WorkflowSlider("Saturation", edited.saturation, 0f..2f, resetValue = 1f) { v -> change { it.copy(saturation = v) } }
                         WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> change { it.copy(warmth = v) } }
                         Divider()
                         Text("TONE & DETAIL", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
@@ -729,13 +729,91 @@ fun PhotoWorkflowScreen(
 }
 
 @Composable
-private fun WorkflowSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+private fun WorkflowSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    resetValue: Float = 0f,
+    onChange: (Float) -> Unit
+) {
+    val latestValue by rememberUpdatedState(value)
+    val latestOnChange by rememberUpdatedState(onChange)
+    val latestResetValue by rememberUpdatedState(resetValue)
+    val low = range.start
+    val high = range.endInclusive
+    val fraction = ((value - low) / (high - low).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, color = Color(0xFF334155), style = MaterialTheme.typography.bodySmall)
             Text("%.0f".format(value), color = Color(0xFFF07824), style = MaterialTheme.typography.labelSmall)
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range, colors = SliderDefaults.colors(thumbColor = Color(0xFFF07824), activeTrackColor = Color(0xFFF07824), inactiveTrackColor = Color(0xFFE2E8F0)))
+        Canvas(
+            modifier = Modifier.fillMaxWidth().height(38.dp)
+                .pointerInput(low, high, resetValue) {
+                    var lastTapAt = 0L
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val inset = 11.dp.toPx()
+                        val radius = 9.dp.toPx()
+                        val hitRadius = radius + 4.dp.toPx()
+                        val trackWidth = (size.width - inset * 2f).coerceAtLeast(1f)
+                        val currentFraction = ((latestValue - low) / (high - low).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
+                        val thumbCenter = Offset(inset + currentFraction * trackWidth, size.height / 2f)
+                        val dx = down.position.x - thumbCenter.x
+                        val dy = down.position.y - thumbCenter.y
+                        if (dx * dx + dy * dy > hitRadius * hitRadius) {
+                            waitForUpOrCancellation()
+                            return@awaitEachGesture
+                        }
+
+                        val dragStart = awaitTouchSlopOrCancellation(down.id) { change, _ ->
+                            change.consume()
+                            val x = (change.position.x - inset).coerceIn(0f, trackWidth)
+                            latestOnChange(low + (x / trackWidth) * (high - low))
+                        }
+                        if (dragStart != null) {
+                            drag(down.id) { change ->
+                                change.consume()
+                                val x = (change.position.x - inset).coerceIn(0f, trackWidth)
+                                latestOnChange(low + (x / trackWidth) * (high - low))
+                            }
+                            lastTapAt = 0L
+                        } else {
+                            val tapAt = down.uptimeMillis
+                            if (lastTapAt > 0L && tapAt - lastTapAt <= viewConfiguration.doubleTapTimeoutMillis) {
+                                latestOnChange(latestResetValue.coerceIn(low, high))
+                                lastTapAt = 0L
+                            } else {
+                                lastTapAt = tapAt
+                            }
+                        }
+                    }
+                }
+        ) {
+            val inset = 11.dp.toPx()
+            val trackHeight = 6.dp.toPx()
+            val radius = 9.dp.toPx()
+            val trackWidth = (size.width - inset * 2f).coerceAtLeast(1f)
+            val y = size.height / 2f
+            val x = inset + fraction * trackWidth
+            val corner = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f)
+
+            drawRoundRect(
+                color = Color(0xFFE2E8F0),
+                topLeft = Offset(inset, y - trackHeight / 2f),
+                size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight),
+                cornerRadius = corner
+            )
+            drawRoundRect(
+                color = Color(0xFFF07824),
+                topLeft = Offset(inset, y - trackHeight / 2f),
+                size = androidx.compose.ui.geometry.Size((x - inset).coerceAtLeast(0f), trackHeight),
+                cornerRadius = corner
+            )
+            drawCircle(Color.White, radius = radius, center = Offset(x, y))
+            drawCircle(Color(0xFFF07824), radius = radius, center = Offset(x, y), style = Stroke(width = 2.5.dp.toPx()))
+        }
     }
 }
 
