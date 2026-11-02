@@ -286,26 +286,21 @@ fun PhotoWorkflowScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF090D17))) {
+    Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA))) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (stage > 0) stage-- else onBack() }) { Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color.White) }
+            IconButton(onClick = { if (stage > 0) stage-- else onBack() }) { Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color(0xFF475569)) }
             Column(Modifier.weight(1f)) {
-                Text("Studio Editor", color = Color.White, fontWeight = FontWeight.Bold)
-                Text("TAHAP " + (stage + 1) + "/5 · " + listOf("CAHAYA", "CUTOUT", "TEMPLATE", "ENHANCE", "EXPORT")[stage], color = Color(0xFF9AA8BC), style = MaterialTheme.typography.labelSmall)
+                Text(projectName, color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
+                Text(photo.name, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
-            TextButton(onClick = { persist(); status = "Perubahan disimpan." }) { Text("Simpan", color = Color(0xFFB6A7FF)) }
-        }
-        LazyRow(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export").size) { i ->
-                val names = listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")
-                FilterChip(stage == i, { persist(); stage = i }, label = { Text(names[i]) })
-            }
+            IconButton(onClick = { persist(); status = "Perubahan disimpan." }) { Icon(Icons.Default.Save, contentDescription = "Simpan", tint = Color(0xFFF07824)) }
         }
         Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
-            .clip(RoundedCornerShape(20.dp)).background(Color(0xFF05070D)), contentAlignment = Alignment.Center) {
-            val brushPreview = stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()
+             .clip(RoundedCornerShape(16.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+            val brushPreview = (stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()) || (stage == 0 && brushEnabled)
+            val brushSourcePath = if (stage == 1) edited.cutoutPath else (edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath)
             if (brushPreview) {
-                AsyncImage(model = edited.cutoutPath?.let { File(it) }, contentDescription = "Cutout transparan",
+                AsyncImage(model = brushSourcePath?.let { File(it) }, contentDescription = "Area kuas",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             } else {
                 val composedPreview = previewBitmap
@@ -400,9 +395,9 @@ fun PhotoWorkflowScreen(
                 Text(edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
             }
         }
-        Surface(color = Color(0xFF141C2B), shape = RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
+        Surface(color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
             Column(Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
-                Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color(0xFF1E293B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(10.dp))
                 when (stage) {
                     0 -> {
