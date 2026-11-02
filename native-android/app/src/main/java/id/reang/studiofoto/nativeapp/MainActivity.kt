@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     val projects by vm.projects.collectAsState(initial = emptyList())
+    val assets by vm.assets.collectAsState(initial = emptyList())
     var activeProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var activePhoto by remember { mutableStateOf<PhotoEntity?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -106,6 +107,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     if (activePhoto != null) {
         PhotoWorkflowScreen(
             photo = activePhoto!!,
+            assets = assets,
             falApiKey = falApiKey,
             onFalApiKeyChange = { falApiKey = it },
             onBack = { activePhoto = null },
@@ -113,6 +115,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 vm.savePhoto(updated)
                 activePhoto = updated
             },
+            onRegisterAsset = { name, filePath, kind -> vm.addAsset(name, filePath, kind) },
             onExportAll = {
                 val projectId = activeProject?.id
                 if (projectId != null) {
