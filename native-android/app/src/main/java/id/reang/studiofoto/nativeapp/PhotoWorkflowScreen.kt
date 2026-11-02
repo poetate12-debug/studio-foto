@@ -1187,9 +1187,9 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                 }
                             }
                         }
-                        WorkflowSlider("Hue warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Hue"), -100f..100f) { updateLocalBrushColorValue("Hue", it) }
-                        WorkflowSlider("Saturasi warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Saturation"), -100f..100f) { updateLocalBrushColorValue("Saturation", it) }
-                        WorkflowSlider("Luminansi warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Luminance"), -100f..100f) { updateLocalBrushColorValue("Luminance", it) }
+                        WorkflowSlider("Hue warna lokal", localBrushColorValue("Hue"), -100f..100f) { updateLocalBrushColorValue("Hue", it) }
+                        WorkflowSlider("Saturasi warna lokal", localBrushColorValue("Saturation"), -100f..100f) { updateLocalBrushColorValue("Saturation", it) }
+                        WorkflowSlider("Luminansi warna lokal", localBrushColorValue("Luminance"), -100f..100f) { updateLocalBrushColorValue("Luminance", it) }
                         TextButton(onClick = {
                             val json = runCatching { JSONObject(edited.localBrushColorMixJson) }.getOrDefault(JSONObject())
                             listOf("Hue", "Saturation", "Luminance").forEach { json.put(selectedColor + it, 0) }
