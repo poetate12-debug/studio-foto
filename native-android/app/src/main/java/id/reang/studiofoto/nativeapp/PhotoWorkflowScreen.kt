@@ -6,6 +6,7 @@ import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -1382,6 +1383,7 @@ private fun WorkflowSlider(
     onChange: (Float) -> Unit
 ) {
     val latestOnChange by rememberUpdatedState(onChange)
+    val latestResetValue by rememberUpdatedState(resetValue)
     val low = range.start
     val high = range.endInclusive
     val safeValue = value.coerceIn(low, high)
@@ -1395,6 +1397,7 @@ private fun WorkflowSlider(
         ) {
             Text(label, color = Color(0xFF334155), fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
             Surface(
+                onClick = { latestOnChange(latestResetValue.coerceIn(low, high)) },
                 color = Color(0xFFFFF1E7),
                 shape = RoundedCornerShape(8.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFAD9C4))
