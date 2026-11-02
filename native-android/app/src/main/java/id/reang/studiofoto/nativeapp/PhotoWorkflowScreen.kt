@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -98,21 +99,21 @@ fun PhotoWorkflowScreen(
     val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "backgrounds").absolutePath }
-                .onSuccess { file -> change { it.copy(backgroundPath = file, aiCompositePath = null) }; onRegisterAsset(uri.lastPathSegment ?: "Background", file, "background"); persist(); status = "Background tersimpan di koleksi dan proyek." }
+                .onSuccess { file -> change { it.copy(backgroundPath = file, aiCompositePath = null) }; onRegisterAsset(documentDisplayName(context, uri, "Background"), file, "background"); persist(); status = "Background tersimpan di koleksi dan proyek." }
                 .onFailure { status = it.message ?: "Gagal membaca background." }
         }
     }
     val pickOverlay = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "overlays").absolutePath }
-                .onSuccess { file -> change { it.copy(overlayPath = file) }; onRegisterAsset(uri.lastPathSegment ?: "Template PNG", file, "template"); persist(); status = "Template PNG disimpan ke koleksi." }
+                .onSuccess { file -> change { it.copy(overlayPath = file) }; onRegisterAsset(documentDisplayName(context, uri, "Template PNG"), file, "template"); persist(); status = "Template PNG disimpan ke koleksi." }
                 .onFailure { status = it.message ?: "Gagal membaca template PNG." }
         }
     }
     val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { NativeFiles.importUri(context, uri, "logos").absolutePath }
-                .onSuccess { file -> change { it.copy(logoPath = file) }; onRegisterAsset(uri.lastPathSegment ?: "Logo", file, "logo"); persist(); status = "Logo disimpan ke koleksi." }
+                .onSuccess { file -> change { it.copy(logoPath = file) }; onRegisterAsset(documentDisplayName(context, uri, "Logo"), file, "logo"); persist(); status = "Logo disimpan ke koleksi." }
                 .onFailure { status = it.message ?: "Gagal membaca logo." }
         }
     }
@@ -530,4 +531,14 @@ private fun editorPreviewMatrix(photo: PhotoEntity): ColorMatrix {
         contrast * r, contrast * g, contrast * (b + saturation), 0f, offset - warmth,
         0f, 0f, 0f, 1f, 0f
     ))
+}
+
+
+private fun documentDisplayName(context: android.content.Context, uri: android.net.Uri, fallback: String): String {
+    return runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val column = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && column >= 0) cursor.getString(column) else null
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: fallback
 }
