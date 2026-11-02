@@ -1,27 +1,47 @@
-# Reang Studio Foto — Android packaging
+# Reang Studio Foto — Native Android preview
 
-The Android APK packages the existing Reang Studio Foto editor from the repository's `index.html` through Capacitor. This is the compatibility path used to bring the existing editor workflow onto Android without leaving its tools behind.
+This folder contains the **native Android application** built with Kotlin, Jetpack Compose, AndroidX Room, and Coil.
 
-## Editor features carried into the APK
-- Project creation, project list, multiple photo import and on-device project data.
-- Per-photo lighting controls, local adjustments and brush-based selections.
-- Cutout/background removal workflow, Keep/Remove brush refinement and object tools.
-- Template sizes, saved templates, background library, text/logo/ornament layers, layer order and placement controls.
-- AI tools for background removal/replacement, object removal, background blur, enhancement/upscale and face-related refinement where the selected fal.ai model is available.
-- JPEG/PNG output, print dimensions/DPI settings and sequential export.
-- Native Android image saving through `NativeDownloaderPlugin` to `Download/ReangStudioFoto`.
+## Native build
 
-## Build
+- The Android app entry point is `MainActivity.kt`.
+- The workflow builds this folder with Gradle `assembleRelease`.
+- The APK application ID is `id.reang.studiofoto.nativeapp`.
+- This app module does not embed the web editor and does not use Android WebView or Capacitor as its UI host.
+- The legacy web/PWA project elsewhere in the repository is separate and is not included by this Gradle project.
 
-The GitHub Actions workflow `.github/workflows/native-android.yml` installs the Capacitor dependencies, validates the editor with `npm test`, bundles `native-download.js`, generates the Android project and builds a signed release APK.
+## Implemented in this preview
 
-Required GitHub Actions secrets:
+- Native Compose home, project list, project creation, and project detail screens.
+- Multi-image selection through Android's Storage Access Framework.
+- Project and photo metadata stored in a local Room database.
+- Photo preview and live brightness, contrast, and saturation preview controls.
+- Saving those three adjustment values to the Room database.
+
+## Not implemented yet
+
+These are visible as workflow steps or workspace menu items, but are **not functional editing/export tools** in this preview:
+
+- Persistent copying of imported originals into app-managed files. The current implementation stores the selected content URI and attempts to retain read permission.
+- Cutout / background removal and brush refinement.
+- Template/background library, canvas composition, layers, text, logos, and object positioning.
+- AI enhancement models, face-detail enhancement, and fal.ai integration.
+- Exporting edited pixels to JPEG/PNG, print sizing/DPI, batch export, and RAW development.
+- Masking and local adjustment tools.
+
+The editor's brightness/contrast/saturation controls currently affect the on-screen preview and persist adjustment numbers in Room. They do not yet render a new output image. Do not treat the current preview APK as feature-complete or as a migration of all legacy editor features.
+
+## Data durability
+
+Room stores project/photo metadata in the app's private database. The selected image itself is currently referenced by its Android content URI rather than copied into app-owned storage. This is independent of browser cache because the app is native, but it is not a complete self-contained photo archive. Clearing app data or uninstalling the app removes the app's local database; source images may also become unavailable if their original provider removes them or revokes access. A later storage phase must copy originals into app-managed files and implement backup/export and database migrations.
+
+## Build and signing
+
+GitHub Actions workflow: `.github/workflows/native-android.yml`
+
+Required repository secrets:
 - `REANG_KEYSTORE_BASE64`
 - `REANG_KEYSTORE_PASSWORD`
 - `REANG_KEY_ALIAS`
 
-The APK application ID is `id.reang.studiofoto.nativeapp`, preserving update compatibility with the currently installed native preview. The previous Kotlin/Compose foundation source remains in this folder's source tree as a separate native implementation base; it is not the active UI host in this compatibility build.
-
-## Important limits
-
-This packaging reuses the existing editor code; it does not mean every AI model is guaranteed to work for every account or image. AI processing requires a valid fal.ai key, network access, model availability/permissions and sufficient account balance. Results must be checked manually, especially face-related edits. The editor stores its projects and templates locally in the app WebView data; uninstalling the app or clearing app data can remove that local data. The 30 MB limit applies to each image written by the native downloader.
+The workflow runs Gradle `assembleRelease`, verifies the package ID and signing-certificate fingerprint, then publishes the APK release asset. A successful build verifies compilation and signing; it does not replace device-level functional testing.
