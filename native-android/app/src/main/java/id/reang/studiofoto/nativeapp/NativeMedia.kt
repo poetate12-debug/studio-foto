@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
+import android.graphics.BlurMaskFilter
 import android.graphics.Path
 import android.graphics.Shader
 import android.graphics.Canvas
@@ -64,6 +65,7 @@ object NativeFiles {
 
     fun deletePrivatePhotoFiles(photo: PhotoEntity) {
         listOf(photo.localPath, photo.cutoutPath, photo.enhancedPath, photo.aiCompositePath)
+            .plus(photo.localAdjustmentPath)
             .filterNotNull()
             .distinct()
             .forEach { path -> runCatching { File(path).delete() } }
@@ -240,6 +242,88 @@ object NativeImageEngine {
         NativeFiles.writeBytes(context, bytes.toByteArray(), "cutouts", "png")
     }
 
+    suspend fun applyLocalBrush(
+        context: Context,
+        basePath: String,
+        strokes: List<CutoutBrushStroke>,
+        exposure: Float,
+        warmth: Float,
+        saturation: Float,
+        texture: Float
+    ): String = withContext(Dispatchers.IO) {
+        val source = decode(basePath, 2800) ?: error("Foto untuk kuas tidak dapat dibaca.")
+        require(strokes.isNotEmpty()) { "Sapukan kuas pada area yang ingin diubah." }
+        val width = source.width
+        val height = source.height
+        val mask = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val maskCanvas = Canvas(mask)
+        strokes.forEach { stroke ->
+            if (stroke.points.isEmpty()) return@forEach
+            val path = Path()
+            stroke.points.forEachIndexed { index, point ->
+                val x = point.first.coerceIn(0f, 1f) * width
+                val y = point.second.coerceIn(0f, 1f) * height
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            val strokeWidth = (stroke.widthFraction.coerceIn(0.003f, 0.15f) * min(width, height)).coerceAtLeast(4f)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                maskFilter = BlurMaskFilter((strokeWidth * 0.12f).coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
+                if (stroke.erase) xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+            }
+            if (stroke.points.size == 1) {
+                val point = stroke.points.first()
+                paint.style = Paint.Style.FILL
+                maskCanvas.drawCircle(point.first * width, point.second * height, strokeWidth / 2f, paint)
+            } else maskCanvas.drawPath(path, paint)
+        }
+        val output = source.copy(Bitmap.Config.ARGB_8888, true)
+        val srcRow = IntArray(width)
+        val maskRow = IntArray(width)
+        val exp = Math.pow(2.0, (exposure.coerceIn(-100f, 100f) / 100f * 0.8f).toDouble()).toFloat()
+        val warm = warmth.coerceIn(-100f, 100f) / 100f * 0.16f
+        val sat = 1f + saturation.coerceIn(-100f, 100f) / 100f
+        val detail = texture.coerceIn(-100f, 100f) / 100f * 0.28f
+        for (y in 0 until height) {
+            source.getPixels(srcRow, 0, width, 0, y, width, 1)
+            mask.getPixels(maskRow, 0, width, 0, y, width, 1)
+            for (x in 0 until width) {
+                val amount = Color.alpha(maskRow[x]) / 255f
+                if (amount <= 0f) continue
+                val px = srcRow[x]
+                if (Color.alpha(px) == 0) continue
+                val gray = (0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px)) / 255f
+                var red = Color.red(px) / 255f
+                var green = Color.green(px) / 255f
+                var blue = Color.blue(px) / 255f
+                val originalR = red; val originalG = green; val originalB = blue
+                red = red * exp + warm
+                green *= exp
+                blue = blue * exp - warm
+                val luma = (red * 0.2126f + green * 0.7152f + blue * 0.0722f).coerceIn(0f, 1f)
+                red = luma + (red - luma) * sat
+                green = luma + (green - luma) * sat
+                blue = luma + (blue - luma) * sat
+                red += (originalR - gray) * detail
+                green += (originalG - gray) * detail
+                blue += (originalB - gray) * detail
+                red = originalR + (red - originalR) * amount
+                green = originalG + (green - originalG) * amount
+                blue = originalB + (blue - originalB) * amount
+                srcRow[x] = Color.argb(Color.alpha(px), (red.coerceIn(0f, 1f) * 255f).toInt(), (green.coerceIn(0f, 1f) * 255f).toInt(), (blue.coerceIn(0f, 1f) * 255f).toInt())
+            }
+            output.setPixels(srcRow, 0, width, 0, y, width, 1)
+        }
+        val bytes = ByteArrayOutputStream()
+        output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+        source.recycle(); mask.recycle(); output.recycle()
+        NativeFiles.writeBytes(context, bytes.toByteArray(), "local-adjustments", "png")
+    }
+
     fun decode(path: String?, maxSide: Int = 3200): Bitmap? {
         if (path.isNullOrBlank()) return null
         val file = File(path)
@@ -288,7 +372,7 @@ object NativeImageEngine {
             }
         }
 
-        val sourcePath = photo.enhancedPath ?: photo.cutoutPath ?: photo.localPath
+        val sourcePath = photo.localAdjustmentPath ?: photo.enhancedPath ?: photo.cutoutPath ?: photo.localPath
         val subject = if (photo.aiCompositePath == null) decode(sourcePath, max(width, height)) else null
         if (subject != null) {
             val baseW = width * 0.82f * photo.objectScale.coerceIn(0.2f, 2.5f)
@@ -341,7 +425,7 @@ object NativeImageEngine {
         val height = bitmap.height
         val row = IntArray(width)
         val exposure = Math.pow(2.0, (photo.brightness.coerceIn(-0.6f, 0.6f) * 1.4f).toDouble()).toFloat()
-        val contrast = (photo.contrast * (1f + photo.dehaze.coerceIn(-100f, 100f) * 0.0035f + photo.clarity.coerceIn(-100f, 100f) * 0.002f)).coerceIn(0.25f, 2.5f)
+        val contrast = (photo.contrast * (1f + photo.dehaze.coerceIn(-100f, 100f) * 0.0035f)).coerceIn(0.25f, 2.5f)
         val saturation = photo.saturation.coerceIn(0f, 2f)
         val vibrance = photo.vibrance.coerceIn(-100f, 100f) / 100f
         val warmth = photo.warmth.coerceIn(-100f, 100f) / 100f * 0.12f
@@ -349,11 +433,30 @@ object NativeImageEngine {
         val highlight = photo.highlights.coerceIn(-100f, 100f) / 100f * 0.38f
         val black = photo.blacks.coerceIn(-100f, 100f) / 100f * 0.28f
         val vignette = photo.vignette.coerceIn(0f, 100f) / 100f * 0.72f
+        val whiteLift = photo.whites.coerceIn(-100f, 100f) / 100f * 0.25f
+        val detailFactor = photo.clarity.coerceIn(-100f, 100f) / 100f * 0.65f +
+            photo.texture.coerceIn(-100f, 100f) / 100f * 0.38f +
+            photo.sharpen.coerceIn(0f, 100f) / 100f * 0.9f
+        val mixer = runCatching { JSONObject(photo.colorMixJson) }.getOrDefault(JSONObject())
+        val mixerNames = arrayOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
+        val mixerCenters = floatArrayOf(0f, 30f, 60f, 120f, 180f, 240f, 275f, 330f)
+        val mixerHue = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Hue", 0.0).toFloat().coerceIn(-180f, 180f) }
+        val mixerSat = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Saturation", 0.0).toFloat().coerceIn(-100f, 100f) }
+        val mixerLum = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Luminance", 0.0).toFloat().coerceIn(-100f, 100f) }
+        val hasMixer = mixerHue.any { it != 0f } || mixerSat.any { it != 0f } || mixerLum.any { it != 0f }
+        val detailBitmap = if (detailFactor != 0f) {
+            val small = Bitmap.createScaledBitmap(bitmap, max(1, width / 7), max(1, height / 7), true)
+            val enlarged = Bitmap.createScaledBitmap(small, width, height, true)
+            small.recycle()
+            enlarged
+        } else null
+        val detailRow = if (detailBitmap != null) IntArray(width) else null
         val centerX = (width - 1) / 2f
         val centerY = (height - 1) / 2f
         val maxDistance = kotlin.math.sqrt(centerX * centerX + centerY * centerY).coerceAtLeast(1f)
         for (y in 0 until height) {
             bitmap.getPixels(row, 0, width, 0, y, width, 1)
+            if (detailBitmap != null && detailRow != null) detailBitmap.getPixels(detailRow, 0, width, 0, y, width, 1)
             val ny = (y - centerY) / maxDistance
             for (x in 0 until width) {
                 val pixel = row[x]
@@ -366,10 +469,11 @@ object NativeImageEngine {
                 val shadowLift = shadow * (1f - luma) * (1f - luma)
                 val highlightLift = highlight * luma * luma
                 val blackLift = black * (1f - luma) * 0.65f
+                val whites = whiteLift * luma * luma * luma
                 val tone = exposure
-                red = ((red * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift + warmth
-                green = ((green * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift
-                blue = ((blue * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift - warmth
+                red = ((red * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift + whites + warmth
+                green = ((green * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift + whites
+                blue = ((blue * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift + whites - warmth
                 val mid = (red + green + blue) / 3f
                 val chroma = (max(red, max(green, blue)) - min(red, min(green, blue))).coerceIn(0f, 1f)
                 val vibranceFactor = 1f + vibrance * (1f - chroma)
@@ -377,6 +481,33 @@ object NativeImageEngine {
                 red = mid + (red - mid) * satFactor
                 green = mid + (green - mid) * satFactor
                 blue = mid + (blue - mid) * satFactor
+                if (detailBitmap != null && detailRow != null && detailFactor != 0f) {
+                    val low = detailRow[x]
+                    red += (red - Color.red(low) / 255f) * detailFactor
+                    green += (green - Color.green(low) / 255f) * detailFactor
+                    blue += (blue - Color.blue(low) / 255f) * detailFactor
+                }
+                if (hasMixer) {
+                    val hsl = rgbToHsl(red, green, blue)
+                    var hueShift = 0f
+                    var saturationShift = 0f
+                    var luminanceShift = 0f
+                    for (i in mixerCenters.indices) {
+                        if (mixerHue[i] == 0f && mixerSat[i] == 0f && mixerLum[i] == 0f) continue
+                        var distance = kotlin.math.abs(hsl[0] - mixerCenters[i])
+                        distance = min(distance, 360f - distance)
+                        val weight = (1f - distance / 48f).coerceIn(0f, 1f)
+                        hueShift += mixerHue[i] * weight
+                        saturationShift += mixerSat[i] * weight
+                        luminanceShift += mixerLum[i] * weight
+                    }
+                    val adjusted = hslToRgb(
+                        hsl[0] + hueShift,
+                        (hsl[1] * (1f + saturationShift / 100f)).coerceIn(0f, 1f),
+                        (hsl[2] + luminanceShift / 100f * 0.30f).coerceIn(0f, 1f)
+                    )
+                    red = adjusted[0]; green = adjusted[1]; blue = adjusted[2]
+                }
                 val nx = (x - centerX) / maxDistance
                 val distance = kotlin.math.sqrt(nx * nx + ny * ny)
                 val edge = ((distance - 0.30f) / 0.70f).coerceIn(0f, 1f)
@@ -388,6 +519,43 @@ object NativeImageEngine {
             }
             bitmap.setPixels(row, 0, width, 0, y, width, 1)
         }
+        detailBitmap?.recycle()
+    }
+
+    private fun rgbToHsl(red: Float, green: Float, blue: Float): FloatArray {
+        val r = red.coerceIn(0f, 1f); val g = green.coerceIn(0f, 1f); val b = blue.coerceIn(0f, 1f)
+        val maxValue = max(r, max(g, b)); val minValue = min(r, min(g, b))
+        val delta = maxValue - minValue
+        var hue = 0f
+        val light = (maxValue + minValue) / 2f
+        var saturation = 0f
+        if (delta > 0.0001f) {
+            saturation = delta / (1f - kotlin.math.abs(2f * light - 1f)).coerceAtLeast(0.0001f)
+            hue = when (maxValue) {
+                r -> 60f * (((g - b) / delta) % 6f)
+                g -> 60f * ((b - r) / delta + 2f)
+                else -> 60f * ((r - g) / delta + 4f)
+            }
+            if (hue < 0f) hue += 360f
+        }
+        return floatArrayOf(hue, saturation.coerceIn(0f, 1f), light.coerceIn(0f, 1f))
+    }
+
+    private fun hslToRgb(hue: Float, saturation: Float, lightness: Float): FloatArray {
+        val h = ((hue % 360f) + 360f) % 360f
+        val s = saturation.coerceIn(0f, 1f); val l = lightness.coerceIn(0f, 1f)
+        val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
+        val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+        val m = l - c / 2f
+        val values = when {
+            h < 60f -> floatArrayOf(c, x, 0f)
+            h < 120f -> floatArrayOf(x, c, 0f)
+            h < 180f -> floatArrayOf(0f, c, x)
+            h < 240f -> floatArrayOf(0f, x, c)
+            h < 300f -> floatArrayOf(x, 0f, c)
+            else -> floatArrayOf(c, 0f, x)
+        }
+        return floatArrayOf((values[0] + m).coerceIn(0f, 1f), (values[1] + m).coerceIn(0f, 1f), (values[2] + m).coerceIn(0f, 1f))
     }
 
     private fun fitRect(bw: Int, bh: Int, target: RectF): RectF {
