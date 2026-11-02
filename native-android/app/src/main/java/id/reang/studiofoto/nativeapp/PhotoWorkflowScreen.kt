@@ -396,7 +396,7 @@ fun PhotoWorkflowScreen(
             }
         }
         Surface(color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
-            Column(Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
                 Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color(0xFF1E293B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(10.dp))
                 when (stage) {
@@ -406,7 +406,7 @@ fun PhotoWorkflowScreen(
                         WorkflowSlider("Saturation", edited.saturation, 0f..2f) { v -> change { it.copy(saturation = v) } }
                         WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> change { it.copy(warmth = v) } }
                         Divider()
-                        Text("TONE & DETAIL", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        Text("TONE & DETAIL", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Highlights", edited.highlights, -100f..100f) { v -> change { it.copy(highlights = v) } }
                         WorkflowSlider("Shadows", edited.shadows, -100f..100f) { v -> change { it.copy(shadows = v) } }
                         WorkflowSlider("Blacks", edited.blacks, -100f..100f) { v -> change { it.copy(blacks = v) } }
@@ -614,9 +614,59 @@ fun PhotoWorkflowScreen(
                 Spacer(Modifier.height(9.dp))
                 if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text(status, color = if (status.contains("gagal", true)) Color(0xFFFF9C9C) else Color(0xFF9AA8BC), style = MaterialTheme.typography.labelSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { if (stage > 0) stage-- else onBack() }, modifier = Modifier.weight(1f)) { Text("Kembali") }
-                    Button(onClick = { persist(); if (stage < 4) stage++ else onBack() }, enabled = !working, modifier = Modifier.weight(1.3f)) { Text(if (stage == 4) "Selesai" else "Lanjut") }
+
+            }
+        }
+        if (projectPhotos.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().height(78.dp).background(Color.White).padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val photoPosition = (projectPhotos.indexOfFirst { it.id == photo.id } + 1).coerceAtLeast(1)
+                Text("$photoPosition/${projectPhotos.size}", color = Color(0xFF64748B), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 5.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.weight(1f)) {
+                    items(projectPhotos, key = { it.id }) { item ->
+                        Surface(
+                            onClick = { persist(); onSelectPhoto(item) },
+                            shape = RoundedCornerShape(10.dp),
+                            border = if (item.id == photo.id) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFF07824)) else null,
+                            modifier = Modifier.width(57.dp).fillMaxHeight()
+                        ) {
+                            AsyncImage(
+                                model = item.localPath?.let { File(it) } ?: item.uri,
+                                contentDescription = item.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding().height(64.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val stageNames = listOf("Cahaya", "Cutout", "Template", "Wajah", "Ekspor")
+            val stageIcons = listOf(Icons.Default.WbSunny, Icons.Default.ContentCut, Icons.Default.Layers, Icons.Default.AutoAwesome, Icons.Default.FileDownload)
+            stageNames.forEachIndexed { index, label ->
+                Surface(
+                    onClick = { persist(); stage = index },
+                    color = Color.Transparent,
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Box(
+                            Modifier.size(29.dp).clip(RoundedCornerShape(50.dp))
+                                .background(if (stage == index) Color(0xFFF07824) else Color(0xFFDDF8E8)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (stage == index) Text((index + 1).toString(), color = Color.White, fontWeight = FontWeight.Bold)
+                            else Icon(stageIcons[index], contentDescription = null, tint = Color(0xFF249B62), modifier = Modifier.size(17.dp))
+                        }
+                        Text(label, color = if (stage == index) Color(0xFFF07824) else Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }
@@ -628,9 +678,9 @@ private fun WorkflowSlider(label: String, value: Float, range: ClosedFloatingPoi
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall)
-            Text("%.0f".format(value), color = Color(0xFFB6A7FF), style = MaterialTheme.typography.labelSmall)
+            Text("%.0f".format(value), color = Color(0xFFF07824), style = MaterialTheme.typography.labelSmall)
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range)
+        Slider(value = value, onValueChange = onChange, valueRange = range, colors = SliderDefaults.colors(thumbColor = Color(0xFFF07824), activeTrackColor = Color(0xFFF07824), inactiveTrackColor = Color(0xFFE2E8F0)))
     }
 }
 
