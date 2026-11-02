@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -316,18 +317,35 @@ object NativeImageEngine {
             val mime = if (format == "jpeg") "image/jpeg" else "image/png"
             val ext = if (format == "jpeg") "jpg" else "png"
             val name = "Reang-${System.currentTimeMillis()}.$ext"
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                if (Build.VERSION.SDK_INT >= 29) put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/ReangStudioFoto")
+            val temp = File(context.cacheDir, name)
+            try {
+                temp.outputStream().use { stream ->
+                    val ok = bitmap.compress(if (format == "jpeg") Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG, 95, stream)
+                    check(ok) { "Gagal merender gambar." }
+                }
+                bitmap.recycle()
+                if (format == "jpeg") {
+                    ExifInterface(temp.absolutePath).apply {
+                        setAttribute(ExifInterface.TAG_X_RESOLUTION, dpi.toString())
+                        setAttribute(ExifInterface.TAG_Y_RESOLUTION, dpi.toString())
+                        setAttribute(ExifInterface.TAG_RESOLUTION_UNIT, "2")
+                        saveAttributes()
+                    }
+                }
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    if (Build.VERSION.SDK_INT >= 29) put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/ReangStudioFoto")
+                }
+                val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: error("Tidak dapat membuat file ekspor di galeri.")
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    temp.inputStream().use { input -> input.copyTo(output) }
+                } ?: error("Tidak dapat membuka file tujuan.")
+                uri
+            } finally {
+                if (!bitmap.isRecycled) bitmap.recycle()
+                temp.delete()
             }
-            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                ?: error("Tidak dapat membuat file ekspor di galeri.")
-            context.contentResolver.openOutputStream(uri)?.use { stream ->
-                val ok = bitmap.compress(if (format == "jpeg") Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG, 95, stream)
-                check(ok) { "Gagal menulis file ekspor." }
-            } ?: error("Tidak dapat membuka file tujuan.")
-            bitmap.recycle()
-            uri
         }
 }
