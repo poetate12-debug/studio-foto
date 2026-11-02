@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,8 +77,8 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showNewProject by rememberSaveable { mutableStateOf(false) }
     var projectName by rememberSaveable { mutableStateOf("") }
-    var falApiKey by remember { mutableStateOf("") }
     val context = LocalContext.current
+    var falApiKey by remember { mutableStateOf(FalKeyVault.load(context)) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -106,11 +107,13 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     }
 
     if (activePhoto != null) {
+        val activeProjectPhotos by vm.photos(activePhoto!!.projectId).collectAsState(initial = emptyList())
         PhotoWorkflowScreen(
             photo = activePhoto!!,
+            projectPhotos = activeProjectPhotos,
+            onSelectPhoto = { selected -> activePhoto = selected },
             assets = assets,
             falApiKey = falApiKey,
-            onFalApiKeyChange = { falApiKey = it },
             onBack = { activePhoto = null },
             onSave = { updated ->
                 vm.savePhoto(updated)
@@ -191,7 +194,14 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 onOpenProject = { activeProject = it },
                 onDeleteProject = { vm.deleteProject(it.id) }
             )
-            else -> WorkspaceScreen(onOpenProjects = { selectedTab = 1 })
+            else -> WorkspaceScreen(
+                onOpenProjects = { selectedTab = 1 },
+                falApiKey = falApiKey,
+                onSaveFalApiKey = { value ->
+                    FalKeyVault.save(context, value)
+                    falApiKey = value.trim()
+                }
+            )
         }
     }
 
@@ -514,7 +524,13 @@ private fun ProjectRow(project: ProjectEntity, onClick: () -> Unit, large: Boole
 }
 
 @Composable
-private fun WorkspaceScreen(onOpenProjects: () -> Unit) {
+private fun WorkspaceScreen(
+    onOpenProjects: () -> Unit,
+    falApiKey: String,
+    onSaveFalApiKey: (String) -> Unit
+) {
+    var apiKeyDraft by remember(falApiKey) { mutableStateOf(falApiKey) }
+    var keySaved by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(18.dp),
@@ -542,6 +558,42 @@ private fun WorkspaceScreen(onOpenProjects: () -> Unit) {
         item { WorkspaceRow("AI Photo Tools", "Enhance, cutout, hapus objek, bokeh", Icons.Default.AutoAwesome, Gold, onOpenProjects) }
         item { WorkspaceRow("Masking & kuas", "Koreksi tepi cutout dengan kuas", Icons.Default.Brush, Cyan, onOpenProjects) }
         item { WorkspaceRow("Ekspor cetak", "JPEG/PNG dan ukuran A3/A4 dengan DPI", Icons.Default.Print, Color(0xFF74B7FF), onOpenProjects) }
+        item {
+            Text("PENGATURAN API", color = Color(0xFFD7D0FF), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(19.dp)) {
+                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = Cyan)
+                        Spacer(Modifier.width(9.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Kunci API fal.ai", color = White, fontWeight = FontWeight.Bold)
+                            Text(if (falApiKey.isBlank()) "Belum dikonfigurasi" else "Kunci sudah tersimpan aman", color = Muted, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (falApiKey.isNotBlank()) Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF42C987))
+                    }
+                    OutlinedTextField(
+                        value = apiKeyDraft,
+                        onValueChange = { apiKeyDraft = it; keySaved = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("API key fal.ai") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                    Button(onClick = {
+                        runCatching { onSaveFalApiKey(apiKeyDraft); keySaved = true }
+                            .onFailure { keySaved = false }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (apiKeyDraft.isBlank()) "Hapus API key" else "Simpan API key")
+                    }
+                    Text(
+                        if (keySaved) "Pengaturan API berhasil disimpan."
+                        else "API key dienkripsi menggunakan Android Keystore dan dipakai otomatis di semua tahap AI. Tidak perlu dimasukkan lagi di halaman Cutout atau Enhance.",
+                        color = if (keySaved) Color(0xFF42C987) else Muted,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
         item {
             Surface(color = Color(0xFF151E2D), shape = RoundedCornerShape(17.dp)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
