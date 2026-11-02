@@ -3,7 +3,9 @@ package id.reang.studiofoto.nativeapp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.graphics.Bitmap
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +22,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +63,13 @@ fun PhotoWorkflowScreen(
     var objectPrompt by rememberSaveable(photo.id) { mutableStateOf("") }
     var format by rememberSaveable(photo.id) { mutableStateOf(photo.exportFormat) }
     var dpi by rememberSaveable(photo.id) { mutableIntStateOf(photo.exportDpi) }
+    var brushEnabled by rememberSaveable(photo.id) { mutableStateOf(false) }
+    var brushErase by rememberSaveable(photo.id) { mutableStateOf(false) }
+    var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
+    var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
+    val brushAspect = remember(edited.cutoutPath, edited.localPath) {
+        NativeImageEngine.imageAspect(edited.cutoutPath ?: edited.localPath)
+    }
 
     fun persist() = onSave(edited)
     fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
@@ -221,18 +234,98 @@ fun PhotoWorkflowScreen(
         }
         Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
             .clip(RoundedCornerShape(20.dp)).background(Color(0xFF05070D)), contentAlignment = Alignment.Center) {
-            val composedPreview = previewBitmap
-            if (composedPreview != null) {
-                androidx.compose.foundation.Image(
-                    composedPreview.asImageBitmap(),
-                    contentDescription = edited.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
+            val brushPreview = stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()
+            if (brushPreview) {
+                AsyncImage(model = edited.cutoutPath, contentDescription = "Cutout transparan",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             } else {
-                AsyncImage(model = edited.localPath ?: edited.uri, contentDescription = edited.name,
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
-                    colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
+                val composedPreview = previewBitmap
+                if (composedPreview != null) {
+                    androidx.compose.foundation.Image(
+                        composedPreview.asImageBitmap(),
+                        contentDescription = edited.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    AsyncImage(model = edited.localPath ?: edited.uri, contentDescription = edited.name,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
+                }
+            }
+            if (brushPreview) {
+                Canvas(
+                    modifier = Modifier.fillMaxSize().pointerInput(brushErase, brushSize, brushAspect) {
+                        fun normalized(point: Offset): Pair<Float, Float>? {
+                            val viewW = size.width.toFloat()
+                            val viewH = size.height.toFloat()
+                            if (viewW <= 0f || viewH <= 0f || brushAspect <= 0f) return null
+                            val viewAspect = viewW / viewH
+                            val contentW: Float
+                            val contentH: Float
+                            val left: Float
+                            val top: Float
+                            if (viewAspect > brushAspect) {
+                                contentH = viewH; contentW = viewH * brushAspect
+                                left = (viewW - contentW) / 2f; top = 0f
+                            } else {
+                                contentW = viewW; contentH = viewW / brushAspect
+                                left = 0f; top = (viewH - contentH) / 2f
+                            }
+                            if (point.x !in left..(left + contentW) || point.y !in top..(top + contentH)) return null
+                            return ((point.x - left) / contentW) to ((point.y - top) / contentH)
+                        }
+                        detectDragGestures(
+                            onDragStart = { point ->
+                                normalized(point)?.let { uv ->
+                                    brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize)
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                normalized(change.position)?.let { uv ->
+                                    val last = brushStrokes.lastOrNull()
+                                    if (last != null && last.erase == brushErase && last.widthFraction == brushSize) {
+                                        brushStrokes = brushStrokes.dropLast(1) + last.copy(points = last.points + uv)
+                                    } else {
+                                        brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                ) {
+                    val viewW = size.width; val viewH = size.height
+                    val viewAspect = viewW / viewH
+                    val contentW: Float
+                    val contentH: Float
+                    val left: Float
+                    val top: Float
+                    if (viewAspect > brushAspect) {
+                        contentH = viewH; contentW = viewH * brushAspect
+                        left = (viewW - contentW) / 2f; top = 0f
+                    } else {
+                        contentW = viewW; contentH = viewW / brushAspect
+                        left = 0f; top = (viewH - contentH) / 2f
+                    }
+                    brushStrokes.forEach { stroke ->
+                        if (stroke.points.isNotEmpty()) {
+                            val path = Path()
+                            stroke.points.forEachIndexed { index, uv ->
+                                val x = left + uv.first * contentW
+                                val y = top + uv.second * contentH
+                                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            }
+                            val color = if (stroke.erase) Color(0xAAFF5555) else Color(0xAA55E7B5)
+                            val lineWidth = stroke.widthFraction * minOf(contentW, contentH)
+                            if (stroke.points.size == 1) {
+                                drawCircle(color, lineWidth / 2f, Offset(left + stroke.points[0].first * contentW, top + stroke.points[0].second * contentH))
+                            } else {
+                                drawPath(path, color, style = Stroke(width = lineWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                            }
+                        }
+                    }
+                }
             }
             Surface(Modifier.align(Alignment.BottomCenter).padding(9.dp), color = Color(0xB3080D17), shape = RoundedCornerShape(16.dp)) {
                 Text(edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
@@ -263,6 +356,39 @@ fun PhotoWorkflowScreen(
                         if (cutoutMode == "generate") OutlinedTextField(prompt, { prompt = it }, label = { Text("Deskripsi background") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                         OutlinedTextField(falApiKey, onFalApiKeyChange, label = { Text("API key fal.ai (sesi ini)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true)
                         Button(onClick = { runAi(cutoutMode) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Memproses…" else "Jalankan " + cutoutMode) }
+                        if (!edited.cutoutPath.isNullOrBlank()) {
+                            Divider()
+                            Text("Koreksi tepi cutout", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text("Aktifkan kuas, lalu sapukan pada foto transparan. Pulihkan mengambil piksel dari foto asli; Hapus membuat area transparan.", color = Color(0xFF9AA8BC), style = MaterialTheme.typography.labelSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(!brushErase, { brushErase = false; brushEnabled = true }, label = { Text("Pulihkan") })
+                                FilterChip(brushErase, { brushErase = true; brushEnabled = true }, label = { Text("Hapus") })
+                                FilterChip(brushEnabled, { brushEnabled = !brushEnabled }, label = { Text(if (brushEnabled) "Kuas aktif" else "Kuas mati") })
+                            }
+                            WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f) { brushSize = it / 100f }
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Button(onClick = {
+                                    val source = edited.localPath
+                                    val cutout = edited.cutoutPath
+                                    if (source != null && cutout != null && brushStrokes.isNotEmpty()) {
+                                        scope.launch {
+                                            working = true
+                                            status = "Menerapkan koreksi kuas…"
+                                            runCatching { NativeImageEngine.applyCutoutBrush(context, source, cutout, brushStrokes) }
+                                                .onSuccess { file ->
+                                                    change { it.copy(cutoutPath = file, enhancedPath = null, aiCompositePath = null) }
+                                                    persist()
+                                                    brushStrokes = emptyList()
+                                                    status = "Koreksi kuas tersimpan."
+                                                }
+                                                .onFailure { status = it.message ?: "Koreksi kuas gagal." }
+                                            working = false
+                                        }
+                                    }
+                                }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Terapkan kuas") }
+                                OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan coretan") }
+                            }
+                        }
                     }
                     2 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
