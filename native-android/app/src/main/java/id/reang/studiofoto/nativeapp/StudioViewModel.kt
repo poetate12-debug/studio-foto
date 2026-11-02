@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class ImportedPhoto(val originalUri: String, val localPath: String, val name: String)
@@ -40,5 +41,18 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun savePhoto(photo: PhotoEntity) {
         viewModelScope.launch { dao.updatePhoto(photo) }
+    }
+
+    fun exportAll(projectId: Long, onComplete: (Int, Int) -> Unit) {
+        viewModelScope.launch {
+            val photos = dao.observePhotos(projectId).first()
+            var saved = 0
+            photos.forEach { photo ->
+                runCatching {
+                    NativeImageEngine.export(getApplication(), photo, photo.exportFormat, photo.exportDpi)
+                }.onSuccess { saved++ }
+            }
+            onComplete(saved, photos.size)
+        }
     }
 }
