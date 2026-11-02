@@ -164,7 +164,7 @@ fun PhotoWorkflowScreen(
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        stage, brushEnabled, brushStrokes, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture, localRedReduction,
+        stage, brushStrokes, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture, localRedReduction,
         edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
         edited.lightcraftPhotoId, edited.lightcraftRenderedPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
@@ -182,6 +182,8 @@ fun PhotoWorkflowScreen(
             runCatching {
                 if (stage == 0) {
                     val developed = LightCraftDevelopEngine.renderPreview(context, edited, 1600)
+                    // Brush mode controls painting input only. Saved mask corrections stay composited
+                    // while switching back to global light/color controls, so the preview never drops them.
                     val history = savedLocalBrushStrokes + brushStrokes
                     val display = if (history.isNotEmpty()) {
                         val basePath = LightCraftDevelopEngine.writePreview(context, developed.bitmap, developed.photoId)
