@@ -210,6 +210,7 @@ object NativeImageEngine {
             }
             if (stroke.points.size == 1) {
                 val point = stroke.points.first()
+                paint.style = Paint.Style.FILL
                 canvas.drawCircle(point.first * width, point.second * height, paint.strokeWidth / 2f, paint)
             } else canvas.drawPath(path, paint)
         }
@@ -243,7 +244,8 @@ object NativeImageEngine {
         val generated = decode(photo.aiCompositePath, max(width, height))
         if (generated != null) {
             applyAdvancedLightAdjustments(generated, photo)
-            drawCover(canvas, generated, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+            val generatedTarget = RectF(0f, 0f, width.toFloat(), height.toFloat())
+            canvas.drawBitmap(generated, null, fitRect(generated.width, generated.height, generatedTarget), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
             generated.recycle()
         } else {
             val background = decode(photo.backgroundPath, max(width, height))
