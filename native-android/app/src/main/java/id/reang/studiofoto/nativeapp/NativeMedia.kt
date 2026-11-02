@@ -4,6 +4,9 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Path
+import android.graphics.Shader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
@@ -156,7 +159,68 @@ object FalAiClient {
     }
 }
 
+data class CutoutBrushStroke(
+    val points: List<Pair<Float, Float>>,
+    val erase: Boolean,
+    val widthFraction: Float
+)
+
 object NativeImageEngine {
+    fun imageAspect(path: String?): Float {
+        if (path.isNullOrBlank()) return 1f
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, options)
+        return if (options.outWidth > 0 && options.outHeight > 0) options.outWidth.toFloat() / options.outHeight.toFloat() else 1f
+    }
+
+    suspend fun applyCutoutBrush(
+        context: Context,
+        originalPath: String,
+        cutoutPath: String,
+        strokes: List<CutoutBrushStroke>
+    ): String = withContext(Dispatchers.IO) {
+        val original = decode(originalPath, 3000) ?: error("Foto asli tidak dapat dibaca.")
+        val cutout = decode(cutoutPath, 3000) ?: error("Hasil cutout tidak dapat dibaca.")
+        val width = cutout.width
+        val height = cutout.height
+        val source = if (original.width == width && original.height == height) original
+            else Bitmap.createScaledBitmap(original, width, height, true)
+        val output = cutout.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(output)
+        strokes.forEach { stroke ->
+            if (stroke.points.isEmpty()) return@forEach
+            val path = Path()
+            stroke.points.forEachIndexed { index, point ->
+                val x = point.first.coerceIn(0f, 1f) * width
+                val y = point.second.coerceIn(0f, 1f) * height
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = (stroke.widthFraction.coerceIn(0.003f, 0.15f) * min(width, height)).coerceAtLeast(4f)
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            if (stroke.erase) {
+                paint.color = Color.TRANSPARENT
+                paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+            } else {
+                paint.shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            }
+            if (stroke.points.size == 1) {
+                val point = stroke.points.first()
+                canvas.drawCircle(point.first * width, point.second * height, paint.strokeWidth / 2f, paint)
+            } else canvas.drawPath(path, paint)
+        }
+        val bytes = ByteArrayOutputStream()
+        output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+        if (source !== original) source.recycle()
+        original.recycle()
+        cutout.recycle()
+        output.recycle()
+        NativeFiles.writeBytes(context, bytes.toByteArray(), "cutouts", "png")
+    }
+
     fun decode(path: String?, maxSide: Int = 3200): Bitmap? {
         if (path.isNullOrBlank()) return null
         val file = File(path)
