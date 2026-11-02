@@ -129,9 +129,9 @@ fun PhotoWorkflowScreen(
             try {
                 when (action) {
                     "cutout", "blur" -> {
-                        val model = when (cutoutModel) { "birefnet" -> "fal-ai/birefnet"; "rmbg" -> "fal-ai/imageutils/rembg"; else -> "fal-ai/bria/background/remove" }
+                        val model = when (cutoutModel) { "birefnet" -> "fal-ai/birefnet/v2"; "rmbg" -> "fal-ai/imageutils/rembg"; else -> "fal-ai/bria/background/remove" }
                         val input = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
-                        if (cutoutModel == "birefnet") input.put("model", "General Use (Light)")
+                        if (cutoutModel == "birefnet") input.put("model", "Portrait").put("operating_resolution", "2048x2048").put("refine_foreground", true).put("output_format", "png")
                         val result = FalAiClient.run(context, model, input, key) { status = it }
                         if (action == "cutout") {
                             change { it.copy(cutoutPath = result.localPath, enhancedPath = null, aiCompositePath = null) }
@@ -152,7 +152,7 @@ fun PhotoWorkflowScreen(
                             else -> "fal-ai/bria/background/remove"
                         }
                         val removeInput = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
-                        if (cutoutModel == "birefnet") removeInput.put("model", "General Use (Light)")
+                        if (cutoutModel == "birefnet") removeInput.put("model", "Portrait").put("operating_resolution", "2048x2048").put("refine_foreground", true).put("output_format", "png")
                         val cutout = FalAiClient.run(context, removeModel, removeInput, key) { status = it }
                         status = "Membuat background baru…"
                         val ratio = if (edited.templateWidthCm >= edited.templateHeightCm) "3:2" else "2:3"
