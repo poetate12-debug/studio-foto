@@ -438,6 +438,7 @@ fun PhotoWorkflowScreen(
             .build()
         val detector = FaceDetection.getClient(options)
         faceMaskProcessing = true
+        faceMaskFaceCount = 0
         status = "Mendeteksi kontur wajah utama…"
         detector.process(inputImage)
             .addOnSuccessListener { faces ->
@@ -1232,7 +1233,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         }
                         if (edited.localAdjustmentPath != null) {
                             TextButton(onClick = {
-                                change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]", lightcraftRenderedPath = null) }
+                                change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]", localBrushColorMixJson = "{}", lightcraftRenderedPath = null) }
                                 savedLocalBrushStrokes = emptyList()
                                 brushStrokes = emptyList()
                                 persist()
@@ -1331,6 +1332,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                                 localBrushSaturation = 0f,
                                                 localBrushTexture = 0f,
                                                 localBrushRedReduction = 0f,
+                                                localBrushColorMixJson = "{}",
                                                 lightcraftRenderedPath = null
                                             )
                                         }
