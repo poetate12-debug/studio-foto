@@ -101,10 +101,10 @@ fun PhotoWorkflowScreen(
     var photoPanX by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var photoPanY by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var showBefore by remember(photo.id) { mutableStateOf(false) }
-    var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
-    var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
-    var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
-    var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
+    var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushExposure) }
+    var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushWarmth) }
+    var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushSaturation) }
+    var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushTexture) }
     var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
     val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
@@ -458,7 +458,7 @@ fun PhotoWorkflowScreen(
                     )
                 } else {
                     AsyncImage(model = edited.localPath?.let { File(it) } ?: edited.uri, contentDescription = edited.name,
-                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().then(zoomModifier), contentScale = ContentScale.Fit,
                         colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
                 }
             }
@@ -521,7 +521,11 @@ fun PhotoWorkflowScreen(
                                                 photoToSave.copy(
                                                     localAdjustmentPath = savedPath,
                                                     localBrushBasePath = base,
-                                                    localBrushHistoryJson = brushStrokesToJson(history)
+                                                    localBrushHistoryJson = brushStrokesToJson(history),
+                                                    localBrushExposure = latestLocalExposure,
+                                                    localBrushWarmth = latestLocalWarmth,
+                                                    localBrushSaturation = latestLocalSaturation,
+                                                    localBrushTexture = latestLocalTexture
                                                 )
                                             } else {
                                                 val base = photoToSave.cutoutBrushBasePath ?: photoToSave.cutoutPath
@@ -766,6 +770,36 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         WorkflowSlider("Warmth lokal", localWarmth, -100f..100f) { localWarmth = it }
                         WorkflowSlider("Saturation lokal", localSaturation, -100f..100f) { localSaturation = it }
                         WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
+                        if (savedLocalBrushStrokes.isNotEmpty()) {
+                            Button(
+                                onClick = {
+                                    val base = edited.localBrushBasePath ?: edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
+                                    if (base.isNullOrBlank()) {
+                                        status = "Foto dasar untuk kuas tidak ditemukan."
+                                    } else scope.launch {
+                                        working = true
+                                        status = "Menerapkan ulang pengaturan ke seluruh area kuas…"
+                                        runCatching {
+                                            NativeImageEngine.applyLocalBrush(context, base, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture)
+                                        }.onSuccess { path ->
+                                            val updated = edited.copy(
+                                                localAdjustmentPath = path,
+                                                localBrushBasePath = base,
+                                                localBrushExposure = localExposure,
+                                                localBrushWarmth = localWarmth,
+                                                localBrushSaturation = localSaturation,
+                                                localBrushTexture = localTexture
+                                            )
+                                            edited = updated
+                                            onSave(updated)
+                                            status = "Pengaturan diterapkan ke seluruh area kuas."
+                                        }.onFailure { status = it.message ?: "Gagal menerapkan ulang kuas." }
+                                        working = false
+                                    }
+                                },
+                                enabled = !working
+                            ) { Text("Terapkan pengaturan ke area tersimpan") }
+                        }
                         if (edited.localAdjustmentPath != null) {
                             TextButton(onClick = {
                                 change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]") }
@@ -777,6 +811,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         }
                             }
                         }
+                    }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             FilterChip(cutoutMode == "cutout", { cutoutMode = "cutout" }, label = { Text("Transparan") })

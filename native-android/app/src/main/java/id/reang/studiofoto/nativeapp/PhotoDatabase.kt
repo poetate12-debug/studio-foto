@@ -83,7 +83,11 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "NULL") val localBrushBasePath: String? = null,
     @ColumnInfo(defaultValue = "'[]'") val localBrushHistoryJson: String = "[]",
     @ColumnInfo(defaultValue = "NULL") val cutoutBrushBasePath: String? = null,
-    @ColumnInfo(defaultValue = "'[]'") val cutoutBrushHistoryJson: String = "[]"
+    @ColumnInfo(defaultValue = "'[]'") val cutoutBrushHistoryJson: String = "[]",
+    @ColumnInfo(defaultValue = "0") val localBrushExposure: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val localBrushWarmth: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val localBrushSaturation: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val localBrushTexture: Float = 0f
 )
 
 @Dao
@@ -187,6 +191,10 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN localBrushHistoryJson TEXT NOT NULL DEFAULT '[]'")
                 db.execSQL("ALTER TABLE photos ADD COLUMN cutoutBrushBasePath TEXT DEFAULT NULL")
                 db.execSQL("ALTER TABLE photos ADD COLUMN cutoutBrushHistoryJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushExposure REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushWarmth REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushSaturation REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushTexture REAL NOT NULL DEFAULT 0")
             }
         }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
