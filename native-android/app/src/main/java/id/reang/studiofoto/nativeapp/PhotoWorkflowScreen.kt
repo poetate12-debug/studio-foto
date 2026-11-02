@@ -238,6 +238,14 @@ fun PhotoWorkflowScreen(
         json.put(selectedColor + component, value.toDouble())
         changeLight { it.copy(colorMixJson = json.toString()) }
     }
+    fun localBrushColorValue(component: String): Float =
+        runCatching { JSONObject(edited.localBrushColorMixJson).optDouble(selectedColor + component, 0.0).toFloat() }
+            .getOrDefault(0f)
+    fun updateLocalBrushColorValue(component: String, value: Float) {
+        val json = runCatching { JSONObject(edited.localBrushColorMixJson) }.getOrDefault(JSONObject())
+        json.put(selectedColor + component, value.toDouble())
+        change { it.copy(localBrushColorMixJson = json.toString()) }
+    }
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
@@ -759,7 +767,7 @@ fun PhotoWorkflowScreen(
                                                         context, developed.path, history,
                                                         latestLocalExposure, latestLocalWarmth,
                                                         latestLocalSaturation, latestLocalTexture,
-                                                        latestLocalRedReduction
+                                                        latestLocalRedReduction, photoToSave.localBrushColorMixJson
                                                     ) to history
                                                 }
                                                 1 -> {
@@ -783,6 +791,7 @@ fun PhotoWorkflowScreen(
                                                     localBrushSaturation = latestLocalSaturation,
                                                     localBrushTexture = latestLocalTexture,
                                                     localBrushRedReduction = latestLocalRedReduction,
+                                                    localBrushColorMixJson = photoToSave.localBrushColorMixJson,
                                                     lightcraftPhotoId = generatedLightCraftId,
                                                     lightcraftRenderedPath = savedPath
                                                 )
@@ -865,6 +874,38 @@ fun PhotoWorkflowScreen(
                             } else {
                                 drawPath(path, color, style = Stroke(width = lineWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                             }
+                        }
+                    }
+                }
+            }
+            if (stage == 0 && lightPanel == "wajah" && !brushEnabled && savedLocalBrushStrokes.any { it.filled }) {
+                Canvas(Modifier.fillMaxSize().then(zoomModifier)) {
+                    val viewAspect = size.width / size.height.coerceAtLeast(1f)
+                    val contentW: Float
+                    val contentH: Float
+                    val left: Float
+                    val top: Float
+                    if (viewAspect > brushAspect) {
+                        contentH = size.height
+                        contentW = contentH * brushAspect
+                        left = (size.width - contentW) / 2f
+                        top = 0f
+                    } else {
+                        contentW = size.width
+                        contentH = contentW / brushAspect.coerceAtLeast(0.01f)
+                        left = 0f
+                        top = (size.height - contentH) / 2f
+                    }
+                    savedLocalBrushStrokes.filter { it.filled }.forEach { stroke ->
+                        if (stroke.points.size >= 3) {
+                            val maskPath = Path()
+                            stroke.points.forEachIndexed { index, point ->
+                                val x = left + point.first * contentW
+                                val y = top + point.second * contentH
+                                if (index == 0) maskPath.moveTo(x, y) else maskPath.lineTo(x, y)
+                            }
+                            maskPath.close()
+                            drawPath(maskPath, if (stroke.erase) Color(0x88EF5350) else Color(0x7752D6A5))
                         }
                     }
                 }
@@ -1163,7 +1204,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                             val path = NativeImageEngine.applyLocalBrush(
                                                 context, developed.path, savedLocalBrushStrokes,
                                                 localExposure, localWarmth, localSaturation, localTexture,
-                                                localRedReduction
+                                                localRedReduction, edited.localBrushColorMixJson
                                             )
                                             developed to path
                                         }.onSuccess { (developed, path) ->
@@ -1176,7 +1217,8 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                                 localBrushWarmth = localWarmth,
                                                 localBrushSaturation = localSaturation,
                                                 localBrushTexture = localTexture,
-                                                localBrushRedReduction = localRedReduction
+                                                localBrushRedReduction = localRedReduction,
+                                                localBrushColorMixJson = edited.localBrushColorMixJson
                                             )
                                             edited = updated
                                             onSave(updated)
@@ -1247,7 +1289,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                                     val path = NativeImageEngine.applyLocalBrush(
                                                         context, developed.path, savedLocalBrushStrokes,
                                                         localExposure, localWarmth, localSaturation, localTexture,
-                                                        localRedReduction
+                                                        localRedReduction, edited.localBrushColorMixJson
                                                     )
                                                     developed to path
                                                 }.onSuccess { (developed, path) ->
@@ -1261,7 +1303,8 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                                         localBrushWarmth = localWarmth,
                                                         localBrushSaturation = localSaturation,
                                                         localBrushTexture = localTexture,
-                                                        localBrushRedReduction = localRedReduction
+                                                        localBrushRedReduction = localRedReduction,
+                                                        localBrushColorMixJson = edited.localBrushColorMixJson
                                                     )
                                                     edited = updated
                                                     onSave(updated)
@@ -1822,87 +1865,78 @@ private fun brushStrokesToJson(strokes: List<CutoutBrushStroke>): String {
     return array.toString()
 }
 
-private fun exifAwareImageSize(path: String): Pair<Int, Int> {
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, options)
-    val rawWidth = options.outWidth
-    val rawHeight = options.outHeight
-    if (rawWidth <= 0 || rawHeight <= 0) return 0 to 0
-    val orientation = runCatching {
-        ExifInterface(path).getAttributeInt(
-            ExifInterface.TAG_ORIENTATION,
-            ExifInterface.ORIENTATION_NORMAL
-        )
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-    val rotated = orientation in setOf(
-        ExifInterface.ORIENTATION_ROTATE_90,
-        ExifInterface.ORIENTATION_ROTATE_270,
-        ExifInterface.ORIENTATION_TRANSPOSE,
-        ExifInterface.ORIENTATION_TRANSVERSE
-    )
-    return if (rotated) rawHeight to rawWidth else rawWidth to rawHeight
-}
-
 private fun buildFaceContourMaskStrokes(
     faceContour: List<PointF>,
     protectedContours: List<List<PointF>>,
     imageWidth: Int,
-    imageHeight: Int
+    imageHeight: Int,
+    faceBounds: android.graphics.Rect
 ): List<CutoutBrushStroke> {
-    if (faceContour.size < 8 || imageWidth <= 0 || imageHeight <= 0) return emptyList()
-    val polygon = faceContour.map { (it.x / imageWidth.toFloat()).coerceIn(0f, 1f) to (it.y / imageHeight.toFloat()).coerceIn(0f, 1f) }
-    val minY = polygon.minOf { it.second }
-    val maxY = polygon.maxOf { it.second }
-    val minDimension = minOf(imageWidth, imageHeight).toFloat().coerceAtLeast(1f)
-    val faceHeightPixels = (maxY - minY) * imageHeight
-    if (faceHeightPixels < 80f) return emptyList()
-    val rowStep = (faceHeightPixels / 105f).coerceAtLeast(2f / imageHeight)
-    val strokeWidth = ((rowStep * imageHeight * 1.25f) / minDimension).coerceIn(0.0035f, 0.035f)
-    val protectedBands = protectedContours.mapNotNull { contour ->
-        if (contour.isEmpty()) null else {
-            val top = contour.minOf { it.y / imageHeight.toFloat() }
-            val bottom = contour.maxOf { it.y / imageHeight.toFloat() }
-            val padding = ((bottom - top) * 0.65f).coerceAtLeast(0.006f)
-            (top - padding).coerceAtLeast(minY) to (bottom + padding).coerceAtMost(maxY)
+    if (imageWidth <= 0 || imageHeight <= 0) return emptyList()
+
+    val outline = if (faceContour.size >= 8) {
+        faceContour
+    } else {
+        // Contour mode may omit outlines on small or angled faces. Use a conservative
+        // inset oval from the detector's face bounds as a usable fallback.
+        val left = faceBounds.left + faceBounds.width() * 0.12f
+        val right = faceBounds.right - faceBounds.width() * 0.12f
+        val top = faceBounds.top + faceBounds.height() * 0.12f
+        val bottom = faceBounds.bottom - faceBounds.height() * 0.10f
+        if (right <= left || bottom <= top) return emptyList()
+        val cx = (left + right) / 2f
+        val cy = (top + bottom) / 2f
+        val rx = (right - left) / 2f
+        val ry = (bottom - top) / 2f
+        (0 until 64).map { index ->
+            val angle = (index * 2.0 * Math.PI / 64.0)
+            PointF(cx + kotlin.math.cos(angle).toFloat() * rx, cy + kotlin.math.sin(angle).toFloat() * ry)
         }
     }
-    val output = ArrayList<CutoutBrushStroke>(110)
-    var y = minY + rowStep / 2f
-    while (y < maxY) {
-        // Leave horizontal bands around eyes and lips untouched so local retouching
-        // does not soften or recolor those identity-defining details.
-        val featureBand = protectedBands.any { y in it.first..it.second }
-        if (!featureBand) {
-            val intersections = ArrayList<Float>()
-            for (index in polygon.indices) {
-                val a = polygon[index]
-                val b = polygon[(index + 1) % polygon.size]
-                if ((a.second <= y && b.second > y) || (b.second <= y && a.second > y)) {
-                    val t = (y - a.second) / (b.second - a.second)
-                    intersections.add(a.first + (b.first - a.first) * t)
-                }
-            }
-            intersections.sort()
-            var index = 0
-            while (index + 1 < intersections.size) {
-                val left = intersections[index].coerceIn(0f, 1f)
-                val right = intersections[index + 1].coerceIn(0f, 1f)
-                if (right - left > 0.012f) {
-                    output.add(
-                        CutoutBrushStroke(
-                            points = listOf(left to y, right to y),
-                            erase = false,
-                            widthFraction = strokeWidth,
-                            softness = 0.58f
-                        )
-                    )
-                }
-                index += 2
-            }
+
+    fun normalizedPolygon(points: List<PointF>, scale: Float = 1f): List<Pair<Float, Float>> {
+        val centerX = points.map { it.x }.average().toFloat()
+        val centerY = points.map { it.y }.average().toFloat()
+        return points.map { point ->
+            val x = centerX + (point.x - centerX) * scale
+            val y = centerY + (point.y - centerY) * scale
+            (x / imageWidth.toFloat()).coerceIn(0f, 1f) to
+                (y / imageHeight.toFloat()).coerceIn(0f, 1f)
         }
-        y += rowStep
     }
-    return output
+
+    val facePolygon = normalizedPolygon(outline, 0.92f)
+    if (facePolygon.size < 8) return emptyList()
+    val minX = facePolygon.minOf { it.first }
+    val maxX = facePolygon.maxOf { it.first }
+    val minY = facePolygon.minOf { it.second }
+    val maxY = facePolygon.maxOf { it.second }
+    if ((maxX - minX) * imageWidth < 55f || (maxY - minY) * imageHeight < 70f) return emptyList()
+
+    val mask = mutableListOf(
+        CutoutBrushStroke(
+            points = facePolygon,
+            erase = false,
+            widthFraction = 0.010f,
+            softness = 0.72f,
+            filled = true
+        )
+    )
+    protectedContours.forEach { contour ->
+        if (contour.size >= 5) {
+            val isEye = contour.size >= 15
+            mask.add(
+                CutoutBrushStroke(
+                    points = normalizedPolygon(contour, if (isEye) 1.28f else 1.22f),
+                    erase = true,
+                    widthFraction = 0.006f,
+                    softness = 0.18f,
+                    filled = true
+                )
+            )
+        }
+    }
+    return mask
 }
 
 private fun documentDisplayName(context: android.content.Context, uri: android.net.Uri, fallback: String): String {
