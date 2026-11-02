@@ -102,8 +102,13 @@ public class NativeDownloaderPlugin extends Plugin {
         }
 
         try {
+            long maxEncodedLength = ((long) MAX_IMAGE_BYTES + 2L) / 3L * 4L;
+            if (encoded.length() > maxEncodedLength) {
+                throw new Exception("File gambar melebihi batas 30 MB.");
+            }
             byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
             if (bytes.length == 0) throw new Exception("Data gambar kosong.");
+            if (bytes.length > MAX_IMAGE_BYTES) throw new Exception("File gambar melebihi batas 30 MB.");
             File localFile = saveToPrivateFiles(bytes, filename);
             Uri downloadUri = saveToPublicDownloads(bytes, filename, mimeType);
 
