@@ -32,7 +32,7 @@ object NativeFiles {
             val ext = context.contentResolver.getType(uri)?.substringAfterLast('/')?.let {
                 when (it.lowercase()) { "jpeg" -> "jpg"; "png", "webp", "heic" -> it; else -> "jpg" }
             } ?: "jpg"
-            val target = File(dir, "\${UUID.randomUUID()}.$ext")
+            val target = File(dir, "${UUID.randomUUID()}.$ext")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             } ?: error("File sumber tidak dapat dibuka.")
@@ -43,10 +43,18 @@ object NativeFiles {
     suspend fun writeBytes(context: Context, bytes: ByteArray, folder: String, extension: String): String =
         withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, folder).apply { mkdirs() }
-            val file = File(dir, "\${UUID.randomUUID()}.$extension")
+            val file = File(dir, "${UUID.randomUUID()}.$extension")
             file.writeBytes(bytes)
             file.absolutePath
         }
+
+    suspend fun imageDataUri(path: String, maxSide: Int = 2400): String = withContext(Dispatchers.IO) {
+        val bitmap = NativeImageEngine.decode(path, maxSide) ?: error("Foto tidak dapat dibaca.")
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        bitmap.recycle()
+        "data:image/jpeg;base64," + android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
+    }
 }
 
 object FalAiClient {
@@ -72,7 +80,7 @@ object FalAiClient {
                 delay(2000)
                 val status = request("GET", statusUrl, apiKey)
                 val state = status.optString("status", status.optString("state")).uppercase()
-                onProgress("Status $state · \${attempt * 2 + 2} detik")
+                onProgress("Status $state · ${attempt * 2 + 2} detik")
                 when (state) {
                     "COMPLETED" -> { result = request("GET", resultUrl, apiKey); completed = true; break }
                     "FAILED", "CANCELLED" -> error(status.optString("error").ifBlank { status.optString("detail", "Proses AI gagal.") })
@@ -118,7 +126,7 @@ object FalAiClient {
             connection.requestMethod = method
             connection.connectTimeout = 20000
             connection.readTimeout = 30000
-            connection.setRequestProperty("Authorization", "Key \${apiKey.trim()}")
+            connection.setRequestProperty("Authorization", "Key ${apiKey.trim()}")
             connection.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 connection.doOutput = true
@@ -159,21 +167,27 @@ object NativeImageEngine {
         val out = Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawColor(Color.rgb(245, 242, 238))
-        val background = decode(photo.backgroundPath, max(width, height))
-        if (background != null) {
-            drawCover(canvas, background, RectF(0f, 0f, width.toFloat(), height.toFloat()))
-            background.recycle()
+        val generated = decode(photo.aiCompositePath, max(width, height))
+        if (generated != null) {
+            drawCover(canvas, generated, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+            generated.recycle()
         } else {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                intArrayOf(Color.rgb(232, 227, 250), Color.rgb(248, 241, 231), Color.rgb(222, 211, 194)),
-                null, android.graphics.Shader.TileMode.CLAMP)
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            paint.shader = null
+            val background = decode(photo.backgroundPath, max(width, height))
+            if (background != null) {
+                drawCover(canvas, background, RectF(0f, 0f, width.toFloat(), height.toFloat()))
+                background.recycle()
+            } else {
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+                paint.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+                    intArrayOf(Color.rgb(232, 227, 250), Color.rgb(248, 241, 231), Color.rgb(222, 211, 194)),
+                    null, android.graphics.Shader.TileMode.CLAMP)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+                paint.shader = null
+            }
         }
 
         val sourcePath = photo.enhancedPath ?: photo.cutoutPath ?: photo.localPath
-        val subject = decode(sourcePath, max(width, height))
+        val subject = if (photo.aiCompositePath == null) decode(sourcePath, max(width, height)) else null
         if (subject != null) {
             val baseW = width * 0.82f * photo.objectScale.coerceIn(0.2f, 2.5f)
             val baseH = height * 0.80f * photo.objectScale.coerceIn(0.2f, 2.5f)
@@ -295,7 +309,7 @@ object NativeImageEngine {
             val bitmap = render(photo, width, height)
             val mime = if (format == "jpeg") "image/jpeg" else "image/png"
             val ext = if (format == "jpeg") "jpg" else "png"
-            val name = "Reang-\${System.currentTimeMillis()}.$ext"
+            val name = "Reang-${System.currentTimeMillis()}.$ext"
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                 put(MediaStore.MediaColumns.MIME_TYPE, mime)
