@@ -96,13 +96,13 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     }
 
     if (activePhoto != null) {
-        EditorScreen(
+        PhotoWorkflowScreen(
             photo = activePhoto!!,
             onBack = { activePhoto = null },
             onSave = { b, c, s ->
                 vm.saveAdjustments(activePhoto!!, b, c, s)
                 activePhoto = activePhoto!!.copy(brightness = b, contrast = c, saturation = s)
-                scope.launch { snackbar.showSnackbar("Penyesuaian foto tersimpan") }
+                scope.launch { snackbar.showSnackbar("Pengaturan cahaya tersimpan") }
             }
         )
         return
