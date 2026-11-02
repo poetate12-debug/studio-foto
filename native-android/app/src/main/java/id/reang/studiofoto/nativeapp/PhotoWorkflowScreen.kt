@@ -51,6 +51,7 @@ fun PhotoWorkflowScreen(
     onBack: () -> Unit,
     onSave: (PhotoEntity) -> Unit,
     onRegisterAsset: (String, String, String) -> Unit,
+    onDeleteAsset: (StudioAssetEntity) -> Unit,
     onExportAll: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -66,6 +67,7 @@ fun PhotoWorkflowScreen(
     var enhanceModel by rememberSaveable(photo.id) { mutableStateOf("topaz-hifi") }
     var scale by rememberSaveable(photo.id) { mutableIntStateOf(2) }
     var objectPrompt by rememberSaveable(photo.id) { mutableStateOf("") }
+    var showAssetManager by rememberSaveable(photo.id) { mutableStateOf(false) }
     var format by rememberSaveable(photo.id) { mutableStateOf(photo.exportFormat) }
     var dpi by rememberSaveable(photo.id) { mutableIntStateOf(photo.exportDpi) }
     var customWidth by rememberSaveable(photo.id) { mutableStateOf(photo.templateWidthCm.toString()) }
@@ -99,6 +101,38 @@ fun PhotoWorkflowScreen(
             runCatching { NativeImageEngine.render(edited, previewWidth, previewHeight) }.getOrNull()
         }
     }
+    if (showAssetManager) {
+        AlertDialog(
+            onDismissRequest = { showAssetManager = false },
+            title = { Text("Koleksi aset tersimpan") },
+            text = {
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (assets.isEmpty()) {
+                        Text("Belum ada aset. Tambahkan background, PNG template, atau logo pada tahap Template.")
+                    } else {
+                        assets.forEach { asset ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(asset.name, fontWeight = FontWeight.SemiBold)
+                                    Text(asset.kind.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                                IconButton(onClick = { onDeleteAsset(asset) }) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus aset", tint = Color(0xFFFF8D8D))
+                                }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAssetManager = false }) { Text("Selesai") }
+            }
+        )
+    }
+
     DisposableEffect(previewBitmap) {
         val bitmapToRelease = previewBitmap
         onDispose { bitmapToRelease?.recycle() }
@@ -435,6 +469,7 @@ fun PhotoWorkflowScreen(
                             OutlinedButton(onClick = { pickOverlay.launch(arrayOf("image/png")) }, modifier = Modifier.weight(1f)) { Text("Template PNG") }
                         }
                         OutlinedButton(onClick = { pickLogo.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Tambah logo / ornamen") }
+                        TextButton(onClick = { showAssetManager = true }) { Text("Kelola koleksi background, template, dan logo") }
                         if (assets.any { it.kind == "background" }) {
                             Text("BACKGROUND TERSIMPAN", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
