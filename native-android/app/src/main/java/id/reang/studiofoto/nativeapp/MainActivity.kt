@@ -187,7 +187,8 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
             1 -> ProjectsScreen(
                 projects = projects,
                 onNewProject = { showNewProject = true },
-                onOpenProject = { activeProject = it }
+                onOpenProject = { activeProject = it },
+                onDeleteProject = { vm.deleteProject(it.id) }
             )
             else -> WorkspaceScreen(onOpenProjects = { selectedTab = 1 })
         }
