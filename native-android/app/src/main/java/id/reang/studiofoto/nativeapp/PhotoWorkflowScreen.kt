@@ -460,7 +460,7 @@ fun PhotoWorkflowScreen(
                         status = "Mask wajah gagal dibuat dari kontur. Coba foto dengan wajah lebih jelas."
                     } else {
                         pushUndoSnapshot()
-                        val combined = savedLocalBrushStrokes + maskStrokes
+                        val combined = savedLocalBrushStrokes.filterNot { it.filled } + maskStrokes
                         savedLocalBrushStrokes = combined
                         val updated = edited.copy(
                             localBrushBasePath = edited.localBrushBasePath ?: edited.localPath,
