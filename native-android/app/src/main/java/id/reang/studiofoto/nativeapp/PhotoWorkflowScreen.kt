@@ -478,7 +478,7 @@ fun PhotoWorkflowScreen(
                         Button(onClick = { runAi(cutoutMode) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Memproses…" else "Jalankan " + cutoutMode) }
                         if (!edited.cutoutPath.isNullOrBlank()) {
                             Divider()
-                            Text("Koreksi tepi cutout", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text("Koreksi tepi cutout", color = Color(0xFF334155), fontWeight = FontWeight.SemiBold)
                             Text("Aktifkan kuas, lalu sapukan pada foto transparan. Pulihkan mengambil piksel dari foto asli; Hapus membuat area transparan.", color = Color(0xFF9AA8BC), style = MaterialTheme.typography.labelSmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 FilterChip(!brushErase, { brushErase = false; brushEnabled = true }, label = { Text("Pulihkan") })
@@ -518,7 +518,7 @@ fun PhotoWorkflowScreen(
                             item { FilterChip(edited.templateName == "A4 Landscape", { change { it.copy(templateName = "A4 Landscape", templateWidthCm = 29.7f, templateHeightCm = 21f) }; customWidth = "29.7"; customHeight = "21" }, label = { Text("A4 Landscape") }) }
                             item { FilterChip(edited.templateName == "Bebas", { change { it.copy(templateName = "Bebas") } }, label = { Text("Bebas") }) }
                         }
-                        Text("Ukuran khusus (cm)", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Text("Ukuran khusus (cm)", color = Color(0xFF334155), style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(value = customWidth, onValueChange = { customWidth = it }, label = { Text("Lebar") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(value = customHeight, onValueChange = { customHeight = it }, label = { Text("Tinggi") }, modifier = Modifier.weight(1f), singleLine = true)
@@ -576,7 +576,7 @@ fun PhotoWorkflowScreen(
                             FilterChip(enhanceModel == k, { enhanceModel = k }, label = { Text(label) })
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Upscale", color = Color.White, modifier = Modifier.weight(1f))
+                            Text("Upscale", color = Color(0xFF334155), modifier = Modifier.weight(1f))
                             FilterChip(scale == 2, { scale = 2 }, label = { Text("2×") })
                             FilterChip(scale == 4, { scale = 4 }, label = { Text("4×") })
                         }
@@ -589,7 +589,7 @@ fun PhotoWorkflowScreen(
                         Text("Model generatif dapat mengubah detail wajah. Periksa identitas secara manual sebelum cetak.", color = Color(0xFFFFC76A), style = MaterialTheme.typography.labelSmall)
                     }
                     4 -> {
-                        Text("Ukuran: " + edited.templateWidthCm + " × " + edited.templateHeightCm + " cm", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Ukuran: " + edited.templateWidthCm + " × " + edited.templateHeightCm + " cm", color = Color(0xFF334155), fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf(150, 200, 300).forEach { d -> FilterChip(dpi == d, { dpi = d; change { it.copy(exportDpi = d) } }, label = { Text("$d DPI") }) }
                         }
@@ -677,7 +677,7 @@ fun PhotoWorkflowScreen(
 private fun WorkflowSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall)
+            Text(label, color = Color(0xFF334155), style = MaterialTheme.typography.bodySmall)
             Text("%.0f".format(value), color = Color(0xFFF07824), style = MaterialTheme.typography.labelSmall)
         }
         Slider(value = value, onValueChange = onChange, valueRange = range, colors = SliderDefaults.colors(thumbColor = Color(0xFFF07824), activeTrackColor = Color(0xFFF07824), inactiveTrackColor = Color(0xFFE2E8F0)))
