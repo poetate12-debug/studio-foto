@@ -101,7 +101,7 @@ fun PhotoWorkflowScreen(
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
+        stage, edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
         edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
         edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson,
@@ -114,7 +114,10 @@ fun PhotoWorkflowScreen(
         val previewWidth = if (landscape) 900 else 640
         val previewHeight = if (landscape) 636 else 900
         previewBitmap = withContext(Dispatchers.IO) {
-            runCatching { NativeImageEngine.render(edited, previewWidth, previewHeight) }.getOrNull()
+            runCatching {
+                if (stage == 0) NativeImageEngine.renderPhotoPreview(edited, 1600)
+                else NativeImageEngine.render(edited, previewWidth, previewHeight)
+            }.getOrNull()
         }
     }
     if (showAssetManager) {
