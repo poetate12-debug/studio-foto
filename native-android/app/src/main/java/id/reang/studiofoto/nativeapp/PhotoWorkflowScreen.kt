@@ -85,8 +85,10 @@ fun PhotoWorkflowScreen(
     var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
     val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
-    val brushAspect = remember(edited.localAdjustmentPath, edited.enhancedPath, edited.cutoutPath, edited.localPath) {
-        NativeImageEngine.imageAspect(edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath)
+    val lightBrushBase = edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
+    val brushSourcePath = if (stage == 1) edited.cutoutPath else lightBrushBase
+    val brushAspect = remember(stage, lightBrushBase, edited.cutoutPath) {
+        NativeImageEngine.imageAspect(brushSourcePath)
     }
 
     fun persist() = onSave(edited)
@@ -301,7 +303,6 @@ fun PhotoWorkflowScreen(
         Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
              .clip(RoundedCornerShape(16.dp)).background(Color.White), contentAlignment = Alignment.Center) {
             val brushPreview = (stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()) || (stage == 0 && brushEnabled)
-            val brushSourcePath = if (stage == 1) edited.cutoutPath else (edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath)
             if (brushPreview) {
                 AsyncImage(model = brushSourcePath?.let { File(it) }, contentDescription = "Area kuas",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
@@ -452,7 +453,7 @@ fun PhotoWorkflowScreen(
                         WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
                         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             Button(onClick = {
-                                val base = edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath
+                                val base = lightBrushBase
                                 if (base != null && brushStrokes.isNotEmpty()) scope.launch {
                                     working = true
                                     status = "Menerapkan penyesuaian lokal…"
