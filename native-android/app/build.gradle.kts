@@ -11,8 +11,8 @@ android {
         applicationId = "id.reang.studiofoto.nativeapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4-native-preview"
+        versionCode = 6
+        versionName = "1.1.0-native-workflow"
     }
     signingConfigs {
         create("release") {
