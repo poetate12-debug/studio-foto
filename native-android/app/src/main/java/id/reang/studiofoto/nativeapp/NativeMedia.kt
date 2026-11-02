@@ -332,10 +332,16 @@ object NativeImageEngine {
         BitmapFactory.decodeFile(path, bounds)
         var sample = 1
         while (max(bounds.outWidth, bounds.outHeight) / sample > maxSide) sample *= 2
-        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+        val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
-        })
+            inMutable = true
+        }) ?: return null
+        // Pixel-processing tools call setPixels(); BitmapFactory returns immutable
+        // images by default unless inMutable is explicitly enabled.
+        return if (decoded.isMutable) decoded else decoded.copy(Bitmap.Config.ARGB_8888, true).also {
+            decoded.recycle()
+        }
     }
 
     fun renderPhotoPreview(photo: PhotoEntity, maxSide: Int = 1600): Bitmap {
