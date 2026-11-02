@@ -83,6 +83,8 @@ interface StudioDao {
     @Insert suspend fun insertProject(project: ProjectEntity): Long
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertPhoto(photo: PhotoEntity): Long
     @Update suspend fun updatePhoto(photo: PhotoEntity)
+    @Query("DELETE FROM photos WHERE id = :photoId") suspend fun deletePhoto(photoId: Long)
+    @Query("DELETE FROM projects WHERE id = :projectId") suspend fun deleteProject(projectId: Long)
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
