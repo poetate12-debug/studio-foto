@@ -1,47 +1,54 @@
-# Reang Studio Foto — Native Android preview
+# Reang Studio Foto — Native Android
 
-This folder contains the **native Android application** built with Kotlin, Jetpack Compose, AndroidX Room, and Coil.
+Aplikasi Android ini dibangun dengan **Kotlin + Jetpack Compose**, AndroidX Room, Coil, dan Android MediaStore. Modul ini tidak memakai WebView atau Capacitor sebagai UI host. Kode PWA lama tetap berada di direktori terpisah dan tidak dimuat ke aplikasi native.
 
-## Native build
+## Build
 
-- The Android app entry point is `MainActivity.kt`.
-- The workflow builds this folder with Gradle `assembleRelease`.
-- The APK application ID is `id.reang.studiofoto.nativeapp`.
-- This app module does not embed the web editor and does not use Android WebView or Capacitor as its UI host.
-- The legacy web/PWA project elsewhere in the repository is separate and is not included by this Gradle project.
+- Gradle project: `native-android/`
+- Application ID: `id.reang.studiofoto.nativeapp`
+- Build type: signed release APK melalui GitHub Actions
+- Minimum Android: API 26
+- Versi aplikasi: 1.1.0-native-workflow (versionCode 6)
 
-## Implemented in this preview
+Workflow: `.github/workflows/native-android.yml`
 
-- Native Compose home, project list, project creation, and project detail screens.
-- Multi-image selection through Android's Storage Access Framework.
-- Project and photo metadata stored in a local Room database.
-- Photo preview and live brightness, contrast, and saturation preview controls.
-- Saving those three adjustment values to the Room database.
-
-## Not implemented yet
-
-These are visible as workflow steps or workspace menu items, but are **not functional editing/export tools** in this preview:
-
-- Persistent copying of imported originals into app-managed files. The current implementation stores the selected content URI and attempts to retain read permission.
-- Cutout / background removal and brush refinement.
-- Template/background library, canvas composition, layers, text, logos, and object positioning.
-- AI enhancement models, face-detail enhancement, and fal.ai integration.
-- Exporting edited pixels to JPEG/PNG, print sizing/DPI, batch export, and RAW development.
-- Masking and local adjustment tools.
-
-The editor's brightness/contrast/saturation controls currently affect the on-screen preview and persist adjustment numbers in Room. They do not yet render a new output image. Do not treat the current preview APK as feature-complete or as a migration of all legacy editor features.
-
-## Data durability
-
-Room stores project/photo metadata in the app's private database. The selected image itself is currently referenced by its Android content URI rather than copied into app-owned storage. This is independent of browser cache because the app is native, but it is not a complete self-contained photo archive. Clearing app data or uninstalling the app removes the app's local database; source images may also become unavailable if their original provider removes them or revokes access. A later storage phase must copy originals into app-managed files and implement backup/export and database migrations.
-
-## Build and signing
-
-GitHub Actions workflow: `.github/workflows/native-android.yml`
-
-Required repository secrets:
+Required GitHub Actions secrets:
 - `REANG_KEYSTORE_BASE64`
 - `REANG_KEYSTORE_PASSWORD`
 - `REANG_KEY_ALIAS`
 
-The workflow runs Gradle `assembleRelease`, verifies the package ID and signing-certificate fingerprint, then publishes the APK release asset. A successful build verifies compilation and signing; it does not replace device-level functional testing.
+Workflow memverifikasi application ID dan fingerprint sertifikat APK. Build berhasil membuktikan kompilasi dan penandatanganan, tetapi bukan pengganti pengujian setiap fitur pada perangkat Android.
+
+## Fitur native yang sudah dipindahkan ke alur kerja
+
+- Beranda, daftar proyek, pembuatan proyek, galeri proyek, dan impor beberapa foto.
+- Foto sumber disalin ke direktori privat aplikasi. Metadata dan jalur file disimpan dalam Room; pengeditan tidak menimpa file sumber.
+- Tahap Cahaya dengan brightness/exposure, contrast, saturation, warmth, highlights, shadows, blacks, dehaze, clarity, vibrance, dan vignette. Penyesuaian diproses pada piksel hasil render/ekspor.
+- Tahap Cutout dengan Bria RMBG, BiRefNet v2 Portrait, atau Rembg melalui fal.ai.
+- Kuas koreksi Cutout: pulihkan piksel dari foto asli atau hapus area menjadi transparan.
+- Mode bokeh dengan subjek terpisah dan latar blur.
+- Background AI dibuat terpisah dari subjek agar wajah/foto asli tidak ikut digambar ulang oleh model generasi background.
+- Koleksi lokal reusable untuk background, PNG template, dan logo; aset disalin ke penyimpanan aplikasi dan dapat dipilih lagi pada proyek lain.
+- Tahap Template dengan preset A3/A4 potret/lanskap, ukuran khusus, pemilihan background, transformasi posisi/zoom background, transformasi ukuran/posisi objek, PNG overlay, logo, nama acara, dan tanggal.
+- Tahap Enhance dengan pilihan Topaz Precision, Real-ESRGAN, atau Recraft Crisp; tersedia kontrol 2×/4× dan kekuatan campuran hasil dengan sumber.
+- Alat tambahan penghapusan objek dan perbaikan detail/arah mata melalui model AI.
+- Tahap Export menghasilkan file JPEG atau PNG ke galeri Android, dengan ukuran cetak dan DPI yang dapat dipilih. Ekspor satu foto maupun seluruh foto dalam proyek tersedia.
+- Ukuran JPEG diberi metadata resolusi DPI. Dimensi raster hasil mengikuti ukuran cetak/DPI yang dipilih, dengan pembatasan piksel untuk mengurangi risiko kehabisan memori.
+
+## Batasan yang masih perlu diselesaikan
+
+Ini adalah implementasi native bertahap, belum parity 100% terhadap seluruh fitur PWA lama.
+
+- Belum ada pengembangan RAW/DNG, HSL mixer per warna, brush cahaya lokal, layer arbitrer berlapis dengan urutan/locking, pengaturan tekstur selektif, atau semua alat kecil dari editor web lama.
+- Template PNG dipakai sebagai satu overlay penuh; logo memakai penempatan sederhana. Editor layer bebas seperti Photoshop belum tersedia.
+- Bokeh saat ini menggunakan pemrosesan native blur sederhana, bukan simulasi lensa bokeh optik.
+- Perbaikan wajah/arah mata memakai model generatif. Model dapat mengubah detail wajah; hasil harus diperiksa dan bukan dijamin mempertahankan identitas secara sempurna.
+- Key fal.ai hanya disimpan dalam memori aplikasi untuk sesi aktif dan perlu dimasukkan lagi setelah aplikasi ditutup. Jangan membagikan APK yang berisi key pribadi. Setiap pekerjaan AI memerlukan internet, akses model, dan saldo akun fal.ai.
+- Belum ada sinkronisasi cloud atau mekanisme backup/restore proyek. Data di direktori privat dan Room bertahan setelah aplikasi ditutup atau cache browser dibersihkan, tetapi akan hilang bila pengguna menghapus data aplikasi atau meng-uninstall aplikasi tanpa backup.
+- Perlu uji fungsional pada perangkat nyata untuk setiap varian Android, jenis file foto, model AI, dan ukuran ekspor sebelum digunakan sebagai alur produksi harian.
+
+## Penyimpanan dan privasi
+
+Foto asli yang diimpor disalin ke `filesDir` privat aplikasi. Hasil Cutout, background, overlay, logo, hasil AI, serta metadata proyek juga disimpan secara lokal. Foto sumber tidak ditimpa. Menghapus cache browser tidak memengaruhi penyimpanan native. Penghapusan data aplikasi atau uninstall tetap menghapus basis data dan file privat.
+
+Untuk proses cetak penting, selalu ekspor file akhir ke galeri/penyimpanan eksternal dan simpan salinan cadangan secara terpisah.
