@@ -118,10 +118,10 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
             },
             onRegisterAsset = { name, filePath, kind -> vm.addAsset(name, filePath, kind) },
             onDeleteAsset = { vm.deleteAsset(it.id) },
-            onExportAll = {
+            onExportAll = { latestPhoto ->
                 val projectId = activeProject?.id
                 if (projectId != null) {
-                    vm.exportAll(projectId) { saved, total ->
+                    vm.exportAll(projectId, latestPhoto) { saved, total ->
                         scope.launch { snackbar.showSnackbar("Ekspor selesai: $saved dari $total foto.") }
                     }
                 }
