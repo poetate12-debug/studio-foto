@@ -255,9 +255,10 @@ object NativeImageEngine {
         exposure: Float,
         warmth: Float,
         saturation: Float,
-        texture: Float
+        texture: Float,
+        redReduction: Float = 0f
     ): String = withContext(Dispatchers.IO) {
-        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture)
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction)
         val bytes = ByteArrayOutputStream()
         output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
         output.recycle()
@@ -272,9 +273,10 @@ object NativeImageEngine {
         warmth: Float,
         saturation: Float,
         texture: Float,
-        photo: PhotoEntity
+        photo: PhotoEntity,
+        redReduction: Float = 0f
     ): Bitmap = withContext(Dispatchers.IO) {
-        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture)
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction)
         applyAdvancedLightAdjustments(output, photo)
         output
     }
@@ -285,7 +287,8 @@ object NativeImageEngine {
         exposure: Float,
         warmth: Float,
         saturation: Float,
-        texture: Float
+        texture: Float,
+        redReduction: Float = 0f
     ): Bitmap {
         require(strokes.isNotEmpty()) { "Sapukan kuas pada area foto terlebih dahulu." }
         val source = decode(basePath, 2800) ?: error("Foto untuk kuas tidak dapat dibaca.")
@@ -355,6 +358,32 @@ object NativeImageEngine {
                 red = luma + (red - luma) * sat + (originalR - gray) * detail
                 green = luma + (green - luma) * sat + (originalG - gray) * detail
                 blue = luma + (blue - luma) * sat + (originalB - gray) * detail
+
+                // Reduce excess red/orange saturation only inside this local brush mask.
+                // The hue weighting keeps the correction focused on reddish skin tones.
+                val reduction = redReduction.coerceIn(0f, 100f) / 100f
+                if (reduction > 0f) {
+                    val hsl = rgbToHsl(
+                        red.coerceIn(0f, 1f),
+                        green.coerceIn(0f, 1f),
+                        blue.coerceIn(0f, 1f)
+                    )
+                    val rawDistance = kotlin.math.abs(hsl[0] - 12f)
+                    val hueDistance = min(rawDistance, 360f - rawDistance)
+                    val hueWeight = (1f - hueDistance / 55f).coerceIn(0f, 1f)
+                    val chromaWeight = ((hsl[1] - 0.08f) / 0.52f).coerceIn(0f, 1f)
+                    val strength = reduction * hueWeight * chromaWeight
+                    if (strength > 0f) {
+                        val corrected = hslToRgb(
+                            hsl[0] + 2.5f * strength,
+                            hsl[1] * (1f - 0.78f * strength),
+                            (hsl[2] + 0.018f * strength).coerceIn(0f, 1f)
+                        )
+                        red = corrected[0]
+                        green = corrected[1]
+                        blue = corrected[2]
+                    }
+                }
 
                 red = originalR + (red - originalR) * amount
                 green = originalG + (green - originalG) * amount
