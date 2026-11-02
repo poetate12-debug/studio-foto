@@ -108,29 +108,41 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
 
     if (activePhoto != null) {
         val activeProjectPhotos by vm.photos(activePhoto!!.projectId).collectAsState(initial = emptyList())
-        PhotoWorkflowScreen(
-            photo = activePhoto!!,
-            projectName = activeProject?.name ?: "Studio Editor",
-            projectPhotos = activeProjectPhotos,
-            onSelectPhoto = { selected -> activePhoto = selected },
-            assets = assets,
-            falApiKey = falApiKey,
-            onBack = { activePhoto = null },
-            onSave = { updated ->
-                vm.savePhoto(updated)
-                activePhoto = updated
-            },
-            onRegisterAsset = { name, filePath, kind -> vm.addAsset(name, filePath, kind) },
-            onDeleteAsset = { vm.deleteAsset(it.id) },
-            onExportAll = { latestPhoto ->
-                val projectId = activeProject?.id
-                if (projectId != null) {
-                    vm.exportAll(projectId, latestPhoto) { saved, total ->
-                        scope.launch { snackbar.showSnackbar("Ekspor selesai: $saved dari $total foto.") }
+        MaterialTheme(
+            colorScheme = lightColorScheme(
+                primary = Color(0xFFF07824),
+                onPrimary = Color.White,
+                secondary = Color(0xFF249B62),
+                background = Color(0xFFF5F7FA),
+                onBackground = Color(0xFF1E293B),
+                surface = Color.White,
+                onSurface = Color(0xFF334155)
+            )
+        ) {
+            PhotoWorkflowScreen(
+                photo = activePhoto!!,
+                projectName = activeProject?.name ?: "Studio Editor",
+                projectPhotos = activeProjectPhotos,
+                onSelectPhoto = { selected -> activePhoto = selected },
+                assets = assets,
+                falApiKey = falApiKey,
+                onBack = { activePhoto = null },
+                onSave = { updated ->
+                    vm.savePhoto(updated)
+                    activePhoto = updated
+                },
+                onRegisterAsset = { name, filePath, kind -> vm.addAsset(name, filePath, kind) },
+                onDeleteAsset = { vm.deleteAsset(it.id) },
+                onExportAll = { latestPhoto ->
+                    val projectId = activeProject?.id
+                    if (projectId != null) {
+                        vm.exportAll(projectId, latestPhoto) { saved, total ->
+                            scope.launch { snackbar.showSnackbar("Ekspor selesai: $saved dari $total foto.") }
+                        }
                     }
                 }
-            }
-        )
+            )
+        }
         return
     }
 
