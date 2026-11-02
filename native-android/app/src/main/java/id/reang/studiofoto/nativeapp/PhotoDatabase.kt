@@ -26,6 +26,7 @@ data class StudioAssetEntity(
 data class ProjectEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    @ColumnInfo(defaultValue = "''") val eventDate: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -89,6 +90,7 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "0") val localBrushSaturation: Float = 0f,
     @ColumnInfo(defaultValue = "0") val localBrushTexture: Float = 0f,
     @ColumnInfo(defaultValue = "0") val localBrushRedReduction: Float = 0f,
+    @ColumnInfo(defaultValue = "'{}'") val localBrushColorMixJson: String = "{}",
     @ColumnInfo(defaultValue = "NULL") val lightcraftPhotoId: Long? = null,
     @ColumnInfo(defaultValue = "NULL") val lightcraftRenderedPath: String? = null
 )
@@ -110,6 +112,8 @@ interface StudioDao {
     fun observePhotos(projectId: Long): Flow<List<PhotoEntity>>
     @Query("SELECT * FROM photos WHERE id = :photoId LIMIT 1")
     suspend fun getPhoto(photoId: Long): PhotoEntity?
+    @Query("SELECT * FROM projects WHERE id = :projectId LIMIT 1")
+    suspend fun getProject(projectId: Long): ProjectEntity?
     @Insert suspend fun insertProject(project: ProjectEntity): Long
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertPhoto(photo: PhotoEntity): Long
     @Update suspend fun updatePhoto(photo: PhotoEntity)
@@ -118,7 +122,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class, LightPresetEntity::class], version = 10, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class, LightPresetEntity::class], version = 11, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -211,9 +215,15 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN localBrushRedReduction REAL NOT NULL DEFAULT 0")
             }
         }
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN eventDate TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localBrushColorMixJson TEXT NOT NULL DEFAULT '{}' ")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build().also { INSTANCE = it }
         }
     }
