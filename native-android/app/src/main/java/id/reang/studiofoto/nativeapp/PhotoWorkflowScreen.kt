@@ -54,7 +54,7 @@ fun PhotoWorkflowScreen(
             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = if (stage > 0) ({ stage-- }) else onBack) {
+            IconButton(onClick = { if (stage > 0) stage-- else onBack() }) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color.White)
             }
             Column(Modifier.weight(1f)) {
