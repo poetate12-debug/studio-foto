@@ -276,23 +276,8 @@ object NativeImageEngine {
             val left = (width - baseW) / 2f + photo.objectX * width / 100f
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
+            applyAdvancedLightAdjustments(subject, photo)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            val sat = (photo.saturation + photo.vibrance * 0.004f).coerceIn(0f, 2f)
-            val inv = 1f - sat
-            val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
-            val contrast = (photo.contrast * (1f + photo.dehaze.coerceIn(-100f, 100f) * 0.002f + photo.clarity.coerceIn(-100f, 100f) * 0.0015f)).coerceIn(0.35f, 2.2f)
-            val exposureOffset = photo.brightness.coerceIn(-0.6f, 0.6f) * 255f
-            val shadowOffset = photo.shadows.coerceIn(-100f, 100f) * 0.28f
-            val blackOffset = photo.blacks.coerceIn(-100f, 100f) * 0.22f
-            val highlightOffset = photo.highlights.coerceIn(-100f, 100f) * 0.16f
-            val offset = exposureOffset + shadowOffset + blackOffset + highlightOffset
-            val warm = photo.warmth.coerceIn(-100f, 100f) * 0.55f
-            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
-                contrast * (r + sat), contrast * g, contrast * b, 0f, offset + warm,
-                contrast * r, contrast * (g + sat), contrast * b, 0f, offset,
-                contrast * r, contrast * g, contrast * (b + sat), 0f, offset - warm,
-                0f, 0f, 0f, 1f, 0f
-            )))
             canvas.save()
             canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawBitmap(subject, null, fitRect(subject.width, subject.height, rect), paint)
@@ -300,19 +285,6 @@ object NativeImageEngine {
             subject.recycle()
         }
 
-        if (photo.vignette > 0f) {
-            val amount = photo.vignette.coerceIn(0f, 100f) / 100f
-            val radius = max(width, height) * 0.78f
-            val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = android.graphics.RadialGradient(
-                    width / 2f, height / 2f, radius,
-                    intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.argb((amount * 165).toInt(), 0, 0, 0)),
-                    floatArrayOf(0f, 0.62f, 1f),
-                    android.graphics.Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), vignettePaint)
-        }
 
         val overlay = decode(photo.overlayPath, max(width, height))
         if (overlay != null) {
@@ -342,6 +314,60 @@ object NativeImageEngine {
             }
         }
         return out
+    }
+
+    private fun applyAdvancedLightAdjustments(bitmap: Bitmap, photo: PhotoEntity) {
+        val width = bitmap.width
+        val height = bitmap.height
+        val row = IntArray(width)
+        val exposure = Math.pow(2.0, (photo.brightness.coerceIn(-0.6f, 0.6f) * 1.4f).toDouble()).toFloat()
+        val contrast = (photo.contrast * (1f + photo.dehaze.coerceIn(-100f, 100f) * 0.0035f + photo.clarity.coerceIn(-100f, 100f) * 0.002f)).coerceIn(0.25f, 2.5f)
+        val saturation = photo.saturation.coerceIn(0f, 2f)
+        val vibrance = photo.vibrance.coerceIn(-100f, 100f) / 100f
+        val warmth = photo.warmth.coerceIn(-100f, 100f) / 100f * 0.12f
+        val shadow = photo.shadows.coerceIn(-100f, 100f) / 100f * 0.42f
+        val highlight = photo.highlights.coerceIn(-100f, 100f) / 100f * 0.38f
+        val black = photo.blacks.coerceIn(-100f, 100f) / 100f * 0.28f
+        val vignette = photo.vignette.coerceIn(0f, 100f) / 100f * 0.72f
+        val centerX = (width - 1) / 2f
+        val centerY = (height - 1) / 2f
+        val maxDistance = kotlin.math.sqrt(centerX * centerX + centerY * centerY).coerceAtLeast(1f)
+        for (y in 0 until height) {
+            bitmap.getPixels(row, 0, width, 0, y, width, 1)
+            val ny = (y - centerY) / maxDistance
+            for (x in 0 until width) {
+                val pixel = row[x]
+                val alpha = Color.alpha(pixel)
+                if (alpha == 0) continue
+                var red = Color.red(pixel) / 255f
+                var green = Color.green(pixel) / 255f
+                var blue = Color.blue(pixel) / 255f
+                val luma = (0.2126f * red + 0.7152f * green + 0.0722f * blue).coerceIn(0f, 1f)
+                val shadowLift = shadow * (1f - luma) * (1f - luma)
+                val highlightLift = highlight * luma * luma
+                val blackLift = black * (1f - luma) * 0.65f
+                val tone = exposure
+                red = ((red * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift + warmth
+                green = ((green * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift
+                blue = ((blue * tone - 0.5f) * contrast + 0.5f) + shadowLift + highlightLift + blackLift - warmth
+                val mid = (red + green + blue) / 3f
+                val chroma = (max(red, max(green, blue)) - min(red, min(green, blue))).coerceIn(0f, 1f)
+                val vibranceFactor = 1f + vibrance * (1f - chroma)
+                val satFactor = saturation * vibranceFactor
+                red = mid + (red - mid) * satFactor
+                green = mid + (green - mid) * satFactor
+                blue = mid + (blue - mid) * satFactor
+                val nx = (x - centerX) / maxDistance
+                val distance = kotlin.math.sqrt(nx * nx + ny * ny)
+                val edge = ((distance - 0.30f) / 0.70f).coerceIn(0f, 1f)
+                val vignetteFactor = 1f - vignette * edge * edge
+                red = (red * vignetteFactor).coerceIn(0f, 1f)
+                green = (green * vignetteFactor).coerceIn(0f, 1f)
+                blue = (blue * vignetteFactor).coerceIn(0f, 1f)
+                row[x] = Color.argb(alpha, (red * 255f).toInt(), (green * 255f).toInt(), (blue * 255f).toInt())
+            }
+            bitmap.setPixels(row, 0, width, 0, y, width, 1)
+        }
     }
 
     private fun fitRect(bw: Int, bh: Int, target: RectF): RectF {
