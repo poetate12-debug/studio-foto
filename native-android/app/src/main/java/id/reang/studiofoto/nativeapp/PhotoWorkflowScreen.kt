@@ -2,6 +2,8 @@ package id.reang.studiofoto.nativeapp
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.graphics.Bitmap
+import android.graphics.PointF
+import android.net.Uri
 import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -55,6 +57,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.json.JSONArray
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceContour
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlin.math.roundToInt
 
 @Composable
@@ -101,6 +108,10 @@ fun PhotoWorkflowScreen(
     var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
     var savedLocalBrushStrokes by remember(photo.id) { mutableStateOf(brushStrokesFromJson(photo.localBrushHistoryJson)) }
     var savedCutoutBrushStrokes by remember(photo.id) { mutableStateOf(brushStrokesFromJson(photo.cutoutBrushHistoryJson)) }
+    var faceMaskProcessing by remember(photo.id) { mutableStateOf(false) }
+    var faceMaskFaceCount by remember(photo.id) { mutableIntStateOf(0) }
+    val undoHistory = remember(photo.id) { mutableStateListOf<PhotoEntity>() }
+    val redoHistory = remember(photo.id) { mutableStateListOf<PhotoEntity>() }
     var lightPanel by rememberSaveable(photo.id) { mutableStateOf("cahaya") }
     var photoZoom by rememberSaveable(photo.id) { mutableFloatStateOf(1f) }
     var photoPanX by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
@@ -141,9 +152,55 @@ fun PhotoWorkflowScreen(
         NativeImageEngine.imageAspect(brushSourcePath)
     }
 
+    fun historySnapshot(): PhotoEntity = edited.copy(
+        localBrushExposure = localExposure,
+        localBrushWarmth = localWarmth,
+        localBrushSaturation = localSaturation,
+        localBrushTexture = localTexture,
+        localBrushRedReduction = localRedReduction
+    )
+    fun pushUndoSnapshot() {
+        val snapshot = historySnapshot()
+        if (undoHistory.lastOrNull() != snapshot) {
+            undoHistory.add(snapshot)
+            if (undoHistory.size > 40) undoHistory.removeAt(0)
+        }
+        redoHistory.clear()
+    }
+    fun restoreHistorySnapshot(snapshot: PhotoEntity) {
+        edited = snapshot
+        savedLocalBrushStrokes = brushStrokesFromJson(snapshot.localBrushHistoryJson)
+        savedCutoutBrushStrokes = brushStrokesFromJson(snapshot.cutoutBrushHistoryJson)
+        localExposure = snapshot.localBrushExposure
+        localWarmth = snapshot.localBrushWarmth
+        localSaturation = snapshot.localBrushSaturation
+        localTexture = snapshot.localBrushTexture
+        localRedReduction = snapshot.localBrushRedReduction
+        brushStrokes = emptyList()
+        brushEnabled = false
+        onSave(snapshot)
+    }
+    fun undoEdit() {
+        if (undoHistory.isEmpty()) return
+        redoHistory.add(historySnapshot())
+        val previous = undoHistory.removeAt(undoHistory.lastIndex)
+        restoreHistorySnapshot(previous)
+        status = "Perubahan terakhir dibatalkan."
+    }
+    fun redoEdit() {
+        if (redoHistory.isEmpty()) return
+        undoHistory.add(historySnapshot())
+        val next = redoHistory.removeAt(redoHistory.lastIndex)
+        restoreHistorySnapshot(next)
+        status = "Perubahan dikembalikan."
+    }
     fun persist() = onSave(edited)
-    fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
+    fun change(block: (PhotoEntity) -> PhotoEntity) {
+        pushUndoSnapshot()
+        edited = block(edited)
+    }
     fun changeLight(block: (PhotoEntity) -> PhotoEntity) {
+        pushUndoSnapshot()
         edited = block(edited).copy(
             lightPreset = "Kustom",
             lightcraftRenderedPath = null,
@@ -332,10 +389,85 @@ fun PhotoWorkflowScreen(
         )
     }
 
+    fun detectAndCreateFaceMask() {
+        val sourcePath = edited.localPath?.takeIf { it.isNotBlank() && File(it).exists() }
+        if (sourcePath == null) {
+            status = "Foto asli tidak ditemukan. Impor ulang foto sebelum membuat mask."
+            return
+        }
+        if (faceMaskProcessing || working) return
+        val inputImage = try {
+            InputImage.fromFilePath(context, Uri.fromFile(File(sourcePath)))
+        } catch (error: Exception) {
+            status = "Foto tidak dapat dibaca untuk deteksi wajah: ${error.message ?: "kesalahan file"}"
+            return
+        }
+        val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+            .setMinFaceSize(0.035f)
+            .build()
+        val detector = FaceDetection.getClient(options)
+        faceMaskProcessing = true
+        status = "Mendeteksi kontur wajah utama…"
+        detector.process(inputImage)
+            .addOnSuccessListener { faces ->
+                val mainFace = faces.maxByOrNull { it.boundingBox.width().toLong() * it.boundingBox.height().toLong() }
+                val faceContour = mainFace?.getContour(FaceContour.FACE)?.points.orEmpty()
+                if (mainFace == null || faceContour.size < 8) {
+                    status = "Kontur wajah belum terbaca. Pastikan wajah cukup besar, fokus, dan tidak tertutup."
+                } else {
+                    val protected = listOf(
+                        FaceContour.LEFT_EYE, FaceContour.RIGHT_EYE,
+                        FaceContour.UPPER_LIP_TOP, FaceContour.LOWER_LIP_BOTTOM
+                    ).mapNotNull { type ->
+                        mainFace.getContour(type)?.points?.takeIf { it.isNotEmpty() }
+                    }
+                    val maskStrokes = buildFaceContourMaskStrokes(
+                        faceContour, protected, inputImage.width, inputImage.height
+                    )
+                    if (maskStrokes.isEmpty()) {
+                        status = "Mask wajah gagal dibuat dari kontur. Coba foto dengan wajah lebih jelas."
+                    } else {
+                        pushUndoSnapshot()
+                        val combined = savedLocalBrushStrokes + maskStrokes
+                        savedLocalBrushStrokes = combined
+                        val updated = edited.copy(
+                            localBrushBasePath = edited.localBrushBasePath ?: edited.localPath,
+                            localBrushHistoryJson = brushStrokesToJson(combined),
+                            localBrushExposure = localExposure,
+                            localBrushWarmth = localWarmth,
+                            localBrushSaturation = localSaturation,
+                            localBrushTexture = localTexture,
+                            localBrushRedReduction = localRedReduction,
+                            localAdjustmentPath = null,
+                            lightcraftRenderedPath = null
+                        )
+                        edited = updated
+                        onSave(updated)
+                        faceMaskFaceCount = 1
+                        lightPanel = "wajah"
+                        brushEnabled = false
+                        brushStrokes = emptyList()
+                        status = "Mask kontur wajah utama dibuat. Mata dan bibir dilindungi dari sapuan otomatis; periksa lalu sempurnakan manual bila perlu."
+                    }
+                }
+            }
+            .addOnFailureListener { error ->
+                status = "Deteksi wajah gagal: ${error.message ?: "model tidak tersedia"}"
+            }
+            .addOnCompleteListener {
+                detector.close()
+                faceMaskProcessing = false
+            }
+    }
+
     fun runAi(action: String) {
         val key = falApiKey.trim()
         if (key.length < 12) { status = "Masukkan API key fal.ai terlebih dahulu."; return }
         if (edited.localPath.isNullOrBlank()) { status = "File asli belum tersedia. Impor ulang foto ini."; return }
+        pushUndoSnapshot()
         scope.launch {
             working = true
             status = "Menyiapkan hasil cahaya LightCraft…"
@@ -457,6 +589,14 @@ fun PhotoWorkflowScreen(
                 Text(projectName, color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
                 Text(photo.name, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
+            IconButton(
+                enabled = undoHistory.isNotEmpty() && !working,
+                onClick = { undoEdit() }
+            ) { Icon(Icons.Default.Undo, contentDescription = "Undo", tint = if (undoHistory.isNotEmpty()) Color(0xFF475569) else Color(0xFFCBD5E1)) }
+            IconButton(
+                enabled = redoHistory.isNotEmpty() && !working,
+                onClick = { redoEdit() }
+            ) { Icon(Icons.Default.Redo, contentDescription = "Redo", tint = if (redoHistory.isNotEmpty()) Color(0xFF475569) else Color(0xFFCBD5E1)) }
             IconButton(onClick = { persist(); status = "Perubahan disimpan." }) { Icon(Icons.Default.Save, contentDescription = "Simpan", tint = Color(0xFFF07824)) }
         }
         Box(
@@ -636,6 +776,7 @@ fun PhotoWorkflowScreen(
                                                     localAdjustmentPath = null
                                                 )
                                             }
+                                            pushUndoSnapshot()
                                             edited = updated
                                             onSave(updated)
                                             if (stageToSave == 0) savedLocalBrushStrokes = history
@@ -769,16 +910,19 @@ fun PhotoWorkflowScreen(
                         val activePanelIcon = when (lightPanel) {
                             "warna" -> Icons.Default.Palette
                             "kuas" -> Icons.Default.Brush
+                            "wajah" -> Icons.Default.Face
                             else -> Icons.Default.WbSunny
                         }
                         val activePanelTitle = when (lightPanel) {
                             "warna" -> "Color Lab"
                             "kuas" -> "Selective Brush"
+                            "wajah" -> "Face Mask Lab"
                             else -> "LightCraft Develop"
                         }
                         val activePanelSubtitle = when (lightPanel) {
                             "warna" -> "Pilih rentang warna dan atur karakter warnanya."
                             "kuas" -> "Koreksi lokal dengan mask yang tetap tersimpan."
+                            "wajah" -> "Mask kontur wajah lokal tanpa menggambar ulang identitas."
                             else -> "Kontrol cahaya presisi dengan pratinjau langsung."
                         }
                         Surface(
@@ -817,6 +961,7 @@ fun PhotoWorkflowScreen(
                             PremiumEditorTab("Cahaya", Icons.Default.WbSunny, lightPanel == "cahaya", Modifier.weight(1f)) { lightPanel = "cahaya"; brushEnabled = false }
                             PremiumEditorTab("Warna", Icons.Default.Palette, lightPanel == "warna", Modifier.weight(1f)) { lightPanel = "warna"; brushEnabled = false }
                             PremiumEditorTab("Kuas", Icons.Default.Brush, lightPanel == "kuas", Modifier.weight(1f)) { lightPanel = "kuas" }
+                            PremiumEditorTab("Wajah", Icons.Default.Face, lightPanel == "wajah", Modifier.weight(1f)) { lightPanel = "wajah"; brushEnabled = false }
                         }
                         when (lightPanel) {
                             "cahaya" -> {
@@ -936,7 +1081,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         }) { Text("Reset warna terpilih") }
                         Divider()
                                                     }
-                            else -> {
+                            "kuas" -> {
                         Text("KUAS LOKAL · ATUR AREA TERTENTU", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         Text("Area kuas tetap ditandai setelah tersimpan. Saat kuas diaktifkan kembali, coretan sebelumnya dilanjutkan, bukan dihapus.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                         Text("Area tersimpan: ${savedLocalBrushStrokes.size} coretan", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
@@ -1000,6 +1145,116 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                 status = "Penyesuaian dan area kuas direset."
                             }) { Text("Reset area kuas tersimpan") }
                         }
+                            }
+                            "wajah" -> {
+                                Text("MASKING WAJAH OTOMATIS", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    "ML Kit membaca kontur wajah utama lalu membentuk area koreksi halus. Ini bukan segmentasi kulit sempurna: periksa hasil dan gunakan Kuas untuk merapikan tepi.",
+                                    color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall
+                                )
+                                Button(
+                                    onClick = { detectAndCreateFaceMask() },
+                                    enabled = !faceMaskProcessing && !working,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (faceMaskProcessing) {
+                                        CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = Color.White)
+                                        Spacer(Modifier.width(8.dp))
+                                    } else {
+                                        Icon(Icons.Default.Face, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+                                    Text(if (faceMaskProcessing) "Mendeteksi wajah…" else "Deteksi & buat mask wajah")
+                                }
+                                if (faceMaskFaceCount > 0 || savedLocalBrushStrokes.isNotEmpty()) {
+                                    Text(
+                                        if (faceMaskFaceCount > 0) "Mask wajah utama tersedia · area mask tersimpan bersama kuas lokal"
+                                        else "Area mask lokal tersimpan: ${savedLocalBrushStrokes.size} stroke",
+                                        color = Color(0xFF249B78), style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                                Divider()
+                                Text("PENYESUAIAN KULIT", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                                WorkflowSlider("Exposure kulit", localExposure, -100f..100f) { localExposure = it }
+                                WorkflowSlider("Warmth kulit", localWarmth, -100f..100f) { localWarmth = it }
+                                WorkflowSlider("Saturasi kulit", localSaturation, -100f..100f) { localSaturation = it }
+                                WorkflowSlider("Reduksi merah", localRedReduction, 0f..100f, resetValue = 0f) { localRedReduction = it }
+                                WorkflowSlider("Tekstur / kelembutan", localTexture, -100f..100f) { localTexture = it }
+                                Text("Untuk kulit lebih halus, turunkan Tekstur sedikit. Reduksi merah bekerja lokal agar warna kulit tidak berubah berlebihan.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                                Button(
+                                    onClick = {
+                                        if (savedLocalBrushStrokes.isEmpty()) {
+                                            status = "Buat mask wajah terlebih dahulu."
+                                        } else {
+                                            scope.launch {
+                                                pushUndoSnapshot()
+                                                working = true
+                                                status = "Menerapkan koreksi ke area mask wajah…"
+                                                runCatching {
+                                                    val developed = LightCraftDevelopEngine.exportDeveloped(context, edited)
+                                                    val path = NativeImageEngine.applyLocalBrush(
+                                                        context, developed.path, savedLocalBrushStrokes,
+                                                        localExposure, localWarmth, localSaturation, localTexture,
+                                                        localRedReduction
+                                                    )
+                                                    developed to path
+                                                }.onSuccess { (developed, path) ->
+                                                    val updated = edited.copy(
+                                                        lightcraftPhotoId = developed.photoId,
+                                                        lightcraftRenderedPath = path,
+                                                        localAdjustmentPath = path,
+                                                        localBrushBasePath = path,
+                                                        localBrushHistoryJson = brushStrokesToJson(savedLocalBrushStrokes),
+                                                        localBrushExposure = localExposure,
+                                                        localBrushWarmth = localWarmth,
+                                                        localBrushSaturation = localSaturation,
+                                                        localBrushTexture = localTexture,
+                                                        localBrushRedReduction = localRedReduction
+                                                    )
+                                                    edited = updated
+                                                    onSave(updated)
+                                                    status = "Koreksi mask wajah diterapkan tanpa mengubah bentuk atau menggambar ulang wajah."
+                                                }.onFailure { error ->
+                                                    status = error.message ?: "Gagal menerapkan mask wajah."
+                                                }
+                                                working = false
+                                            }
+                                        }
+                                    },
+                                    enabled = !working && !faceMaskProcessing,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Terapkan koreksi wajah") }
+                                OutlinedButton(
+                                    onClick = {
+                                        change {
+                                            it.copy(
+                                                localAdjustmentPath = null,
+                                                localBrushBasePath = null,
+                                                localBrushHistoryJson = "[]",
+                                                localBrushExposure = 0f,
+                                                localBrushWarmth = 0f,
+                                                localBrushSaturation = 0f,
+                                                localBrushTexture = 0f,
+                                                localBrushRedReduction = 0f,
+                                                lightcraftRenderedPath = null
+                                            )
+                                        }
+                                        savedLocalBrushStrokes = emptyList()
+                                        brushStrokes = emptyList()
+                                        localExposure = 0f
+                                        localWarmth = 0f
+                                        localSaturation = 0f
+                                        localTexture = 0f
+                                        localRedReduction = 0f
+                                        faceMaskFaceCount = 0
+                                        persist()
+                                        status = "Mask wajah dan koreksi lokal direset."
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Reset mask wajah") }
+                                TextButton(onClick = { lightPanel = "kuas"; brushEnabled = true }) {
+                                    Text("Sempurnakan mask dengan Kuas")
+                                }
                             }
                         }
                     }
@@ -1490,6 +1745,68 @@ private fun brushStrokesToJson(strokes: List<CutoutBrushStroke>): String {
         )
     }
     return array.toString()
+}
+
+private fun buildFaceContourMaskStrokes(
+    faceContour: List<PointF>,
+    protectedContours: List<List<PointF>>,
+    imageWidth: Int,
+    imageHeight: Int
+): List<CutoutBrushStroke> {
+    if (faceContour.size < 8 || imageWidth <= 0 || imageHeight <= 0) return emptyList()
+    val polygon = faceContour.map { (it.x / imageWidth.toFloat()).coerceIn(0f, 1f) to (it.y / imageHeight.toFloat()).coerceIn(0f, 1f) }
+    val minY = polygon.minOf { it.second }
+    val maxY = polygon.maxOf { it.second }
+    val minDimension = minOf(imageWidth, imageHeight).toFloat().coerceAtLeast(1f)
+    val faceHeightPixels = (maxY - minY) * imageHeight
+    if (faceHeightPixels < 80f) return emptyList()
+    val rowStep = (faceHeightPixels / 105f).coerceAtLeast(2f / imageHeight)
+    val strokeWidth = ((rowStep * imageHeight * 1.25f) / minDimension).coerceIn(0.0035f, 0.035f)
+    val protectedBands = protectedContours.mapNotNull { contour ->
+        if (contour.isEmpty()) null else {
+            val top = contour.minOf { it.y / imageHeight.toFloat() }
+            val bottom = contour.maxOf { it.y / imageHeight.toFloat() }
+            val padding = ((bottom - top) * 0.65f).coerceAtLeast(0.006f)
+            (top - padding).coerceAtLeast(minY) to (bottom + padding).coerceAtMost(maxY)
+        }
+    }
+    val output = ArrayList<CutoutBrushStroke>(110)
+    var y = minY + rowStep / 2f
+    while (y < maxY) {
+        // Leave horizontal bands around eyes and lips untouched so local retouching
+        // does not soften or recolor those identity-defining details.
+        val featureBand = protectedBands.any { y in it.first..it.second }
+        if (!featureBand) {
+            val intersections = ArrayList<Float>()
+            for (index in polygon.indices) {
+                val a = polygon[index]
+                val b = polygon[(index + 1) % polygon.size]
+                if ((a.second <= y && b.second > y) || (b.second <= y && a.second > y)) {
+                    val t = (y - a.second) / (b.second - a.second)
+                    intersections.add(a.first + (b.first - a.first) * t)
+                }
+            }
+            intersections.sort()
+            var index = 0
+            while (index + 1 < intersections.size) {
+                val left = intersections[index].coerceIn(0f, 1f)
+                val right = intersections[index + 1].coerceIn(0f, 1f)
+                if (right - left > 0.012f) {
+                    output.add(
+                        CutoutBrushStroke(
+                            points = listOf(left to y, right to y),
+                            erase = false,
+                            widthFraction = strokeWidth,
+                            softness = 0.58f
+                        )
+                    )
+                }
+                index += 2
+            }
+        }
+        y += rowStep
+    }
+    return output
 }
 
 private fun documentDisplayName(context: android.content.Context, uri: android.net.Uri, fallback: String): String {
