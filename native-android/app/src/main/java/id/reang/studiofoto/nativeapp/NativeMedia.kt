@@ -202,8 +202,7 @@ object NativeImageEngine {
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            if (true) {
-                val sat = photo.saturation.coerceIn(0f, 2f)
+            val sat = photo.saturation.coerceIn(0f, 2f)
                 val inv = 1f - sat
                 val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
                 val contrast = photo.contrast.coerceIn(.5f, 1.8f)
@@ -215,7 +214,6 @@ object NativeImageEngine {
                     contrast * r, contrast * g, contrast * (b + sat), 0f, offset - warm,
                     0f, 0f, 0f, 1f, 0f
                 )))
-            }
             canvas.save()
             canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawBitmap(subject, null, fitRect(subject.width, subject.height, rect), paint)
