@@ -1,11 +1,20 @@
-name: Build Native Android APK
+name: Build Reang Studio Foto Android APK
 
 on:
   workflow_dispatch:
   push:
     branches: [native-android-foundation]
     paths:
-      - 'native-android/**'
+      - 'index.html'
+      - 'native-download.js'
+      - 'android-native/**'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'icon.svg'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'scripts/**'
       - '.github/workflows/native-android.yml'
 
 permissions:
@@ -18,25 +27,71 @@ concurrency:
 jobs:
   build-native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Java 17
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
           accept-android-sdk-licenses: true
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - name: Restore permanent signing key
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Validate source and editor flows
+        run: npm test
+
+      - name: Prepare complete Reang editor web assets
+        run: |
+          rm -rf www
+          mkdir -p www
+          cp index.html www/index.html
+          cp manifest.json www/manifest.json
+          cp sw.js www/sw.js
+          cp icon.svg www/icon.svg
+          npx esbuild native-download.js --bundle --format=iife --target=es2020 --outfile=www/native-download.bundle.js
+          test -s www/index.html
+          test -s www/native-download.bundle.js
+
+      - name: Generate Capacitor Android project
+        run: |
+          npx cap add android
+          mkdir -p android/app/src/main/java/id/reang/studiofoto
+          cp android-native/NativeDownloaderPlugin.java android/app/src/main/java/id/reang/studiofoto/NativeDownloaderPlugin.java
+          mkdir -p android/app/src/main/java/id/reang/studiofoto/nativeapp
+          cat > android/app/src/main/java/id/reang/studiofoto/nativeapp/MainActivity.java <<'JAVA'
+          package id.reang.studiofoto.nativeapp;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;
+          import id.reang.studiofoto.NativeDownloaderPlugin;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(NativeDownloaderPlugin.class);
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          JAVA
+          npx cap sync android
+
+      - name: Configure package identity and permanent release signing
         env:
           REANG_KEYSTORE_BASE64: ${{ secrets.REANG_KEYSTORE_BASE64 }}
           REANG_KEYSTORE_PASSWORD: ${{ secrets.REANG_KEYSTORE_PASSWORD }}
@@ -46,24 +101,94 @@ jobs:
           test -n "$REANG_KEYSTORE_PASSWORD" || (echo "Missing GitHub secret REANG_KEYSTORE_PASSWORD" && exit 1)
           test -n "$REANG_KEY_ALIAS" || (echo "Missing GitHub secret REANG_KEY_ALIAS" && exit 1)
           echo "$REANG_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/reang-upload.p12"
+          test -s "$RUNNER_TEMP/reang-upload.p12"
           echo "REANG_KEYSTORE_PATH=$RUNNER_TEMP/reang-upload.p12" >> "$GITHUB_ENV"
           echo "REANG_KEY_ALIAS=$REANG_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "REANG_KEYSTORE_PASSWORD=$REANG_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-      - name: Build signed native release APK
-        working-directory: native-android
-        run: gradle assembleRelease --stacktrace
-      - name: Upload signed APK
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path("android/app/build.gradle")
+          source = gradle.read_text(encoding="utf-8")
+          if 'applicationId "id.reang.studiofoto.nativeapp"' not in source:
+              source, count = re.subn(
+                  r'applicationId\s+"[^"]+"',
+                  'applicationId "id.reang.studiofoto.nativeapp"',
+                  source,
+                  count=1
+              )
+              if count != 1:
+                  raise SystemExit("Could not set the native applicationId")
+          if "signingConfigs {" not in source:
+              source = source.replace(
+                  "android {",
+                  """android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("REANG_KEYSTORE_PATH"))
+                      storePassword System.getenv("REANG_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("REANG_KEY_ALIAS")
+                      keyPassword System.getenv("REANG_KEYSTORE_PASSWORD")
+                  }
+              }
+          """,
+                  1
+              )
+          else:
+              raise SystemExit("Unexpected generated signingConfigs block; refusing to overwrite it")
+          if "signingConfig signingConfigs.release" not in source:
+              source, count = re.subn(
+                  r'release\s*\{',
+                  'release {\n            signingConfig signingConfigs.release',
+                  source,
+                  count=1
+              )
+              if count != 1:
+                  raise SystemExit("Could not attach the permanent signing config to release")
+          source = source.replace('versionCode 1', 'versionCode 6', 1)
+          source = source.replace('versionName "1.0"', 'versionName "1.1.0"', 1)
+          gradle.write_text(source, encoding="utf-8")
+          print("Package ID and permanent release signing configured")
+          PY
+          grep -n 'applicationId\|signingConfig\|versionCode\|versionName' android/app/build.gradle
+
+      - name: Build signed release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Verify APK package and signing certificate
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -s "$APK"
+          ACTUAL_PACKAGE=$("$AAPT" dump badging "$APK" | awk -F"'" '/^package: name=/{print $2; exit}')
+          echo "APK package ID: $ACTUAL_PACKAGE"
+          test "$ACTUAL_PACKAGE" = "id.reang.studiofoto.nativeapp"
+          EXPECTED=$(keytool -list -v -keystore "$REANG_KEYSTORE_PATH" -storepass "$REANG_KEYSTORE_PASSWORD" -alias "$REANG_KEY_ALIAS" | sed -n 's/.*SHA256: //p' | head -n 1 | tr -d ': ' | tr '[:lower:]' '[:upper:]')
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ': ' | tr '[:lower:]' '[:upper:]')
+          echo "Expected certificate: $EXPECTED"
+          echo "APK certificate:      $ACTUAL"
+          test -n "$EXPECTED" && test "$EXPECTED" = "$ACTUAL"
+
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: reang-studio-foto-native-signed
-          path: native-android/app/build/outputs/apk/release/app-release.apk
+          name: reang-studio-foto-native-complete
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
       - name: Publish direct APK download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: native-build-${{ github.run_number }}
           name: Reang Studio Foto Native - Build ${{ github.run_number }}
-          body: Signed native Android APK built by GitHub Actions.
-          files: native-android/app/build/outputs/apk/release/app-release.apk
+          body: |
+            Full Reang Studio Foto editor packaged for Android with Capacitor and the native image downloader.
+            Includes project/photo workflow, lighting, cutout tools, template/layer editor, AI tools and export.
+          files: android/app/build/outputs/apk/release/app-release.apk
           make_latest: false
