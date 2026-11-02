@@ -84,10 +84,10 @@ fun PhotoWorkflowScreen(
     var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
     var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
     var showBefore by remember(photo.id) { mutableStateOf(false) }
-    var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(24f) }
+    var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
-    var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(12f) }
+    var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
     val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
@@ -497,7 +497,7 @@ fun PhotoWorkflowScreen(
                             FilterChip(!brushErase, { brushErase = false }, label = { Text("Tambah area") })
                             FilterChip(brushErase, { brushErase = true }, label = { Text("Kurangi area") })
                         }
-                        WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f) { brushSize = it / 100f }
+                        WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f, resetValue = 3.5f) { brushSize = it / 100f }
                         WorkflowSlider("Exposure lokal", localExposure, -100f..100f) { localExposure = it }
                         WorkflowSlider("Warmth lokal", localWarmth, -100f..100f) { localWarmth = it }
                         WorkflowSlider("Saturation lokal", localSaturation, -100f..100f) { localSaturation = it }
@@ -528,7 +528,7 @@ fun PhotoWorkflowScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("rmbg" to "RMBG", "birefnet" to "BiRefNet", "bria" to "Bria").forEach { (k, label) -> FilterChip(cutoutModel == k, { cutoutModel = k }, label = { Text(label) }) }
                         }
-                        if (cutoutMode == "blur") WorkflowSlider("Kekuatan bokeh", blurStrength, 1f..30f) { blurStrength = it }
+                        if (cutoutMode == "blur") WorkflowSlider("Kekuatan bokeh", blurStrength, 1f..30f, resetValue = 16f) { blurStrength = it }
                         if (cutoutMode == "generate") OutlinedTextField(prompt, { prompt = it }, label = { Text("Deskripsi background") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                         Button(onClick = { runAi(cutoutMode) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Memproses…" else "Jalankan " + cutoutMode) }
                         if (!edited.cutoutPath.isNullOrBlank()) {
@@ -615,12 +615,12 @@ fun PhotoWorkflowScreen(
                             }
                         }
                         Text("ATUR BACKGROUND", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        WorkflowSlider("Zoom background", edited.backgroundScale, 0.5f..3f) { v -> change { it.copy(backgroundScale = v) } }
+                        WorkflowSlider("Zoom background", edited.backgroundScale, 0.5f..3f, resetValue = 1f) { v -> change { it.copy(backgroundScale = v) } }
                         WorkflowSlider("Geser background X", edited.backgroundX, -100f..100f) { v -> change { it.copy(backgroundX = v) } }
                         WorkflowSlider("Geser background Y", edited.backgroundY, -100f..100f) { v -> change { it.copy(backgroundY = v) } }
                         Divider()
                         Text("ATUR OBJEK / SUBJEK", color = Color(0xFFB6A7FF), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        WorkflowSlider("Ukuran objek", edited.objectScale, 0.3f..1.7f) { v -> change { it.copy(objectScale = v) } }
+                        WorkflowSlider("Ukuran objek", edited.objectScale, 0.3f..1.7f, resetValue = 1f) { v -> change { it.copy(objectScale = v) } }
                         WorkflowSlider("Posisi objek X", edited.objectX, -40f..40f) { v -> change { it.copy(objectX = v) } }
                         WorkflowSlider("Posisi objek Y", edited.objectY, -40f..40f) { v -> change { it.copy(objectY = v) } }
                         OutlinedTextField(edited.eventText, { v -> change { it.copy(eventText = v) } }, label = { Text("Nama / tulisan acara") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
