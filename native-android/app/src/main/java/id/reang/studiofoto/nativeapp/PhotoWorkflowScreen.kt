@@ -52,7 +52,7 @@ fun PhotoWorkflowScreen(
     onSave: (PhotoEntity) -> Unit,
     onRegisterAsset: (String, String, String) -> Unit,
     onDeleteAsset: (StudioAssetEntity) -> Unit,
-    onExportAll: () -> Unit
+    onExportAll: (PhotoEntity) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -551,7 +551,7 @@ fun PhotoWorkflowScreen(
                                 working = false
                             }
                         }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Mengekspor…" else "Ekspor foto ini") }
-                        OutlinedButton(onClick = { persist(); onExportAll() }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Ekspor semua foto proyek") }
+                        OutlinedButton(onClick = { persist(); onExportAll(edited) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Ekspor semua foto proyek") }
                     }
                 }
                 Spacer(Modifier.height(9.dp))
