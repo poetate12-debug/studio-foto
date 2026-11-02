@@ -11,8 +11,8 @@ android {
         applicationId = "id.reang.studiofoto.nativeapp"
         minSdk = 29
         targetSdk = 35
-        versionCode = 11
-        versionName = "1.4.0-native-presets-review"
+        versionCode = 12
+        versionName = "1.4.1-native-editor-controls"
     }
     signingConfigs {
         create("release") {
