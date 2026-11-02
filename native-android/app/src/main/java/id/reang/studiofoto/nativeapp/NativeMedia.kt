@@ -22,7 +22,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.EOFException
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.zip.CRC32
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -432,6 +442,58 @@ object NativeImageEngine {
             NativeFiles.writeBytes(context, bytes.toByteArray(), "edits", "png")
         }
 
+    private fun injectPngDpi(file: File, dpi: Int) {
+        val temp = File(file.parentFile, file.nameWithoutExtension + "-dpi.png")
+        val ihdr = "IHDR".toByteArray(Charsets.US_ASCII)
+        val iend = "IEND".toByteArray(Charsets.US_ASCII)
+        val pixelsPerMeter = (dpi.coerceIn(72, 600) * (1000.0 / 25.4)).toInt()
+        val physData = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN)
+            .putInt(pixelsPerMeter).putInt(pixelsPerMeter).put(1.toByte()).array()
+        try {
+            DataInputStream(BufferedInputStream(FileInputStream(file))).use { input ->
+                DataOutputStream(BufferedOutputStream(FileOutputStream(temp))).use { output ->
+                    val signature = ByteArray(8)
+                    input.readFully(signature)
+                    output.write(signature)
+                    var finished = false
+                    while (!finished) {
+                        val length = try { input.readInt() } catch (_: EOFException) { break }
+                        require(length >= 0) { "PNG memiliki chunk dengan ukuran tidak valid." }
+                        val type = ByteArray(4)
+                        input.readFully(type)
+                        output.writeInt(length)
+                        output.write(type)
+                        val crc = CRC32().apply { update(type) }
+                        var remaining = length
+                        val buffer = ByteArray(64 * 1024)
+                        while (remaining > 0) {
+                            val count = input.read(buffer, 0, minOf(buffer.size, remaining))
+                            if (count < 0) error("PNG terpotong saat menulis metadata DPI.")
+                            output.write(buffer, 0, count)
+                            crc.update(buffer, 0, count)
+                            remaining -= count
+                        }
+                        output.writeInt(input.readInt())
+                        if (type.contentEquals(ihdr)) {
+                            val chunkType = "pHYs".toByteArray(Charsets.US_ASCII)
+                            val chunkCrc = CRC32().apply { update(chunkType); update(physData) }
+                            output.writeInt(physData.size)
+                            output.write(chunkType)
+                            output.write(physData)
+                            output.writeInt(chunkCrc.value.toInt())
+                        }
+                        if (type.contentEquals(iend)) finished = true
+                    }
+                }
+            }
+            if (temp.length() > 0L) {
+                if (!temp.renameTo(file)) { temp.copyTo(file, overwrite = true); temp.delete() }
+            } else error("Gagal menambahkan metadata DPI PNG.")
+        } finally {
+            if (temp.exists()) temp.delete()
+        }
+    }
+
     suspend fun export(context: Context, photo: PhotoEntity, format: String, dpi: Int): Uri =
         withContext(Dispatchers.IO) {
             val cmW = photo.templateWidthCm.coerceIn(5f, 200f)
@@ -459,6 +521,8 @@ object NativeImageEngine {
                         setAttribute(ExifInterface.TAG_RESOLUTION_UNIT, "2")
                         saveAttributes()
                     }
+                } else {
+                    injectPngDpi(temp, dpi)
                 }
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, name)
