@@ -9,7 +9,7 @@ on:
       - '.github/workflows/native-android.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: reang-native-android-${{ github.ref }}
@@ -59,3 +59,11 @@ jobs:
           path: native-android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish direct APK download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: native-build-${{ github.run_number }}
+          name: Reang Studio Foto Native - Build ${{ github.run_number }}
+          body: Signed native Android APK built by GitHub Actions.
+          files: native-android/app/build/outputs/apk/release/app-release.apk
+          make_latest: false
