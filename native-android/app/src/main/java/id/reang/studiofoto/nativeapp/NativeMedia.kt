@@ -66,6 +66,7 @@ object NativeFiles {
     fun deletePrivatePhotoFiles(photo: PhotoEntity) {
         listOf(photo.localPath, photo.cutoutPath, photo.enhancedPath, photo.aiCompositePath)
             .plus(photo.localAdjustmentPath)
+            .plus(photo.lightcraftRenderedPath)
             .filterNotNull()
             .distinct()
             .forEach { path -> runCatching { File(path).delete() } }
@@ -406,7 +407,7 @@ object NativeImageEngine {
         canvas.drawColor(Color.rgb(245, 242, 238))
         val generated = decode(photo.aiCompositePath, max(width, height))
         if (generated != null) {
-            applyAdvancedLightAdjustments(generated, photo)
+            if (photo.lightcraftRenderedPath.isNullOrBlank()) applyAdvancedLightAdjustments(generated, photo)
             val generatedTarget = RectF(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawBitmap(generated, null, fitRect(generated.width, generated.height, generatedTarget), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
             generated.recycle()
@@ -434,7 +435,7 @@ object NativeImageEngine {
             }
         }
 
-        val sourcePath = photo.localAdjustmentPath ?: photo.enhancedPath ?: photo.cutoutPath ?: photo.localPath
+        val sourcePath = photo.cutoutPath ?: photo.enhancedPath ?: photo.lightcraftRenderedPath ?: photo.localAdjustmentPath ?: photo.localPath
         val subject = if (photo.aiCompositePath == null) decode(sourcePath, max(width, height)) else null
         if (subject != null) {
             val baseW = width * 0.82f * photo.objectScale.coerceIn(0.2f, 2.5f)
@@ -442,7 +443,7 @@ object NativeImageEngine {
             val left = (width - baseW) / 2f + photo.objectX * width / 100f
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
-            applyAdvancedLightAdjustments(subject, photo)
+            if (photo.lightcraftRenderedPath.isNullOrBlank()) applyAdvancedLightAdjustments(subject, photo)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
             canvas.save()
             canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())

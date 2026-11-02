@@ -133,7 +133,16 @@ fun PhotoWorkflowScreen(
     fun persist() = onSave(edited)
     fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
     fun changeLight(block: (PhotoEntity) -> PhotoEntity) {
-        edited = block(edited).copy(lightPreset = "Kustom")
+        edited = block(edited).copy(
+            lightPreset = "Kustom",
+            lightcraftRenderedPath = null,
+            cutoutPath = null,
+            cutoutBrushBasePath = null,
+            cutoutBrushHistoryJson = "[]",
+            enhancedPath = null,
+            aiCompositePath = null
+        )
+        savedCutoutBrushStrokes = emptyList()
     }
     fun colorValue(component: String): Float =
         runCatching { JSONObject(edited.colorMixJson).optDouble(selectedColor + component, 0.0).toFloat() }.getOrDefault(0f)
@@ -145,8 +154,9 @@ fun PhotoWorkflowScreen(
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        stage, brushEnabled, brushStrokes, localExposure, localWarmth, localSaturation, localTexture,
+        stage, brushEnabled, brushStrokes, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture,
         edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
+        edited.lightcraftPhotoId, edited.lightcraftRenderedPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
         edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
         edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson,
@@ -160,20 +170,41 @@ fun PhotoWorkflowScreen(
         val previewHeight = if (landscape) 636 else 900
         val rendered = withContext(Dispatchers.IO) {
             runCatching {
-                when {
-                    stage == 0 && brushEnabled && brushStrokes.isNotEmpty() ->
-                        NativeImageEngine.previewLocalBrush(
-                            context, lightBrushBase ?: error("Foto sumber tidak ditemukan."),
-                            savedLocalBrushStrokes + brushStrokes, localExposure, localWarmth, localSaturation, localTexture, edited
-                        )
-                    stage == 0 -> NativeImageEngine.renderPhotoPreview(edited, 1600)
-                    else -> NativeImageEngine.render(edited, previewWidth, previewHeight)
+                if (stage == 0) {
+                    val developed = LightCraftDevelopEngine.renderPreview(context, edited, 1600)
+                    val history = savedLocalBrushStrokes + brushStrokes
+                    val display = if (brushEnabled && history.isNotEmpty()) {
+                        val basePath = LightCraftDevelopEngine.writePreview(context, developed.bitmap, developed.photoId)
+                        try {
+                            NativeImageEngine.previewLocalBrush(
+                                context, basePath, history,
+                                localExposure, localWarmth, localSaturation, localTexture,
+                                LightCraftDevelopEngine.neutralPhoto(edited)
+                            )
+                        } finally {
+                            developed.bitmap.recycle()
+                        }
+                    } else developed.bitmap
+                    developed.photoId to display
+                } else {
+                    null to NativeImageEngine.render(edited, previewWidth, previewHeight)
                 }
             }
         }
-        previewBitmap = rendered.getOrNull()
+        previewBitmap = rendered.getOrNull()?.second
+        rendered.getOrNull()?.first?.let { id ->
+            if (edited.lightcraftPhotoId != id) {
+                val updated = edited.copy(lightcraftPhotoId = id)
+                edited = updated
+                onSave(updated)
+            }
+        }
         rendered.exceptionOrNull()?.let { error ->
-            status = "Pratinjau gagal diproses: ${error.message ?: error.javaClass.simpleName}"
+            status = "Pratinjau LightCraft gagal: ${error.message ?: error.javaClass.simpleName}"
+            if (stage == 0) {
+                val fallback = withContext(Dispatchers.IO) { runCatching { NativeImageEngine.renderPhotoPreview(edited, 1600) }.getOrNull() }
+                previewBitmap = fallback
+            }
         }
     }
     if (showAssetManager) {
@@ -268,15 +299,38 @@ fun PhotoWorkflowScreen(
         }
     }
 
+    suspend fun bakeLightCraft(sourcePhoto: PhotoEntity): PhotoEntity {
+        val developed = LightCraftDevelopEngine.exportDeveloped(context, sourcePhoto)
+        val strokes = brushStrokesFromJson(sourcePhoto.localBrushHistoryJson)
+        val finalPath = if (strokes.isNotEmpty()) {
+            NativeImageEngine.applyLocalBrush(
+                context, developed.path, strokes,
+                localExposure, localWarmth, localSaturation, localTexture
+            )
+        } else developed.path
+        return sourcePhoto.copy(
+            lightcraftPhotoId = developed.photoId,
+            lightcraftRenderedPath = finalPath,
+            localBrushExposure = localExposure,
+            localBrushWarmth = localWarmth,
+            localBrushSaturation = localSaturation,
+            localBrushTexture = localTexture
+        )
+    }
+
     fun runAi(action: String) {
         val key = falApiKey.trim()
-        val source = edited.localPath
         if (key.length < 12) { status = "Masukkan API key fal.ai terlebih dahulu."; return }
-        if (source.isNullOrBlank()) { status = "File asli belum tersedia. Impor ulang foto ini."; return }
+        if (edited.localPath.isNullOrBlank()) { status = "File asli belum tersedia. Impor ulang foto ini."; return }
         scope.launch {
             working = true
-            status = "Menyiapkan permintaan AI…"
+            status = "Menyiapkan hasil cahaya LightCraft…"
             try {
+                val readyPhoto = bakeLightCraft(edited)
+                edited = readyPhoto
+                onSave(readyPhoto)
+                val source = readyPhoto.lightcraftRenderedPath ?: error("Hasil cahaya LightCraft belum tersedia.")
+                status = "Menyiapkan permintaan AI…"
                 when (action) {
                     "cutout", "blur" -> {
                         val model = when (cutoutModel) { "birefnet" -> "fal-ai/birefnet/v2"; "rmbg" -> "fal-ai/imageutils/rembg"; else -> "fal-ai/bria/background/remove" }
@@ -441,7 +495,7 @@ fun PhotoWorkflowScreen(
                 androidx.compose.foundation.Image(
                     previewBitmap!!.asImageBitmap(),
                     contentDescription = "Pratinjau kuas lokal",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(zoomModifier),
                     contentScale = ContentScale.Fit
                 )
             } else if (brushPreview) {
@@ -493,19 +547,21 @@ fun PhotoWorkflowScreen(
                                     scope.launch {
                                         working = true
                                         status = "Menyimpan kuas dan mempertahankan area sebelumnya…"
+                                        var generatedLightCraftId = photoToSave.lightcraftPhotoId
                                         val result = runCatching {
                                             when (stageToSave) {
                                                 0 -> {
-                                                    val base = latestLightBrushBase ?: error("Foto dasar kuas cahaya tidak ditemukan.")
+                                                    val developed = LightCraftDevelopEngine.exportDeveloped(context, photoToSave)
+                                                    generatedLightCraftId = developed.photoId
                                                     val history = latestSavedLocalBrushStrokes + pendingStrokes
                                                     NativeImageEngine.applyLocalBrush(
-                                                        context, base, history,
+                                                        context, developed.path, history,
                                                         latestLocalExposure, latestLocalWarmth,
                                                         latestLocalSaturation, latestLocalTexture
                                                     ) to history
                                                 }
                                                 1 -> {
-                                                    val original = photoToSave.localPath ?: error("Foto asli tidak ditemukan.")
+                                                    val original = photoToSave.lightcraftRenderedPath ?: photoToSave.localPath ?: error("Foto asli tidak ditemukan.")
                                                     val base = photoToSave.cutoutBrushBasePath ?: photoToSave.cutoutPath
                                                         ?: error("Hasil cutout belum tersedia.")
                                                     val history = latestSavedCutoutBrushStrokes + pendingStrokes
@@ -516,16 +572,16 @@ fun PhotoWorkflowScreen(
                                         }
                                         result.onSuccess { (savedPath, history) ->
                                             val updated = if (stageToSave == 0) {
-                                                val base = photoToSave.localBrushBasePath ?: photoToSave.localAdjustmentPath
-                                                    ?: photoToSave.enhancedPath ?: photoToSave.localPath
                                                 photoToSave.copy(
                                                     localAdjustmentPath = savedPath,
-                                                    localBrushBasePath = base,
+                                                    localBrushBasePath = savedPath,
                                                     localBrushHistoryJson = brushStrokesToJson(history),
                                                     localBrushExposure = latestLocalExposure,
                                                     localBrushWarmth = latestLocalWarmth,
                                                     localBrushSaturation = latestLocalSaturation,
-                                                    localBrushTexture = latestLocalTexture
+                                                    localBrushTexture = latestLocalTexture,
+                                                    lightcraftPhotoId = generatedLightCraftId,
+                                                    lightcraftRenderedPath = savedPath
                                                 )
                                             } else {
                                                 val base = photoToSave.cutoutBrushBasePath ?: photoToSave.cutoutPath
@@ -683,7 +739,8 @@ Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, s
                                         DropdownMenuItem(
                                             text = { Text("★ ${preset.name}") },
                                             onClick = {
-                                                change { applyCustomLightPreset(it, preset) }
+                                                changeLight { applyCustomLightPreset(it, preset) }
+                                                edited = edited.copy(lightPreset = preset.name)
                                                 persist()
                                                 presetMenuExpanded = false
                                                 status = "Preset pribadi ${preset.name} diterapkan."
@@ -732,7 +789,7 @@ Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, s
                         WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> changeLight { it.copy(vignette = v) } }
                         Divider()
                         TextButton(onClick = {
-                            change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f, dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f, vibrance = 0f, vignette = 0f, colorMixJson = "{}", localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]") }
+                            changeLight { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f, dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f, vibrance = 0f, vignette = 0f, colorMixJson = "{}", localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]", lightcraftRenderedPath = null) }
                             savedLocalBrushStrokes = emptyList()
                             brushStrokes = emptyList()
                             persist()
@@ -773,18 +830,24 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         if (savedLocalBrushStrokes.isNotEmpty()) {
                             Button(
                                 onClick = {
-                                    val base = edited.localBrushBasePath ?: edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
-                                    if (base.isNullOrBlank()) {
-                                        status = "Foto dasar untuk kuas tidak ditemukan."
+                                    if (edited.localPath.isNullOrBlank()) {
+                                        status = "Foto asli untuk kuas tidak ditemukan."
                                     } else scope.launch {
                                         working = true
-                                        status = "Menerapkan ulang pengaturan ke seluruh area kuas…"
+                                        status = "Merender ulang area kuas melalui LightCraft…"
                                         runCatching {
-                                            NativeImageEngine.applyLocalBrush(context, base, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture)
-                                        }.onSuccess { path ->
+                                            val developed = LightCraftDevelopEngine.exportDeveloped(context, edited)
+                                            val path = NativeImageEngine.applyLocalBrush(
+                                                context, developed.path, savedLocalBrushStrokes,
+                                                localExposure, localWarmth, localSaturation, localTexture
+                                            )
+                                            developed to path
+                                        }.onSuccess { (developed, path) ->
                                             val updated = edited.copy(
+                                                lightcraftPhotoId = developed.photoId,
+                                                lightcraftRenderedPath = path,
                                                 localAdjustmentPath = path,
-                                                localBrushBasePath = base,
+                                                localBrushBasePath = path,
                                                 localBrushExposure = localExposure,
                                                 localBrushWarmth = localWarmth,
                                                 localBrushSaturation = localSaturation,
@@ -802,7 +865,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         }
                         if (edited.localAdjustmentPath != null) {
                             TextButton(onClick = {
-                                change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]") }
+                                change { it.copy(localAdjustmentPath = null, localBrushBasePath = null, localBrushHistoryJson = "[]", lightcraftRenderedPath = null) }
                                 savedLocalBrushStrokes = emptyList()
                                 brushStrokes = emptyList()
                                 persist()
@@ -990,7 +1053,31 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
             val stageIcons = listOf(Icons.Default.WbSunny, Icons.Default.ContentCut, Icons.Default.Layers, Icons.Default.AutoAwesome, Icons.Default.FileDownload)
             stageNames.forEachIndexed { index, label ->
                 Surface(
-                    onClick = { persist(); stage = index },
+                    onClick = {
+                        persist()
+                        if (working) {
+                            // Do not navigate while a render or AI action is still running.
+                        } else if (index > 0 && edited.localPath != null) {
+                            scope.launch {
+                                working = true
+                                status = "Menyiapkan foto hasil LightCraft untuk tahap berikutnya…"
+                                runCatching { bakeLightCraft(edited) }
+                                    .onSuccess { updated ->
+                                        edited = updated
+                                        onSave(updated)
+                                        stage = index
+                                        brushEnabled = false
+                                        status = "Hasil cahaya LightCraft siap dipakai di tahap berikutnya."
+                                    }
+                                    .onFailure { status = "Gagal menyiapkan hasil LightCraft: ${it.message ?: "kesalahan tidak diketahui"}" }
+                                working = false
+                            }
+                        } else if (index == 0) {
+                            stage = 0
+                        } else {
+                            stage = index
+                        }
+                    },
                     color = Color.Transparent,
                     modifier = Modifier.weight(1f).fillMaxHeight()
                 ) {

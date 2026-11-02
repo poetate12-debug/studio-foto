@@ -6,10 +6,10 @@ plugins {
 }
 android {
     namespace = "id.reang.studiofoto.nativeapp"
-    compileSdk = 35
+    compileSdk = 37
     defaultConfig {
         applicationId = "id.reang.studiofoto.nativeapp"
-        minSdk = 26
+        minSdk = 29
         targetSdk = 35
         versionCode = 11
         versionName = "1.4.0-native-presets-review"
@@ -32,6 +32,7 @@ android {
         }
     }
     buildFeatures { compose = true }
+    sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/source/lightcraft/kotlin"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -53,6 +54,8 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // UniFFI's generated Kotlin bindings call the bundled LightCraft Rust engine through JNA.
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
     kapt("androidx.room:room-compiler:2.6.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

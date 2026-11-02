@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,12 +30,39 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-37 build-tools;35.0.0 ndk;29.0.14206865'
           accept-android-sdk-licenses: true
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Set up Rust toolchain for LightCraft
+        uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Fetch pinned LightCraft engine source
+        run: |
+          git clone https://github.com/artcraft-android/lightcraft-android.git "$RUNNER_TEMP/lightcraft"
+          git -C "$RUNNER_TEMP/lightcraft" checkout 7eb9f0e7e2bb6314879bd9f272a2b12f011f00b2
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/lightcraft-target" >> "$GITHUB_ENV"
+
+      - name: Build LightCraft Rust engine and generate Kotlin bindings
+        env:
+          LIGHTCRAFT_DIR: ${{ runner.temp }}/lightcraft
+        run: |
+          cargo ndk -t arm64-v8a --platform 29 -o "$GITHUB_WORKSPACE/native-android/app/src/main/jniLibs" build --release --locked -p lightcraft-android --lib
+          mkdir -p "$GITHUB_WORKSPACE/native-android/app/build/generated/source/lightcraft/kotlin"
+          cargo run --quiet --locked -p lightcraft-android-bindgen --manifest-path "$LIGHTCRAFT_DIR/apps/lightcraft-android/bindgen/Cargo.toml" -- generate \
+            --library "$CARGO_TARGET_DIR/aarch64-linux-android/release/liblightcraft_android.so" \
+            --language kotlin \
+            --out-dir "$GITHUB_WORKSPACE/native-android/app/build/generated/source/lightcraft/kotlin" \
+            --no-format
+        working-directory: ${{ runner.temp }}/lightcraft
       - name: Restore permanent signing key
         env:
           REANG_KEYSTORE_BASE64: ${{ secrets.REANG_KEYSTORE_BASE64 }}
