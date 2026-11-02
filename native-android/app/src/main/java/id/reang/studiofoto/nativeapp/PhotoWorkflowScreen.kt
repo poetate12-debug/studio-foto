@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -187,7 +189,8 @@ fun PhotoWorkflowScreen(
         Box(Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
             .clip(RoundedCornerShape(20.dp)).background(Color(0xFF05070D)), contentAlignment = Alignment.Center) {
             AsyncImage(model = edited.aiCompositePath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath ?: edited.uri,
-                contentDescription = edited.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                contentDescription = edited.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
             Surface(Modifier.align(Alignment.BottomCenter).padding(9.dp), color = Color(0xB3080D17), shape = RoundedCornerShape(16.dp)) {
                 Text(edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
             }
@@ -297,4 +300,22 @@ private fun WorkflowSlider(label: String, value: Float, range: ClosedFloatingPoi
         }
         Slider(value = value, onValueChange = onChange, valueRange = range)
     }
+}
+
+
+private fun editorPreviewMatrix(photo: PhotoEntity): ColorMatrix {
+    val saturation = photo.saturation.coerceIn(0f, 2f)
+    val inv = 1f - saturation
+    val r = 0.213f * inv
+    val g = 0.715f * inv
+    val b = 0.072f * inv
+    val contrast = photo.contrast.coerceIn(0.5f, 1.8f)
+    val offset = photo.brightness.coerceIn(-0.6f, 0.6f) * 255f
+    val warmth = photo.warmth.coerceIn(-100f, 100f) * 0.55f
+    return ColorMatrix(floatArrayOf(
+        contrast * (r + saturation), contrast * g, contrast * b, 0f, offset + warmth,
+        contrast * r, contrast * (g + saturation), contrast * b, 0f, offset,
+        contrast * r, contrast * g, contrast * (b + saturation), 0f, offset - warmth,
+        0f, 0f, 0f, 1f, 0f
+    ))
 }
