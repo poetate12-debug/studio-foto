@@ -51,9 +51,12 @@ object NativeFiles {
     suspend fun imageDataUri(path: String, maxSide: Int = 2400): String = withContext(Dispatchers.IO) {
         val bitmap = NativeImageEngine.decode(path, maxSide) ?: error("Foto tidak dapat dibaca.")
         val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val keepAlpha = bitmap.hasAlpha()
+        val mime = if (keepAlpha) "image/png" else "image/jpeg"
+        if (keepAlpha) bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        else bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
         bitmap.recycle()
-        "data:image/jpeg;base64," + android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
+        "data:$mime;base64," + android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
     }
 }
 
@@ -199,7 +202,7 @@ object NativeImageEngine {
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            if (photo.enhancedPath == null) {
+            if (true) {
                 val sat = photo.saturation.coerceIn(0f, 2f)
                 val inv = 1f - sat
                 val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
