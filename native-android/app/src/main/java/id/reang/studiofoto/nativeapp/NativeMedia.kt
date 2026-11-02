@@ -183,7 +183,8 @@ data class CutoutBrushStroke(
     val points: List<Pair<Float, Float>>,
     val erase: Boolean,
     val widthFraction: Float,
-    val softness: Float = 0.65f
+    val softness: Float = 0.65f,
+    val filled: Boolean = false
 )
 
 object NativeImageEngine {
@@ -256,9 +257,10 @@ object NativeImageEngine {
         warmth: Float,
         saturation: Float,
         texture: Float,
-        redReduction: Float = 0f
+        redReduction: Float = 0f,
+        colorMixJson: String = "{}"
     ): String = withContext(Dispatchers.IO) {
-        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction)
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction, colorMixJson)
         val bytes = ByteArrayOutputStream()
         output.compress(Bitmap.CompressFormat.PNG, 100, bytes)
         output.recycle()
@@ -274,9 +276,10 @@ object NativeImageEngine {
         saturation: Float,
         texture: Float,
         photo: PhotoEntity,
-        redReduction: Float = 0f
+        redReduction: Float = 0f,
+        colorMixJson: String = "{}"
     ): Bitmap = withContext(Dispatchers.IO) {
-        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction)
+        val output = createLocalBrushBitmap(basePath, strokes, exposure, warmth, saturation, texture, redReduction, colorMixJson)
         applyAdvancedLightAdjustments(output, photo)
         output
     }
@@ -288,7 +291,8 @@ object NativeImageEngine {
         warmth: Float,
         saturation: Float,
         texture: Float,
-        redReduction: Float = 0f
+        redReduction: Float = 0f,
+        colorMixJson: String = "{}"
     ): Bitmap {
         require(strokes.isNotEmpty()) { "Sapukan kuas pada area foto terlebih dahulu." }
         val source = decode(basePath, 2800) ?: error("Foto untuk kuas tidak dapat dibaca.")
@@ -308,7 +312,7 @@ object NativeImageEngine {
             val strokeWidth = (stroke.widthFraction.coerceIn(0.003f, 0.15f) * min(width, height)).coerceAtLeast(4f)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                 color = Color.WHITE
-                style = Paint.Style.STROKE
+                style = if (stroke.filled) Paint.Style.FILL else Paint.Style.STROKE
                 this.strokeWidth = strokeWidth
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
@@ -321,6 +325,7 @@ object NativeImageEngine {
                     xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
                 }
             }
+            if (stroke.filled) path.close()
             if (stroke.points.size == 1) {
                 val point = stroke.points.first()
                 paint.style = Paint.Style.FILL
@@ -337,6 +342,13 @@ object NativeImageEngine {
         val warm = warmth.coerceIn(-100f, 100f) / 100f * 0.16f
         val sat = 1f + saturation.coerceIn(-100f, 100f) / 100f
         val detail = texture.coerceIn(-100f, 100f) / 100f * 0.28f
+        val mixer = runCatching { JSONObject(colorMixJson) }.getOrDefault(JSONObject())
+        val mixerNames = arrayOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
+        val mixerCenters = floatArrayOf(0f, 30f, 60f, 120f, 180f, 240f, 275f, 330f)
+        val mixerHue = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Hue", 0.0).toFloat().coerceIn(-100f, 100f) }
+        val mixerSat = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Saturation", 0.0).toFloat().coerceIn(-100f, 100f) }
+        val mixerLum = FloatArray(8) { mixer.optDouble(mixerNames[it] + "Luminance", 0.0).toFloat().coerceIn(-100f, 100f) }
+        val hasMixer = mixerHue.any { it != 0f } || mixerSat.any { it != 0f } || mixerLum.any { it != 0f }
 
         for (y in 0 until height) {
             source.getPixels(srcRow, 0, width, 0, y, width, 1)
@@ -382,6 +394,36 @@ object NativeImageEngine {
                         red = corrected[0]
                         green = corrected[1]
                         blue = corrected[2]
+                    }
+                }
+
+                if (hasMixer) {
+                    val hsl = rgbToHsl(
+                        red.coerceIn(0f, 1f),
+                        green.coerceIn(0f, 1f),
+                        blue.coerceIn(0f, 1f)
+                    )
+                    var hueShift = 0f
+                    var saturationShift = 0f
+                    var luminanceShift = 0f
+                    for (index in mixerCenters.indices) {
+                        if (mixerHue[index] == 0f && mixerSat[index] == 0f && mixerLum[index] == 0f) continue
+                        var distance = kotlin.math.abs(hsl[0] - mixerCenters[index])
+                        distance = min(distance, 360f - distance)
+                        val weight = (1f - distance / 48f).coerceIn(0f, 1f)
+                        hueShift += mixerHue[index] * weight
+                        saturationShift += mixerSat[index] * weight
+                        luminanceShift += mixerLum[index] * weight
+                    }
+                    if (hueShift != 0f || saturationShift != 0f || luminanceShift != 0f) {
+                        val adjusted = hslToRgb(
+                            hsl[0] + hueShift,
+                            (hsl[1] * (1f + saturationShift / 100f)).coerceIn(0f, 1f),
+                            (hsl[2] + luminanceShift / 100f * 0.30f).coerceIn(0f, 1f)
+                        )
+                        red = adjusted[0]
+                        green = adjusted[1]
+                        blue = adjusted[2]
                     }
                 }
 
