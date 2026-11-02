@@ -6,7 +6,11 @@ import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -39,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
@@ -78,6 +83,7 @@ fun PhotoWorkflowScreen(
     var brushErase by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
     var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
+    var showBefore by remember(photo.id) { mutableStateOf(false) }
     var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(24f) }
     var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
     var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
@@ -103,7 +109,8 @@ fun PhotoWorkflowScreen(
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        stage, edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
+        stage, brushEnabled, brushStrokes, localExposure, localWarmth, localSaturation, localTexture,
+        edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
         edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
         edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson,
@@ -111,14 +118,21 @@ fun PhotoWorkflowScreen(
         edited.backgroundX, edited.backgroundY, edited.eventText, edited.eventDate,
         edited.templateWidthCm, edited.templateHeightCm
     ) {
-        delay(160)
+        delay(180)
         val landscape = edited.templateWidthCm >= edited.templateHeightCm
         val previewWidth = if (landscape) 900 else 640
         val previewHeight = if (landscape) 636 else 900
         val rendered = withContext(Dispatchers.IO) {
             runCatching {
-                if (stage == 0) NativeImageEngine.renderPhotoPreview(edited, 1600)
-                else NativeImageEngine.render(edited, previewWidth, previewHeight)
+                when {
+                    stage == 0 && brushEnabled && brushStrokes.isNotEmpty() ->
+                        NativeImageEngine.previewLocalBrush(
+                            context, lightBrushBase ?: error("Foto sumber tidak ditemukan."),
+                            brushStrokes, localExposure, localWarmth, localSaturation, localTexture, edited
+                        )
+                    stage == 0 -> NativeImageEngine.renderPhotoPreview(edited, 1600)
+                    else -> NativeImageEngine.render(edited, previewWidth, previewHeight)
+                }
             }
         }
         previewBitmap = rendered.getOrNull()
