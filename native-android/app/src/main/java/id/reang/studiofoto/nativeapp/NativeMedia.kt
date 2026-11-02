@@ -242,6 +242,7 @@ object NativeImageEngine {
         canvas.drawColor(Color.rgb(245, 242, 238))
         val generated = decode(photo.aiCompositePath, max(width, height))
         if (generated != null) {
+            applyAdvancedLightAdjustments(generated, photo)
             drawCover(canvas, generated, RectF(0f, 0f, width.toFloat(), height.toFloat()))
             generated.recycle()
         } else {
