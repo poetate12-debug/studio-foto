@@ -105,14 +105,25 @@ fun PhotoWorkflowScreen(
                     }
                     "generate" -> {
                         require(prompt.isNotBlank()) { "Isi deskripsi background terlebih dahulu." }
-                        val input = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
-                            .put("prompt", prompt)
-                            .put("negative_prompt", "changed face, changed identity, different person, changed clothing, extra limbs, distorted hands, text, watermark, low quality")
-                            .put("refine_prompt", true).put("fast", true).put("num_images", 1)
-                        val result = FalAiClient.run(context, "fal-ai/bria/background/replace", input, key) { status = it }
-                        change { it.copy(aiCompositePath = result.localPath, cutoutPath = null, enhancedPath = null) }
+                        status = "Memisahkan objek agar wajah dan tubuh asli tetap dipakai…"
+                        val removeModel = when (cutoutModel) {
+                            "birefnet" -> "fal-ai/birefnet"
+                            "rmbg" -> "fal-ai/imageutils/rembg"
+                            else -> "fal-ai/bria/background/remove"
+                        }
+                        val removeInput = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
+                        if (cutoutModel == "birefnet") removeInput.put("model", "General Use (Heavy)")
+                        val cutout = FalAiClient.run(context, removeModel, removeInput, key) { status = it }
+                        status = "Membuat background baru…"
+                        val ratio = if (edited.templateWidthCm >= edited.templateHeightCm) "3:2" else "2:3"
+                        val bgInput = JSONObject().put("prompt", prompt)
+                            .put("negative_prompt", "person, people, face, body, human, text, watermark, logo, blurry, low quality")
+                            .put("num_images", 1).put("aspect_ratio", ratio).put("medium", "photography")
+                            .put("prompt_enhancement", true)
+                        val bg = FalAiClient.run(context, "fal-ai/bria/text-to-image/base", bgInput, key) { status = it }
+                        change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null) }
                         persist()
-                        status = "Background AI selesai. Foto asli tidak ditimpa."
+                        status = "Background selesai. Objek asli tetap terpisah agar wajah tidak digambar ulang; atur posisinya di tahap Template."
                     }
                     "enhance" -> {
                         val subject = edited.cutoutPath ?: source
