@@ -80,3 +80,11 @@ Untuk proses cetak penting, selalu ekspor file akhir ke galeri/penyimpanan ekste
 - Local brush adjustments now render a live preview while strokes and local exposure/warmth/saturation/texture controls are changed. Use Apply Local Brush to save the selected-area result into the photo project.
 - The local brush preview and saved result share the same feathered mask renderer. Additive strokes paint the selection; subtractive strokes remove coverage from the mask.
 - Device testing is still required for touch hit tolerance, double-tap timing, Before/After press duration, brush edge quality and export parity.
+
+
+## Native light presets and persistent brush update 1.3.0
+
+- Added ten built-in light presets: Asli, Natural, Cerah, Hangat, Vivid, Potret Lembut, Karnaval, Dramatis, Matte and Hitam Putih. Presets set the global light/tone/detail controls and Color Mixer values; the selected preset name is stored per photo.
+- Each local brush stroke is now rendered live and automatically committed to a private PNG adjustment layer when the finger is lifted. The result is saved into the project immediately; drawing another stroke continues from the previous saved adjustment. The manual save button remains available.
+- Room schema version 6 adds the selected light preset name; existing version 5 projects migrate automatically.
+- Build version 1.3.0 (versionCode 10). On-device testing is still needed to verify automatic brush persistence across app restarts, repeated strokes, and all preset looks on the user's own photos.
