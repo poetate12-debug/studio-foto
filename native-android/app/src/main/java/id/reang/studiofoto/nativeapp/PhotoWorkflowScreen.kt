@@ -460,21 +460,47 @@ fun PhotoWorkflowScreen(
         }
         Box(
             Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
-                .clip(RoundedCornerShape(16.dp)).background(Color.White)
-                .pointerInput(photo.id) {
-                    detectTransformGestures { centroid, _, zoom, _ ->
-                        if (zoom != 1f) {
-                            val previous = photoZoom
-                            val updated = (previous * zoom).coerceIn(1f, 4.5f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF101827), Color(0xFF263449))))
+                .border(1.dp, Color(0xFF33435A), RoundedCornerShape(20.dp))
+                .pointerInput(photo.id, stage, edited.templateWidthCm, edited.templateHeightCm, brushAspect) {
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val previous = photoZoom
+                        val updated = (previous * zoom).coerceIn(1f, 4.5f)
+                        if (updated <= 1.01f) {
+                            photoZoom = 1f
+                            photoPanX = 0f
+                            photoPanY = 0f
+                        } else {
                             val factor = updated / previous
-                            photoPanX = (photoPanX - centroid.x) * factor + centroid.x
-                            photoPanY = (photoPanY - centroid.y) * factor + centroid.y
-                            photoZoom = updated
-                            if (updated <= 1.01f) {
-                                photoZoom = 1f
-                                photoPanX = 0f
-                                photoPanY = 0f
+                            // graphicsLayer scales around the preview center. Keep the point
+                            // under the pinch centroid anchored, then add pan movement.
+                            val centerX = size.width / 2f
+                            val centerY = size.height / 2f
+                            val nextPanX = photoPanX * factor + (centroid.x - centerX) * (1f - factor) + pan.x
+                            val nextPanY = photoPanY * factor + (centroid.y - centerY) * (1f - factor) + pan.y
+
+                            // Bound movement to the visible image area.
+                            val imageAspect = if (stage >= 2) {
+                                (edited.templateWidthCm / edited.templateHeightCm).coerceAtLeast(0.05f)
+                            } else brushAspect.coerceAtLeast(0.05f)
+                            val viewportWidth = size.width.toFloat().coerceAtLeast(1f)
+                            val viewportHeight = size.height.toFloat().coerceAtLeast(1f)
+                            val viewportAspect = viewportWidth / viewportHeight
+                            val fitWidth: Float
+                            val fitHeight: Float
+                            if (viewportAspect > imageAspect) {
+                                fitHeight = viewportHeight
+                                fitWidth = fitHeight * imageAspect
+                            } else {
+                                fitWidth = viewportWidth
+                                fitHeight = fitWidth / imageAspect
                             }
+                            val maxPanX = ((fitWidth * updated - viewportWidth) / 2f).coerceAtLeast(0f)
+                            val maxPanY = ((fitHeight * updated - viewportHeight) / 2f).coerceAtLeast(0f)
+                            photoPanX = nextPanX.coerceIn(-maxPanX, maxPanX)
+                            photoPanY = nextPanY.coerceIn(-maxPanY, maxPanY)
+                            photoZoom = updated
                         }
                     }
                 }
@@ -716,10 +742,27 @@ fun PhotoWorkflowScreen(
             Spacer(Modifier.width(7.dp))
             Text("Tandai selesai · lanjut foto berikutnya")
         }
-        Surface(color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
+        Surface(
+            color = Color(0xFFFFFEFC),
+            shape = RoundedCornerShape(24.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E6EF)),
+            shadowElevation = 5.dp,
+            modifier = Modifier.fillMaxWidth().weight(1.25f).padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
-                Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color(0xFF1E293B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color(0xFF1E293B), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
+                        Text("CONTROL PANEL  •  REANG PHOTO LAB", color = Color(0xFF94A0B4), fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Surface(color = Color(0xFFF1F0FA), shape = RoundedCornerShape(10.dp)) {
+                        Text("${stage + 1}/5", color = Color(0xFF514A9A), modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(Modifier.height(11.dp))
                 when (stage) {
                     0 -> {
                         val activePanelIcon = when (lightPanel) {
@@ -1338,84 +1381,52 @@ private fun WorkflowSlider(
     resetValue: Float = 0f,
     onChange: (Float) -> Unit
 ) {
-    val latestValue by rememberUpdatedState(value)
     val latestOnChange by rememberUpdatedState(onChange)
-    val latestResetValue by rememberUpdatedState(resetValue)
     val low = range.start
     val high = range.endInclusive
-    val fraction = ((value - low) / (high - low).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
+    val safeValue = value.coerceIn(low, high)
+    val valueText = if ((high - low) <= 3f) "%.2f".format(safeValue) else "%.0f".format(safeValue)
 
-    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = Color(0xFF334155), style = MaterialTheme.typography.bodySmall)
-            Text("%.0f".format(value), color = Color(0xFFF07824), style = MaterialTheme.typography.labelSmall)
-        }
-        Canvas(
-            modifier = Modifier.fillMaxWidth().height(38.dp)
-                .pointerInput(low, high, resetValue) {
-                    var lastTapAt = 0L
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val inset = 11.dp.toPx()
-                        val radius = 9.dp.toPx()
-                        val hitRadius = radius + 4.dp.toPx()
-                        val trackWidth = (size.width - inset * 2f).coerceAtLeast(1f)
-                        val currentFraction = ((latestValue - low) / (high - low).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
-                        val thumbCenter = Offset(inset + currentFraction * trackWidth, size.height / 2f)
-                        val dx = down.position.x - thumbCenter.x
-                        val dy = down.position.y - thumbCenter.y
-                        if (dx * dx + dy * dy > hitRadius * hitRadius) {
-                            waitForUpOrCancellation()
-                            return@awaitEachGesture
-                        }
-
-                        val dragStart = awaitTouchSlopOrCancellation(down.id) { change, _ ->
-                            change.consume()
-                            val x = (change.position.x - inset).coerceIn(0f, trackWidth)
-                            latestOnChange(low + (x / trackWidth) * (high - low))
-                        }
-                        if (dragStart != null) {
-                            drag(down.id) { change ->
-                                change.consume()
-                                val x = (change.position.x - inset).coerceIn(0f, trackWidth)
-                                latestOnChange(low + (x / trackWidth) * (high - low))
-                            }
-                            lastTapAt = 0L
-                        } else {
-                            val tapAt = down.uptimeMillis
-                            if (lastTapAt > 0L && tapAt - lastTapAt <= viewConfiguration.doubleTapTimeoutMillis) {
-                                latestOnChange(latestResetValue.coerceIn(low, high))
-                                lastTapAt = 0L
-                            } else {
-                                lastTapAt = tapAt
-                            }
-                        }
-                    }
-                }
+    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val inset = 11.dp.toPx()
-            val trackHeight = 6.dp.toPx()
-            val radius = 9.dp.toPx()
-            val trackWidth = (size.width - inset * 2f).coerceAtLeast(1f)
-            val y = size.height / 2f
-            val x = inset + fraction * trackWidth
-            val corner = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f)
-
-            drawRoundRect(
-                color = Color(0xFFE2E8F0),
-                topLeft = Offset(inset, y - trackHeight / 2f),
-                size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight),
-                cornerRadius = corner
-            )
-            drawRoundRect(
-                color = Color(0xFFF07824),
-                topLeft = Offset(inset, y - trackHeight / 2f),
-                size = androidx.compose.ui.geometry.Size((x - inset).coerceAtLeast(0f), trackHeight),
-                cornerRadius = corner
-            )
-            drawCircle(Color.White, radius = radius, center = Offset(x, y))
-            drawCircle(Color(0xFFF07824), radius = radius, center = Offset(x, y), style = Stroke(width = 2.5.dp.toPx()))
+            Text(label, color = Color(0xFF334155), fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
+            Surface(
+                color = Color(0xFFFFF1E7),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFAD9C4))
+            ) {
+                Text(
+                    valueText,
+                    color = Color(0xFFB9571C),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
+        Slider(
+            value = safeValue,
+            onValueChange = { latestOnChange(it.coerceIn(low, high)) },
+            modifier = Modifier.fillMaxWidth().height(38.dp),
+            valueRange = low..high,
+            steps = 0,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFF07824),
+                activeTrackColor = Color(0xFFF07824),
+                inactiveTrackColor = Color(0xFFE2E8F0),
+                activeTickColor = Color(0xFFF07824),
+                inactiveTickColor = Color(0xFFE2E8F0)
+            )
+        )
+        Text(
+            "Ketuk atau geser sepanjang garis untuk mengatur nilai",
+            color = Color(0xFF9AA4B5),
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 
