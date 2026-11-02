@@ -45,9 +45,11 @@ import kotlin.math.roundToInt
 @Composable
 fun PhotoWorkflowScreen(
     photo: PhotoEntity,
+    projectName: String,
+    projectPhotos: List<PhotoEntity>,
+    onSelectPhoto: (PhotoEntity) -> Unit,
     assets: List<StudioAssetEntity>,
     falApiKey: String,
-    onFalApiKeyChange: (String) -> Unit,
     onBack: () -> Unit,
     onSave: (PhotoEntity) -> Unit,
     onRegisterAsset: (String, String, String) -> Unit,
@@ -76,19 +78,33 @@ fun PhotoWorkflowScreen(
     var brushErase by rememberSaveable(photo.id) { mutableStateOf(false) }
     var brushSize by rememberSaveable(photo.id) { mutableFloatStateOf(0.035f) }
     var brushStrokes by remember(photo.id) { mutableStateOf(emptyList<CutoutBrushStroke>()) }
-    val brushAspect = remember(edited.cutoutPath, edited.localPath) {
-        NativeImageEngine.imageAspect(edited.cutoutPath ?: edited.localPath)
+    var localExposure by rememberSaveable(photo.id) { mutableFloatStateOf(24f) }
+    var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
+    var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
+    var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(12f) }
+    var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
+    val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
+    val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
+    val brushAspect = remember(edited.localAdjustmentPath, edited.enhancedPath, edited.cutoutPath, edited.localPath) {
+        NativeImageEngine.imageAspect(edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath)
     }
 
     fun persist() = onSave(edited)
     fun change(block: (PhotoEntity) -> PhotoEntity) { edited = block(edited) }
+    fun colorValue(component: String): Float =
+        runCatching { JSONObject(edited.colorMixJson).optDouble(selectedColor + component, 0.0).toFloat() }.getOrDefault(0f)
+    fun updateColorValue(component: String, value: Float) {
+        val json = runCatching { JSONObject(edited.colorMixJson) }.getOrDefault(JSONObject())
+        json.put(selectedColor + component, value.toDouble())
+        change { it.copy(colorMixJson = json.toString()) }
+    }
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath,
+        edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
         edited.contrast, edited.saturation, edited.warmth, edited.highlights, edited.shadows,
-        edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette,
+        edited.blacks, edited.dehaze, edited.clarity, edited.vibrance, edited.vignette, edited.texture, edited.sharpen, edited.whites, edited.colorMixJson,
         edited.objectX, edited.objectY, edited.objectScale, edited.backgroundScale,
         edited.backgroundX, edited.backgroundY, edited.eventText, edited.eventDate,
         edited.templateWidthCm, edited.templateHeightCm
