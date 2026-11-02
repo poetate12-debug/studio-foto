@@ -1,6 +1,6 @@
 {
-  "appId": "id.reang.studiofoto",
-  "appName": "Reang Studio Foto Baru",
+  "appId": "id.reang.studiofoto.nativeapp",
+  "appName": "Reang Studio Foto",
   "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
