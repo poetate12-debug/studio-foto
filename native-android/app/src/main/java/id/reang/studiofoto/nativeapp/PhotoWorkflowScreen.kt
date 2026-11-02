@@ -2,6 +2,7 @@ package id.reang.studiofoto.nativeapp
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.graphics.Bitmap
+import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -240,7 +241,7 @@ fun PhotoWorkflowScreen(
             .clip(RoundedCornerShape(20.dp)).background(Color(0xFF05070D)), contentAlignment = Alignment.Center) {
             val brushPreview = stage == 1 && brushEnabled && !edited.cutoutPath.isNullOrBlank()
             if (brushPreview) {
-                AsyncImage(model = edited.cutoutPath, contentDescription = "Cutout transparan",
+                AsyncImage(model = edited.cutoutPath?.let { File(it) }, contentDescription = "Cutout transparan",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             } else {
                 val composedPreview = previewBitmap
@@ -252,7 +253,7 @@ fun PhotoWorkflowScreen(
                         contentScale = ContentScale.Fit
                     )
                 } else {
-                    AsyncImage(model = edited.localPath ?: edited.uri, contentDescription = edited.name,
+                    AsyncImage(model = edited.localPath?.let { File(it) } ?: edited.uri, contentDescription = edited.name,
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                         colorFilter = ColorFilter.colorMatrix(editorPreviewMatrix(edited)))
                 }
