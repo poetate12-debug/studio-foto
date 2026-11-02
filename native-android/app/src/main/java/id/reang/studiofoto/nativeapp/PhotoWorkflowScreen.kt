@@ -94,6 +94,12 @@ fun PhotoWorkflowScreen(
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
     val lightBrushBase = edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
     val brushSourcePath = if (stage == 1) edited.cutoutPath else lightBrushBase
+    val latestBrushStrokes by rememberUpdatedState(brushStrokes)
+    val latestLightBrushBase by rememberUpdatedState(lightBrushBase)
+    val latestLocalExposure by rememberUpdatedState(localExposure)
+    val latestLocalWarmth by rememberUpdatedState(localWarmth)
+    val latestLocalSaturation by rememberUpdatedState(localSaturation)
+    val latestLocalTexture by rememberUpdatedState(localTexture)
     val brushAspect = remember(stage, lightBrushBase, edited.cutoutPath) {
         NativeImageEngine.imageAspect(brushSourcePath)
     }
@@ -396,6 +402,34 @@ fun PhotoWorkflowScreen(
                             return ((point.x - left) / contentW) to ((point.y - top) / contentH)
                         }
                         detectDragGestures(
+                            onDragEnd = {
+                                val strokesToSave = latestBrushStrokes
+                                val baseToEdit = latestLightBrushBase
+                                if (stage == 0 && baseToEdit != null && strokesToSave.isNotEmpty() && !working) {
+                                    scope.launch {
+                                        working = true
+                                        status = "Menyimpan perubahan kuas ke foto…"
+                                        runCatching {
+                                            NativeImageEngine.applyLocalBrush(
+                                                context, baseToEdit, strokesToSave,
+                                                latestLocalExposure, latestLocalWarmth,
+                                                latestLocalSaturation, latestLocalTexture
+                                            )
+                                        }.onSuccess { savedPath ->
+                                            change { it.copy(localAdjustmentPath = savedPath) }
+                                            persist()
+                                            brushStrokes = emptyList()
+                                            status = "Perubahan area kuas tersimpan permanen."
+                                        }.onFailure { error ->
+                                            status = error.message ?: "Gagal menyimpan hasil kuas."
+                                        }
+                                        working = false
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                status = "Coretan kuas dibatalkan."
+                            },
                             onDragStart = { point ->
                                 normalized(point)?.let { uv ->
                                     brushStrokes = brushStrokes + CutoutBrushStroke(listOf(uv), brushErase, brushSize)
@@ -492,7 +526,7 @@ fun PhotoWorkflowScreen(
                         }) { Text("Reset warna ${selectedColor}") }
                         Divider()
                         Text("KUAS LOKAL · ATUR AREA TERTENTU", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        Text("Aktifkan kuas, lalu sapukan area pada foto di atas. Ujung kuas dibuat lembut agar transisi tidak kasar.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                        Text("Sapukan kuas pada foto. Setelah jari dilepas, perubahan area otomatis diproses dan disimpan ke proyek, tidak hanya menjadi pratinjau sementara.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             FilterChip(brushEnabled, { brushEnabled = !brushEnabled; brushStrokes = emptyList() }, label = { Text(if (brushEnabled) "Kuas aktif" else "Aktifkan kuas") })
                             FilterChip(!brushErase, { brushErase = false }, label = { Text("Tambah area") })
@@ -514,7 +548,7 @@ fun PhotoWorkflowScreen(
                                         .onFailure { status = it.message ?: "Penyesuaian area gagal." }
                                     working = false
                                 }
-                            }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Terapkan kuas lokal") }
+                            }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Simpan area sekarang") }
                             OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan") }
                         }
                         if (edited.localAdjustmentPath != null) TextButton(onClick = { change { it.copy(localAdjustmentPath = null) }; persist(); status = "Penyesuaian lokal direset." }) { Text("Reset penyesuaian lokal") }
