@@ -70,3 +70,13 @@ Untuk proses cetak penting, selalu ekspor file akhir ke galeri/penyimpanan ekste
 - Fixed the live image-processing path to decode mutable ARGB_8888 bitmaps before pixel operations. The prior immutable BitmapFactory result caused the native per-pixel adjustment routine to fail; the preview coroutine swallowed that error and fell back to a basic color matrix, so Tone/Detail/Color Mixer values changed while the image did not.
 - Preview rendering errors are now reported in the editor status instead of silently disappearing.
 - Build version is 1.2.1 (versionCode 8). Verify on-device that changing Highlights, Shadows, Whites, Clarity, Texture, Sharpen and individual color mixer channels visibly updates both preview and export.
+
+
+## Native editor controls update 1.2.2
+
+- All editor sliders now use a circular thumb. Dragging begins only when the gesture starts on the circular handle; tapping the track elsewhere does not change the value.
+- Double-tapping a slider thumb resets that control to its neutral/default point (for example, contrast and saturation return to 1.0; tone controls return to 0).
+- Press and hold the image preview for one second to temporarily view the unedited original (Before). Release to return to the edited preview (After).
+- Local brush adjustments now render a live preview while strokes and local exposure/warmth/saturation/texture controls are changed. Use Apply Local Brush to save the selected-area result into the photo project.
+- The local brush preview and saved result share the same feathered mask renderer. Additive strokes paint the selection; subtractive strokes remove coverage from the mask.
+- Device testing is still required for touch hit tolerance, double-tap timing, Before/After press duration, brush edge quality and export parity.
