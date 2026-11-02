@@ -65,6 +65,14 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlin.math.roundToInt
 
+private data class SliderHistoryCallbacks(
+    val onStart: () -> Unit,
+    val onFinish: () -> Unit
+)
+private val LocalWorkflowSliderHistory = androidx.compose.runtime.compositionLocalOf {
+    SliderHistoryCallbacks({}, {})
+}
+
 @Composable
 fun PhotoWorkflowScreen(
     photo: PhotoEntity,
@@ -113,6 +121,7 @@ fun PhotoWorkflowScreen(
     var faceMaskFaceCount by remember(photo.id) { mutableIntStateOf(0) }
     val undoHistory = remember(photo.id) { mutableStateListOf<PhotoEntity>() }
     val redoHistory = remember(photo.id) { mutableStateListOf<PhotoEntity>() }
+    var sliderEditInProgress by remember(photo.id) { mutableStateOf(false) }
     var lightPanel by rememberSaveable(photo.id) { mutableStateOf("cahaya") }
     var photoZoom by rememberSaveable(photo.id) { mutableFloatStateOf(1f) }
     var photoPanX by rememberSaveable(photo.id) { mutableFloatStateOf(0f) }
@@ -195,13 +204,22 @@ fun PhotoWorkflowScreen(
         restoreHistorySnapshot(next)
         status = "Perubahan dikembalikan."
     }
-    fun persist() = onSave(edited)
+    fun beginSliderEdit() {
+        if (!sliderEditInProgress) {
+            pushUndoSnapshot()
+            sliderEditInProgress = true
+        }
+    }
+    fun finishSliderEdit() {
+        sliderEditInProgress = false
+    }
+    fun persist() = onSave(historySnapshot())
     fun change(block: (PhotoEntity) -> PhotoEntity) {
-        pushUndoSnapshot()
+        if (!sliderEditInProgress) pushUndoSnapshot()
         edited = block(edited)
     }
     fun changeLight(block: (PhotoEntity) -> PhotoEntity) {
-        pushUndoSnapshot()
+        if (!sliderEditInProgress) pushUndoSnapshot()
         edited = block(edited).copy(
             lightPreset = "Kustom",
             lightcraftRenderedPath = null,
@@ -250,7 +268,7 @@ fun PhotoWorkflowScreen(
                             NativeImageEngine.previewLocalBrush(
                                 context, basePath, history,
                                 localExposure, localWarmth, localSaturation, localTexture,
-                                LightCraftDevelopEngine.neutralPhoto(edited), localRedReduction
+                                LightCraftDevelopEngine.neutralPhoto(edited), localRedReduction, edited.localBrushColorMixJson
                             )
                         } finally {
                             developed.bitmap.recycle()
@@ -376,7 +394,8 @@ fun PhotoWorkflowScreen(
         val finalPath = if (strokes.isNotEmpty()) {
             NativeImageEngine.applyLocalBrush(
                 context, developed.path, strokes,
-                localExposure, localWarmth, localSaturation, localTexture, localRedReduction
+                localExposure, localWarmth, localSaturation, localTexture, localRedReduction,
+                sourcePhoto.localBrushColorMixJson
             )
         } else developed.path
         return sourcePhoto.copy(
@@ -425,9 +444,8 @@ fun PhotoWorkflowScreen(
                     ).mapNotNull { type ->
                         mainFace.getContour(type)?.points?.takeIf { it.isNotEmpty() }
                     }
-                    val (imageWidth, imageHeight) = exifAwareImageSize(sourcePath)
                     val maskStrokes = buildFaceContourMaskStrokes(
-                        faceContour, protected, imageWidth, imageHeight
+                        faceContour, protected, inputImage.width, inputImage.height, mainFace.boundingBox
                     )
                     if (maskStrokes.isEmpty()) {
                         status = "Mask wajah gagal dibuat dari kontur. Coba foto dengan wajah lebih jelas."
@@ -443,6 +461,7 @@ fun PhotoWorkflowScreen(
                             localBrushSaturation = localSaturation,
                             localBrushTexture = localTexture,
                             localBrushRedReduction = localRedReduction,
+                            localBrushColorMixJson = edited.localBrushColorMixJson,
                             localAdjustmentPath = null,
                             lightcraftRenderedPath = null
                         )
@@ -603,9 +622,9 @@ fun PhotoWorkflowScreen(
         }
         Box(
             Modifier.weight(0.9f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(0.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFF101827), Color(0xFF263449))))
-                .border(1.dp, Color(0xFF33435A), RoundedCornerShape(20.dp))
+                .border(4.dp, Color(0xFF33435A), RoundedCornerShape(0.dp))
                 .pointerInput(photo.id, stage, edited.templateWidthCm, edited.templateHeightCm, brushAspect) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
                         val previous = photoZoom
@@ -886,14 +905,10 @@ fun PhotoWorkflowScreen(
             Spacer(Modifier.width(7.dp))
             Text("Tandai selesai · lanjut foto berikutnya")
         }
-        Surface(
-            color = Color(0xFFFFFEFC),
-            shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E6EF)),
-            shadowElevation = 5.dp,
-            modifier = Modifier.fillMaxWidth().weight(1.25f).padding(horizontal = 12.dp, vertical = 6.dp)
+        Column(
+            Modifier.fillMaxWidth().weight(1.25f).background(Color(0xFFF5F7FA))
+                .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -965,6 +980,12 @@ fun PhotoWorkflowScreen(
                             PremiumEditorTab("Kuas", Icons.Default.Brush, lightPanel == "kuas", Modifier.weight(1f)) { lightPanel = "kuas" }
                             PremiumEditorTab("Wajah", Icons.Default.Face, lightPanel == "wajah", Modifier.weight(1f)) { lightPanel = "wajah"; brushEnabled = false }
                         }
+                        CompositionLocalProvider(
+                            LocalWorkflowSliderHistory provides SliderHistoryCallbacks(
+                                onStart = { beginSliderEdit() },
+                                onFinish = { finishSliderEdit() }
+                            )
+                        ) {
                         when (lightPanel) {
                             "cahaya" -> {
 Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
@@ -1100,6 +1121,35 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         WorkflowSlider("Reduksi merah wajah", localRedReduction, 0f..100f, resetValue = 0f) { localRedReduction = it }
                         Text("Mengurangi kejenuhan merah dan oranye hanya pada area yang disapu. Gunakan perlahan agar warna kulit tetap alami.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
+                        Divider()
+                        Text("MIX WARNA DI AREA KUAS", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 3.dp)) {
+                            items(colorNames.size) { i ->
+                                val selected = selectedColor == colorNames[i]
+                                Surface(
+                                    onClick = { selectedColor = colorNames[i] },
+                                    modifier = Modifier.size(34.dp).semantics { contentDescription = colorLabels[i] },
+                                    shape = CircleShape,
+                                    color = Color.White,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (selected) 2.dp else 1.dp,
+                                        if (selected) Color(0xFF5C55B8) else Color(0xFFD9DFEA)
+                                    )
+                                ) {
+                                    Box(Modifier.fillMaxSize().padding(4.dp).clip(CircleShape).background(colorSwatches[i]), contentAlignment = Alignment.Center) {
+                                        if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                        }
+                        WorkflowSlider("Hue warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Hue"), -100f..100f) { updateLocalBrushColorValue("Hue", it) }
+                        WorkflowSlider("Saturasi warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Saturation"), -100f..100f) { updateLocalBrushColorValue("Saturation", it) }
+                        WorkflowSlider("Luminansi warna lokal", localBrushColorValue(edited.localBrushColorMixJson, "Luminance"), -100f..100f) { updateLocalBrushColorValue("Luminance", it) }
+                        TextButton(onClick = {
+                            val json = runCatching { JSONObject(edited.localBrushColorMixJson) }.getOrDefault(JSONObject())
+                            listOf("Hue", "Saturation", "Luminance").forEach { json.put(selectedColor + it, 0) }
+                            change { it.copy(localBrushColorMixJson = json.toString()) }
+                        }) { Text("Reset warna kuas terpilih") }
                         if (savedLocalBrushStrokes.isNotEmpty()) {
                             Button(
                                 onClick = {
@@ -1259,6 +1309,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                 }
                             }
                         }
+                        }
                     }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1392,36 +1443,39 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                 Spacer(Modifier.height(9.dp))
                 if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text(status, color = if (status.contains("gagal", true)) Color(0xFFFF9C9C) else Color(0xFF9AA8BC), style = MaterialTheme.typography.labelSmall)
-
-            }
         }
         if (projectPhotos.isNotEmpty()) {
             Row(
-                Modifier.fillMaxWidth().height(78.dp).background(Color.White).padding(horizontal = 8.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().height(68.dp).background(Color.White).padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val photoPosition = (projectPhotos.indexOfFirst { it.id == photo.id } + 1).coerceAtLeast(1)
                 Text("$photoPosition/${projectPhotos.size}", color = Color(0xFF64748B), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 5.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.weight(1f)) {
                     items(projectPhotos, key = { it.id }) { item ->
+                        val thumbAspect = remember(item.id, item.localPath) {
+                            NativeImageEngine.imageAspect(item.localPath).coerceIn(0.35f, 3.2f)
+                        }
+                        val thumbWidth = (58f * thumbAspect).coerceIn(30f, 72f).dp
                         Surface(
                             onClick = { persist(); onSelectPhoto(item) },
-                            shape = RoundedCornerShape(10.dp),
-                            border = if (item.id == photo.id) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFF07824)) else null,
-                            modifier = Modifier.width(57.dp).fillMaxHeight()
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFE2E8F0),
+                            border = if (item.id == photo.id) androidx.compose.foundation.BorderStroke(3.dp, Color(0xFFF07824)) else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD3DCE8)),
+                            modifier = Modifier.width(thumbWidth).height(56.dp)
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 AsyncImage(
                                     model = item.localPath?.let { File(it) } ?: item.uri,
                                     contentDescription = item.name,
-                                    contentScale = ContentScale.Crop,
+                                    contentScale = ContentScale.Fit,
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 Surface(
                                     color = if (item.isCompleted) Color(0xFF16A34A) else Color(0xFFF59E0B),
                                     shape = CircleShape,
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(11.dp)
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(9.dp)
                                 ) {}
                             }
                         }
@@ -1641,12 +1695,26 @@ private fun WorkflowSlider(
 ) {
     val latestOnChange by rememberUpdatedState(onChange)
     val latestResetValue by rememberUpdatedState(resetValue)
+    val historyCallbacks = LocalWorkflowSliderHistory.current
+    var gestureStarted by remember { mutableStateOf(false) }
+    fun startGesture() {
+        if (!gestureStarted) {
+            gestureStarted = true
+            historyCallbacks.onStart()
+        }
+    }
+    fun finishGesture() {
+        if (gestureStarted) {
+            gestureStarted = false
+            historyCallbacks.onFinish()
+        }
+    }
     val low = range.start
     val high = range.endInclusive
     val safeValue = value.coerceIn(low, high)
     val valueText = if ((high - low) <= 3f) "%.2f".format(safeValue) else "%.0f".format(safeValue)
 
-    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1654,7 +1722,11 @@ private fun WorkflowSlider(
         ) {
             Text(label, color = Color(0xFF334155), fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
             Surface(
-                onClick = { latestOnChange(latestResetValue.coerceIn(low, high)) },
+                onClick = {
+                    startGesture()
+                    latestOnChange(latestResetValue.coerceIn(low, high))
+                    finishGesture()
+                },
                 color = Color(0xFFFFF1E7),
                 shape = RoundedCornerShape(8.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFAD9C4))
@@ -1670,8 +1742,12 @@ private fun WorkflowSlider(
         }
         Slider(
             value = safeValue,
-            onValueChange = { latestOnChange(it.coerceIn(low, high)) },
-            modifier = Modifier.fillMaxWidth().height(38.dp),
+            onValueChange = {
+                startGesture()
+                latestOnChange(it.coerceIn(low, high))
+            },
+            onValueChangeFinished = { finishGesture() },
+            modifier = Modifier.fillMaxWidth().height(30.dp),
             valueRange = low..high,
             steps = 0,
             colors = SliderDefaults.colors(
@@ -1681,11 +1757,6 @@ private fun WorkflowSlider(
                 activeTickColor = Color(0xFFF07824),
                 inactiveTickColor = Color(0xFFE2E8F0)
             )
-        )
-        Text(
-            "Ketuk atau geser sepanjang garis untuk mengatur nilai",
-            color = Color(0xFF9AA4B5),
-            style = MaterialTheme.typography.labelSmall
         )
     }
 }
@@ -1726,7 +1797,8 @@ private fun brushStrokesFromJson(json: String): List<CutoutBrushStroke> = runCat
                     points = points,
                     erase = item.optBoolean("erase", false),
                     widthFraction = item.optDouble("width", 0.035).toFloat(),
-                    softness = item.optDouble("softness", 0.65).toFloat()
+                    softness = item.optDouble("softness", 0.65).toFloat(),
+                    filled = item.optBoolean("filled", false)
                 )
             )
         }
@@ -1743,6 +1815,7 @@ private fun brushStrokesToJson(strokes: List<CutoutBrushStroke>): String {
                 .put("erase", stroke.erase)
                 .put("width", stroke.widthFraction.toDouble())
                 .put("softness", stroke.softness.toDouble())
+                .put("filled", stroke.filled)
                 .put("points", points)
         )
     }
