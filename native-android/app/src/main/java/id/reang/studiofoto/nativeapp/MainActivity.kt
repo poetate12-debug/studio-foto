@@ -1,6 +1,7 @@
 package id.reang.studiofoto.nativeapp
 
 import android.content.Intent
+import java.io.File
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -602,7 +603,7 @@ private fun ProjectDetailScreen(
                 items(photos, key = { it.id }) { photo ->
                     Card(onClick = { onPhotoClick(photo) }, colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(17.dp)) {
                         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(model = photo.localPath ?: photo.uri, contentDescription = photo.name, modifier = Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+                            AsyncImage(model = photo.localPath?.let { File(it) } ?: photo.uri, contentDescription = photo.name, modifier = Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                                 Text(photo.name, color = White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("Buka editor cahaya & warna", color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -646,7 +647,7 @@ private fun EditorScreen(photo: PhotoEntity, onBack: () -> Unit, onSave: (Float,
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = photo.localPath ?: photo.uri,
+                model = photo.localPath?.let { File(it) } ?: photo.uri,
                 contentDescription = photo.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
