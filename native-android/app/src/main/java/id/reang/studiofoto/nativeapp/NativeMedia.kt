@@ -202,9 +202,10 @@ object NativeImageEngine {
                 strokeJoin = Paint.Join.ROUND
             }
             if (stroke.erase) {
-                paint.color = Color.TRANSPARENT
+                paint.color = Color.BLACK
                 paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
             } else {
+                paint.color = Color.WHITE
                 paint.shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             }
             if (stroke.points.size == 1) {
