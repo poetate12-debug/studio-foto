@@ -117,6 +117,7 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 activePhoto = updated
             },
             onRegisterAsset = { name, filePath, kind -> vm.addAsset(name, filePath, kind) },
+            onDeleteAsset = { vm.deleteAsset(it.id) },
             onExportAll = {
                 val projectId = activeProject?.id
                 if (projectId != null) {
