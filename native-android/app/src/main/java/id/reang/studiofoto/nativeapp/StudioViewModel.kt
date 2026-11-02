@@ -24,9 +24,11 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun photos(projectId: Long): Flow<List<PhotoEntity>> = dao.observePhotos(projectId)
 
-    fun createProject(name: String) {
+    fun createProject(name: String, eventDate: String) {
         val clean = name.trim()
-        if (clean.isNotEmpty()) viewModelScope.launch { dao.insertProject(ProjectEntity(name = clean)) }
+        if (clean.isNotEmpty()) viewModelScope.launch {
+            dao.insertProject(ProjectEntity(name = clean, eventDate = eventDate.trim()))
+        }
     }
 
     fun deletePhoto(photo: PhotoEntity) {
@@ -46,13 +48,15 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addPhotos(projectId: Long, items: List<ImportedPhoto>) {
         viewModelScope.launch {
+            val projectDate = dao.getProject(projectId)?.eventDate.orEmpty()
             items.forEach { item ->
                 dao.insertPhoto(
                     PhotoEntity(
                         projectId = projectId,
                         uri = item.originalUri,
                         localPath = item.localPath,
-                        name = item.name
+                        name = item.name,
+                        eventDate = projectDate
                     )
                 )
             }
