@@ -88,8 +88,9 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun exportAll(projectId: Long, onComplete: (Int, Int) -> Unit) {
+    fun exportAll(projectId: Long, latestPhoto: PhotoEntity?, onComplete: (Int, Int) -> Unit) {
         viewModelScope.launch {
+            latestPhoto?.let { dao.updatePhoto(it) }
             val photos = dao.observePhotos(projectId).first()
             var saved = 0
             photos.forEach { photo ->
