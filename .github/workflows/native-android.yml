@@ -138,14 +138,19 @@ jobs:
           else:
               raise SystemExit("Unexpected generated signingConfigs block; refusing to overwrite it")
           if "signingConfig signingConfigs.release" not in source:
-              source, count = re.subn(
-                  r'release\s*\{',
-                  'release {\n            signingConfig signingConfigs.release',
-                  source,
+              build_types = source.find("buildTypes {")
+              if build_types < 0:
+                  raise SystemExit("Could not locate buildTypes in generated Android Gradle file")
+              head, tail = source[:build_types], source[build_types:]
+              tail, count = re.subn(
+                  r'release\\s*\\{',
+                  'release {\\n            signingConfig signingConfigs.release',
+                  tail,
                   count=1
               )
               if count != 1:
-                  raise SystemExit("Could not attach the permanent signing config to release")
+                  raise SystemExit("Could not attach the permanent signing config to buildTypes.release")
+              source = head + tail
           source = source.replace('versionCode 1', 'versionCode 6', 1)
           source = source.replace('versionName "1.0"', 'versionName "1.1.0"', 1)
           gradle.write_text(source, encoding="utf-8")
