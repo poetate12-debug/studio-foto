@@ -43,6 +43,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -859,7 +862,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                 val selected = selectedColor == colorNames[i]
                                 Surface(
                                     onClick = { selectedColor = colorNames[i] },
-                                    modifier = Modifier.size(42.dp),
+                                    modifier = Modifier.size(42.dp).semantics { contentDescription = colorLabels[i] },
                                     shape = CircleShape,
                                     color = Color.White,
                                     border = androidx.compose.foundation.BorderStroke(
