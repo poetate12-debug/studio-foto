@@ -3,7 +3,9 @@ package id.reang.studiofoto.nativeapp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.graphics.Bitmap
 import android.graphics.PointF
+import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -58,7 +60,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.json.JSONArray
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceContour
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
@@ -424,8 +425,9 @@ fun PhotoWorkflowScreen(
                     ).mapNotNull { type ->
                         mainFace.getContour(type)?.points?.takeIf { it.isNotEmpty() }
                     }
+                    val (imageWidth, imageHeight) = exifAwareImageSize(sourcePath)
                     val maskStrokes = buildFaceContourMaskStrokes(
-                        faceContour, protected, inputImage.width, inputImage.height
+                        faceContour, protected, imageWidth, imageHeight
                     )
                     if (maskStrokes.isEmpty()) {
                         status = "Mask wajah gagal dibuat dari kontur. Coba foto dengan wajah lebih jelas."
@@ -1745,6 +1747,27 @@ private fun brushStrokesToJson(strokes: List<CutoutBrushStroke>): String {
         )
     }
     return array.toString()
+}
+
+private fun exifAwareImageSize(path: String): Pair<Int, Int> {
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, options)
+    val rawWidth = options.outWidth
+    val rawHeight = options.outHeight
+    if (rawWidth <= 0 || rawHeight <= 0) return 0 to 0
+    val orientation = runCatching {
+        ExifInterface(path).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_NORMAL
+        )
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    val rotated = orientation in setOf(
+        ExifInterface.ORIENTATION_ROTATE_90,
+        ExifInterface.ORIENTATION_ROTATE_270,
+        ExifInterface.ORIENTATION_TRANSPOSE,
+        ExifInterface.ORIENTATION_TRANSVERSE
+    )
+    return if (rotated) rawHeight to rawWidth else rawWidth to rawHeight
 }
 
 private fun buildFaceContourMaskStrokes(
