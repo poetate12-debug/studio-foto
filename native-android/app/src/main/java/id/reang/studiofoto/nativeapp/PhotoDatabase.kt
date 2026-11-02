@@ -6,6 +6,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+@Entity(tableName = "studio_assets", indices = [Index("kind")])
+data class StudioAssetEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val localPath: String,
+    val kind: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
 @Entity(tableName = "projects")
 data class ProjectEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -61,6 +69,11 @@ data class PhotoEntity(
 
 @Dao
 interface StudioDao {
+    @Query("SELECT * FROM studio_assets ORDER BY createdAt DESC")
+    fun observeAssets(): Flow<List<StudioAssetEntity>>
+    @Insert suspend fun insertAsset(asset: StudioAssetEntity): Long
+    @Query("DELETE FROM studio_assets WHERE id = :assetId")
+    suspend fun deleteAsset(assetId: Long)
     @Query("SELECT * FROM projects ORDER BY createdAt DESC")
     fun observeProjects(): Flow<List<ProjectEntity>>
     @Query("SELECT * FROM photos WHERE projectId = :projectId ORDER BY createdAt DESC")
@@ -73,7 +86,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class], version = 3, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 4, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -116,9 +129,15 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN backgroundY REAL NOT NULL DEFAULT 0")
             }
         }
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS studio_assets (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, localPath TEXT NOT NULL, kind TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_studio_assets_kind ON studio_assets(kind)")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { INSTANCE = it }
         }
     }
