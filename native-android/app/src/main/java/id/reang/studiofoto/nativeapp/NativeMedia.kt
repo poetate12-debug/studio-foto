@@ -89,10 +89,14 @@ object FalAiClient {
             check(completed) { "Waktu tunggu fal.ai habis. Periksa koneksi dan saldo, lalu coba lagi." }
         }
         val imageUrl = findImageUrl(result) ?: error("Model tidak mengembalikan gambar. Periksa endpoint dan izin model.")
-        val bytes = URL(imageUrl).openConnection().apply {
-            connectTimeout = 20000
-            readTimeout = 60000
-        }.getInputStream().use { it.readBytes() }
+        val bytes = if (imageUrl.startsWith("data:image/")) {
+            android.util.Base64.decode(imageUrl.substringAfter(",", ""), android.util.Base64.DEFAULT)
+        } else {
+            URL(imageUrl).openConnection().apply {
+                connectTimeout = 20000
+                readTimeout = 60000
+            }.getInputStream().use { it.readBytes() }
+        }
         check(bytes.isNotEmpty()) { "File hasil AI kosong." }
         val extension = if (bytes.size > 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte()) "png" else "jpg"
         val path = NativeFiles.writeBytes(context, bytes, "ai-results", extension)
@@ -198,7 +202,7 @@ object NativeImageEngine {
             if (photo.enhancedPath == null) {
                 val sat = photo.saturation.coerceIn(0f, 2f)
                 val inv = 1f - sat
-                val r = .213f * inv; val g = .715f * inv; val b = .072f * inv
+                val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
                 val contrast = photo.contrast.coerceIn(.5f, 1.8f)
                 val offset = photo.brightness.coerceIn(-.6f, .6f) * 255f
                 val warm = photo.warmth.coerceIn(-100f, 100f) * 0.55f
