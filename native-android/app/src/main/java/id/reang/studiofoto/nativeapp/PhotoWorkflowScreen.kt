@@ -410,11 +410,59 @@ fun PhotoWorkflowScreen(
                         WorkflowSlider("Highlights", edited.highlights, -100f..100f) { v -> change { it.copy(highlights = v) } }
                         WorkflowSlider("Shadows", edited.shadows, -100f..100f) { v -> change { it.copy(shadows = v) } }
                         WorkflowSlider("Blacks", edited.blacks, -100f..100f) { v -> change { it.copy(blacks = v) } }
+                        WorkflowSlider("Whites", edited.whites, -100f..100f) { v -> change { it.copy(whites = v) } }
                         WorkflowSlider("Dehaze", edited.dehaze, -100f..100f) { v -> change { it.copy(dehaze = v) } }
+                        Divider()
+                        Text("DETAIL", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Clarity", edited.clarity, -100f..100f) { v -> change { it.copy(clarity = v) } }
+                        WorkflowSlider("Texture", edited.texture, -100f..100f) { v -> change { it.copy(texture = v) } }
+                        WorkflowSlider("Sharpen", edited.sharpen, 0f..100f) { v -> change { it.copy(sharpen = v) } }
                         WorkflowSlider("Vibrance", edited.vibrance, -100f..100f) { v -> change { it.copy(vibrance = v) } }
                         WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> change { it.copy(vignette = v) } }
-                        TextButton(onClick = { change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, dehaze = 0f, clarity = 0f, vibrance = 0f, vignette = 0f) } }) { Text("Reset semua cahaya") }
+                        Divider()
+                        Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(colorNames.size) { i ->
+                                FilterChip(selected = selectedColor == colorNames[i], onClick = { selectedColor = colorNames[i] }, label = { Text(colorLabels[i]) })
+                            }
+                        }
+                        WorkflowSlider("Hue / Rona", colorValue("Hue"), -100f..100f) { updateColorValue("Hue", it) }
+                        WorkflowSlider("Saturation / Kepekatan", colorValue("Saturation"), -100f..100f) { updateColorValue("Saturation", it) }
+                        WorkflowSlider("Luminance / Kecerahan", colorValue("Luminance"), -100f..100f) { updateColorValue("Luminance", it) }
+                        TextButton(onClick = {
+                            val json = runCatching { JSONObject(edited.colorMixJson) }.getOrDefault(JSONObject())
+                            listOf("Hue", "Saturation", "Luminance").forEach { json.put(selectedColor + it, 0) }
+                            change { it.copy(colorMixJson = json.toString()) }
+                        }) { Text("Reset warna ${selectedColor}") }
+                        Divider()
+                        Text("KUAS LOKAL · ATUR AREA TERTENTU", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        Text("Aktifkan kuas, lalu sapukan area pada foto di atas. Ujung kuas dibuat lembut agar transisi tidak kasar.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(brushEnabled, { brushEnabled = !brushEnabled; brushStrokes = emptyList() }, label = { Text(if (brushEnabled) "Kuas aktif" else "Aktifkan kuas") })
+                            FilterChip(!brushErase, { brushErase = false }, label = { Text("Tambah area") })
+                            FilterChip(brushErase, { brushErase = true }, label = { Text("Kurangi area") })
+                        }
+                        WorkflowSlider("Ukuran kuas", brushSize * 100f, 1f..12f) { brushSize = it / 100f }
+                        WorkflowSlider("Exposure lokal", localExposure, -100f..100f) { localExposure = it }
+                        WorkflowSlider("Warmth lokal", localWarmth, -100f..100f) { localWarmth = it }
+                        WorkflowSlider("Saturation lokal", localSaturation, -100f..100f) { localSaturation = it }
+                        WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
+                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Button(onClick = {
+                                val base = edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.cutoutPath ?: edited.localPath
+                                if (base != null && brushStrokes.isNotEmpty()) scope.launch {
+                                    working = true
+                                    status = "Menerapkan penyesuaian lokal…"
+                                    runCatching { NativeImageEngine.applyLocalBrush(context, base, brushStrokes, localExposure, localWarmth, localSaturation, localTexture) }
+                                        .onSuccess { file -> change { it.copy(localAdjustmentPath = file) }; persist(); brushStrokes = emptyList(); brushEnabled = false; status = "Penyesuaian area tersimpan." }
+                                        .onFailure { status = it.message ?: "Penyesuaian area gagal." }
+                                    working = false
+                                }
+                            }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Terapkan kuas lokal") }
+                            OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan") }
+                        }
+                        if (edited.localAdjustmentPath != null) TextButton(onClick = { change { it.copy(localAdjustmentPath = null) }; persist(); status = "Penyesuaian lokal direset." }) { Text("Reset penyesuaian lokal") }
+                        TextButton(onClick = { change { it.copy(brightness = 0f, contrast = 1f, saturation = 1f, warmth = 0f, highlights = 0f, shadows = 0f, blacks = 0f, whites = 0f, dehaze = 0f, clarity = 0f, texture = 0f, sharpen = 0f, vibrance = 0f, vignette = 0f, colorMixJson = "{}", localAdjustmentPath = null) } }) { Text("Reset semua cahaya") }
                     }
                     1 -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -427,7 +475,6 @@ fun PhotoWorkflowScreen(
                         }
                         if (cutoutMode == "blur") WorkflowSlider("Kekuatan bokeh", blurStrength, 1f..30f) { blurStrength = it }
                         if (cutoutMode == "generate") OutlinedTextField(prompt, { prompt = it }, label = { Text("Deskripsi background") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                        OutlinedTextField(falApiKey, onFalApiKeyChange, label = { Text("API key fal.ai (sesi ini)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true)
                         Button(onClick = { runAi(cutoutMode) }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(if (working) "Memproses…" else "Jalankan " + cutoutMode) }
                         if (!edited.cutoutPath.isNullOrBlank()) {
                             Divider()
@@ -534,7 +581,6 @@ fun PhotoWorkflowScreen(
                             FilterChip(scale == 4, { scale = 4 }, label = { Text("4×") })
                         }
                         WorkflowSlider("Kekuatan enhance", edited.enhanceStrength.toFloat(), 0f..100f) { v -> change { it.copy(enhanceStrength = v.roundToInt()) } }
-                        OutlinedTextField(falApiKey, onFalApiKeyChange, label = { Text("API key fal.ai (sesi ini)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true)
                         Button(onClick = { runAi("enhance") }, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Tingkatkan objek") }
                         Divider()
                         OutlinedTextField(objectPrompt, { objectPrompt = it }, label = { Text("Objek yang ingin dihapus") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
