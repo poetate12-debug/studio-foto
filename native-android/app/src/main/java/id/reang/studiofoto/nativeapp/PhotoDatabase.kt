@@ -46,7 +46,17 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "''") val eventDate: String = "",
     @ColumnInfo(defaultValue = "'png'") val exportFormat: String = "png",
     @ColumnInfo(defaultValue = "'Natural'") val enhanceMode: String = "Natural",
-    @ColumnInfo(defaultValue = "50") val enhanceStrength: Int = 50
+    @ColumnInfo(defaultValue = "50") val enhanceStrength: Int = 50,
+    @ColumnInfo(defaultValue = "0") val highlights: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val shadows: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val blacks: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val dehaze: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val clarity: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val vibrance: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val vignette: Float = 0f,
+    @ColumnInfo(defaultValue = "1") val backgroundScale: Float = 1f,
+    @ColumnInfo(defaultValue = "0") val backgroundX: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val backgroundY: Float = 0f
 )
 
 @Dao
@@ -63,7 +73,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class], version = 2, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class], version = 3, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -92,9 +102,23 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN enhanceStrength INTEGER NOT NULL DEFAULT 50")
             }
         }
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN highlights REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN shadows REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN blacks REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN dehaze REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN clarity REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN vibrance REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN vignette REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN backgroundScale REAL NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE photos ADD COLUMN backgroundX REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN backgroundY REAL NOT NULL DEFAULT 0")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { INSTANCE = it }
         }
     }
