@@ -52,10 +52,10 @@ object NativeFiles {
             file.absolutePath
         }
 
-    suspend fun imageDataUri(path: String, maxSide: Int = 2400): String = withContext(Dispatchers.IO) {
+    suspend fun imageDataUri(path: String, maxSide: Int = 2400, forcePng: Boolean = false): String = withContext(Dispatchers.IO) {
         val bitmap = NativeImageEngine.decode(path, maxSide) ?: error("Foto tidak dapat dibaca.")
         val output = ByteArrayOutputStream()
-        val keepAlpha = bitmap.hasAlpha()
+        val keepAlpha = bitmap.hasAlpha() || forcePng
         val mime = if (keepAlpha) "image/png" else "image/jpeg"
         if (keepAlpha) bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
         else bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
