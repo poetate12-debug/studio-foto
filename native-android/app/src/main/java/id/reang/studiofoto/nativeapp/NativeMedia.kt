@@ -195,16 +195,17 @@ object NativeImageEngine {
             val top = (height - baseH) / 2f + photo.objectY * height / 100f
             val rect = RectF(left, top, left + baseW, top + baseH)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            if (photo.cutoutPath == null && photo.enhancedPath == null) {
+            if (photo.enhancedPath == null) {
                 val sat = photo.saturation.coerceIn(0f, 2f)
                 val inv = 1f - sat
                 val r = .213f * inv; val g = .715f * inv; val b = .072f * inv
                 val contrast = photo.contrast.coerceIn(.5f, 1.8f)
                 val offset = photo.brightness.coerceIn(-.6f, .6f) * 255f
+                val warm = photo.warmth.coerceIn(-100f, 100f) * 0.55f
                 paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
-                    contrast * (r + sat), contrast * g, contrast * b, 0f, offset,
+                    contrast * (r + sat), contrast * g, contrast * b, 0f, offset + warm,
                     contrast * r, contrast * (g + sat), contrast * b, 0f, offset,
-                    contrast * r, contrast * g, contrast * (b + sat), 0f, offset,
+                    contrast * r, contrast * g, contrast * (b + sat), 0f, offset - warm,
                     0f, 0f, 0f, 1f, 0f
                 )))
             }
