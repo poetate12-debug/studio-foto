@@ -8,7 +8,7 @@ Aplikasi Android ini dibangun dengan **Kotlin + Jetpack Compose**, AndroidX Room
 - Application ID: `id.reang.studiofoto.nativeapp`
 - Build type: signed release APK melalui GitHub Actions
 - Minimum Android: API 26
-- Versi aplikasi: 1.1.0-native-workflow (versionCode 6)
+- Versi aplikasi: 1.4.0-native-presets-review (versionCode 11)
 
 Workflow: `.github/workflows/native-android.yml`
 

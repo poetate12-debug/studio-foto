@@ -6,6 +6,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+@Entity(tableName = "light_presets", indices = [Index(value = ["name"], unique = true)])
+data class LightPresetEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val settingsJson: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "studio_assets", indices = [Index("kind")])
 data class StudioAssetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -70,11 +78,16 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "0") val texture: Float = 0f,
     @ColumnInfo(defaultValue = "0") val sharpen: Float = 0f,
     @ColumnInfo(defaultValue = "0") val whites: Float = 0f,
-    @ColumnInfo(defaultValue = "'Asli'") val lightPreset: String = "Asli"
+    @ColumnInfo(defaultValue = "'Asli'") val lightPreset: String = "Asli",
+    @ColumnInfo(defaultValue = "0") val isCompleted: Boolean = false
 )
 
 @Dao
 interface StudioDao {
+    @Query("SELECT * FROM light_presets ORDER BY createdAt DESC")
+    fun observeLightPresets(): Flow<List<LightPresetEntity>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveLightPreset(preset: LightPresetEntity)
     @Query("SELECT * FROM studio_assets ORDER BY createdAt DESC")
     fun observeAssets(): Flow<List<StudioAssetEntity>>
     @Insert suspend fun insertAsset(asset: StudioAssetEntity): Long
@@ -94,7 +107,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 6, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class, LightPresetEntity::class], version = 7, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -157,9 +170,16 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE photos ADD COLUMN lightPreset TEXT NOT NULL DEFAULT 'Asli'")
             }
         }
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN isCompleted INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS light_presets (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, settingsJson TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_light_presets_name ON light_presets(name)")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build().also { INSTANCE = it }
         }
     }

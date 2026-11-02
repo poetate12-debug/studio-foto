@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -55,6 +56,8 @@ fun PhotoWorkflowScreen(
     projectPhotos: List<PhotoEntity>,
     onSelectPhoto: (PhotoEntity) -> Unit,
     assets: List<StudioAssetEntity>,
+    lightPresets: List<LightPresetEntity>,
+    onSaveLightPreset: (String, String) -> Unit,
     falApiKey: String,
     onBack: () -> Unit,
     onSave: (PhotoEntity) -> Unit,
@@ -76,6 +79,9 @@ fun PhotoWorkflowScreen(
     var scale by rememberSaveable(photo.id) { mutableIntStateOf(2) }
     var objectPrompt by rememberSaveable(photo.id) { mutableStateOf("") }
     var showAssetManager by rememberSaveable(photo.id) { mutableStateOf(false) }
+    var presetMenuExpanded by rememberSaveable(photo.id) { mutableStateOf(false) }
+    var showSavePresetDialog by rememberSaveable(photo.id) { mutableStateOf(false) }
+    var newPresetName by rememberSaveable(photo.id) { mutableStateOf("") }
     var format by rememberSaveable(photo.id) { mutableStateOf(photo.exportFormat) }
     var dpi by rememberSaveable(photo.id) { mutableIntStateOf(photo.exportDpi) }
     var customWidth by rememberSaveable(photo.id) { mutableStateOf(photo.templateWidthCm.toString()) }
@@ -96,6 +102,8 @@ fun PhotoWorkflowScreen(
     val brushSourcePath = if (stage == 1) edited.cutoutPath else lightBrushBase
     val latestBrushStrokes by rememberUpdatedState(brushStrokes)
     val latestLightBrushBase by rememberUpdatedState(lightBrushBase)
+    val latestEditedPhoto by rememberUpdatedState(edited)
+    val latestStage by rememberUpdatedState(stage)
     val latestLocalExposure by rememberUpdatedState(localExposure)
     val latestLocalWarmth by rememberUpdatedState(localWarmth)
     val latestLocalSaturation by rememberUpdatedState(localSaturation)
@@ -178,6 +186,39 @@ fun PhotoWorkflowScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { showAssetManager = false }) { Text("Selesai") }
+            }
+        )
+    }
+
+    if (showSavePresetDialog) {
+        AlertDialog(
+            onDismissRequest = { showSavePresetDialog = false },
+            title = { Text("Buat preset cahaya") },
+            text = {
+                OutlinedTextField(
+                    value = newPresetName,
+                    onValueChange = { newPresetName = it.take(32) },
+                    singleLine = true,
+                    label = { Text("Nama preset") },
+                    placeholder = { Text("Contoh: Karnaval Cerah") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newPresetName.trim().isNotEmpty(),
+                    onClick = {
+                        val cleanName = newPresetName.trim()
+                        onSaveLightPreset(cleanName, lightSettingsJson(edited))
+                        edited = edited.copy(lightPreset = cleanName)
+                        onSave(edited)
+                        showSavePresetDialog = false
+                        newPresetName = ""
+                        status = "Preset $cleanName berhasil disimpan."
+                    }
+                ) { Text("Simpan preset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSavePresetDialog = false }) { Text("Batal") }
             }
         )
     }
@@ -384,7 +425,7 @@ fun PhotoWorkflowScreen(
             }
             if (brushPreview) {
                 Canvas(
-                    modifier = Modifier.fillMaxSize().pointerInput(brushErase, brushSize, brushAspect) {
+                    modifier = Modifier.fillMaxSize().pointerInput(stage, brushErase, brushSize, brushAspect, working, edited.cutoutPath) {
                         fun normalized(point: Offset): Pair<Float, Float>? {
                             val viewW = size.width.toFloat()
                             val viewH = size.height.toFloat()
@@ -404,25 +445,55 @@ fun PhotoWorkflowScreen(
                             if (point.x !in left..(left + contentW) || point.y !in top..(top + contentH)) return null
                             return ((point.x - left) / contentW) to ((point.y - top) / contentH)
                         }
-                        detectDragGestures(
+                        if (!working) detectDragGestures(
                             onDragEnd = {
                                 val strokesToSave = latestBrushStrokes
-                                val baseToEdit = latestLightBrushBase
-                                if (stage == 0 && baseToEdit != null && strokesToSave.isNotEmpty() && !working) {
+                                val stageToSave = latestStage
+                                val photoToSave = latestEditedPhoto
+                                if (strokesToSave.isNotEmpty()) {
                                     scope.launch {
                                         working = true
-                                        status = "Menyimpan perubahan kuas ke foto…"
-                                        runCatching {
-                                            NativeImageEngine.applyLocalBrush(
-                                                context, baseToEdit, strokesToSave,
-                                                latestLocalExposure, latestLocalWarmth,
-                                                latestLocalSaturation, latestLocalTexture
-                                            )
-                                        }.onSuccess { savedPath ->
-                                            change { it.copy(localAdjustmentPath = savedPath) }
-                                            persist()
+                                        status = "Menyimpan hasil kuas ke proyek…"
+                                        val saved = runCatching {
+                                            when (stageToSave) {
+                                                0 -> {
+                                                    val base = latestLightBrushBase
+                                                        ?: error("Foto dasar untuk kuas cahaya tidak ditemukan.")
+                                                    NativeImageEngine.applyLocalBrush(
+                                                        context, base, strokesToSave,
+                                                        latestLocalExposure, latestLocalWarmth,
+                                                        latestLocalSaturation, latestLocalTexture
+                                                    )
+                                                }
+                                                1 -> {
+                                                    val original = photoToSave.localPath
+                                                        ?: error("Foto asli tidak ditemukan.")
+                                                    val cutout = photoToSave.cutoutPath
+                                                        ?: error("Hasil cutout belum tersedia.")
+                                                    NativeImageEngine.applyCutoutBrush(context, original, cutout, strokesToSave)
+                                                }
+                                                else -> error("Kuas hanya tersedia pada tahap Cahaya dan Cutout.")
+                                            }
+                                        }
+                                        saved.onSuccess { savedPath ->
+                                            val updated = if (stageToSave == 0) {
+                                                photoToSave.copy(localAdjustmentPath = savedPath)
+                                            } else {
+                                                photoToSave.copy(
+                                                    cutoutPath = savedPath,
+                                                    enhancedPath = null,
+                                                    aiCompositePath = null,
+                                                    localAdjustmentPath = null
+                                                )
+                                            }
+                                            edited = updated
+                                            onSave(updated)
                                             brushStrokes = emptyList()
-                                            status = "Perubahan area kuas tersimpan permanen."
+                                            status = if (stageToSave == 0) {
+                                                "Kuas cahaya tersimpan permanen di proyek."
+                                            } else {
+                                                "Koreksi cutout tersimpan permanen di proyek."
+                                            }
                                         }.onFailure { error ->
                                             status = error.message ?: "Gagal menyimpan hasil kuas."
                                         }
@@ -488,6 +559,31 @@ fun PhotoWorkflowScreen(
                 Text(if (showBefore) "BEFORE · FOTO ASLI" else edited.name, color = Color.White, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), maxLines = 1)
             }
         }
+        Button(
+            onClick = {
+                val completedPhoto = edited.copy(isCompleted = true)
+                edited = completedPhoto
+                onSave(completedPhoto)
+                val currentIndex = projectPhotos.indexOfFirst { it.id == photo.id }
+                val nextPhoto = if (currentIndex >= 0) {
+                    projectPhotos.drop(currentIndex + 1).firstOrNull { !it.isCompleted }
+                        ?: projectPhotos.take(currentIndex).firstOrNull { !it.isCompleted }
+                } else {
+                    projectPhotos.firstOrNull { !it.isCompleted && it.id != photo.id }
+                }
+                if (nextPhoto != null) {
+                    onSelectPhoto(nextPhoto)
+                } else {
+                    status = "Foto ini selesai. Semua foto lain sudah ditandai selesai."
+                }
+            },
+            enabled = !working,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+        ) {
+            Icon(Icons.Default.CheckCircle, contentDescription = null)
+            Spacer(Modifier.width(7.dp))
+            Text("Tandai selesai · lanjut foto berikutnya")
+        }
         Surface(color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), modifier = Modifier.fillMaxWidth().weight(1.25f)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 12.dp)) {
                 Text(listOf("Cahaya", "Cutout", "Template", "Enhance", "Export")[stage], color = Color(0xFF1E293B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
@@ -495,42 +591,86 @@ fun PhotoWorkflowScreen(
                 when (stage) {
                     0 -> {
                         Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            items(BUILT_IN_LIGHT_PRESETS) { preset ->
-                                FilterChip(
-                                    selected = edited.lightPreset == preset,
-                                    onClick = {
-                                        change { applyBuiltInLightPreset(it, preset) }
-                                        persist()
-                                        status = "Preset $preset diterapkan."
-                                    },
-                                    label = { Text(preset) }
-                                )
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { presetMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Preset: ${edited.lightPreset}", modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Pilih preset")
+                            }
+                            DropdownMenu(
+                                expanded = presetMenuExpanded,
+                                onDismissRequest = { presetMenuExpanded = false },
+                                modifier = Modifier.heightIn(max = 420.dp)
+                            ) {
+                                BUILT_IN_LIGHT_PRESETS.forEach { preset ->
+                                    DropdownMenuItem(
+                                        text = { Text(preset) },
+                                        onClick = {
+                                            change { applyBuiltInLightPreset(it, preset) }
+                                            persist()
+                                            presetMenuExpanded = false
+                                            status = "Preset $preset diterapkan."
+                                        },
+                                        trailingIcon = if (edited.lightPreset == preset) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF249B62)) }
+                                        } else null
+                                    )
+                                }
+                                if (lightPresets.isNotEmpty()) {
+                                    Divider()
+                                    lightPresets.forEach { preset ->
+                                        DropdownMenuItem(
+                                            text = { Text("★ ${preset.name}") },
+                                            onClick = {
+                                                change { applyCustomLightPreset(it, preset) }
+                                                persist()
+                                                presetMenuExpanded = false
+                                                status = "Preset pribadi ${preset.name} diterapkan."
+                                            },
+                                            trailingIcon = if (edited.lightPreset == preset.name) {
+                                                { Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF249B62)) }
+                                            } else null
+                                        )
+                                    }
+                                }
                             }
                         }
-                        Text(
-                            if (edited.lightPreset == "Kustom") "Preset: Kustom · pengaturan manual" else "Preset aktif: ${edited.lightPreset}",
-                            color = Color(0xFF64748B),
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                if (edited.lightPreset == "Kustom") "Pengaturan manual" else "Preset aktif: ${edited.lightPreset}",
+                                color = Color(0xFF64748B),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(onClick = { newPresetName = ""; showSavePresetDialog = true }) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Text("Buat preset")
+                            }
+                        }
                         WorkflowSlider("Brightness", edited.brightness, -0.5f..0.5f) { v -> changeLight { it.copy(brightness = v) } }
-                        WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f, resetValue = 1f) { v -> change { it.copy(contrast = v) } }
-                        WorkflowSlider("Saturation", edited.saturation, 0f..2f, resetValue = 1f) { v -> change { it.copy(saturation = v) } }
-                        WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> change { it.copy(warmth = v) } }
+                        WorkflowSlider("Contrast", edited.contrast, 0.5f..1.8f, resetValue = 1f) { v -> changeLight { it.copy(contrast = v) } }
+                        WorkflowSlider("Saturation", edited.saturation, 0f..2f, resetValue = 1f) { v -> changeLight { it.copy(saturation = v) } }
+                        WorkflowSlider("Warmth", edited.warmth, -100f..100f) { v -> changeLight { it.copy(warmth = v) } }
                         Divider()
                         Text("TONE & DETAIL", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        WorkflowSlider("Highlights", edited.highlights, -100f..100f) { v -> change { it.copy(highlights = v) } }
-                        WorkflowSlider("Shadows", edited.shadows, -100f..100f) { v -> change { it.copy(shadows = v) } }
-                        WorkflowSlider("Blacks", edited.blacks, -100f..100f) { v -> change { it.copy(blacks = v) } }
-                        WorkflowSlider("Whites", edited.whites, -100f..100f) { v -> change { it.copy(whites = v) } }
-                        WorkflowSlider("Dehaze", edited.dehaze, -100f..100f) { v -> change { it.copy(dehaze = v) } }
+                        WorkflowSlider("Highlights", edited.highlights, -100f..100f) { v -> changeLight { it.copy(highlights = v) } }
+                        WorkflowSlider("Shadows", edited.shadows, -100f..100f) { v -> changeLight { it.copy(shadows = v) } }
+                        WorkflowSlider("Blacks", edited.blacks, -100f..100f) { v -> changeLight { it.copy(blacks = v) } }
+                        WorkflowSlider("Whites", edited.whites, -100f..100f) { v -> changeLight { it.copy(whites = v) } }
+                        WorkflowSlider("Dehaze", edited.dehaze, -100f..100f) { v -> changeLight { it.copy(dehaze = v) } }
                         Divider()
                         Text("DETAIL", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        WorkflowSlider("Clarity", edited.clarity, -100f..100f) { v -> change { it.copy(clarity = v) } }
-                        WorkflowSlider("Texture", edited.texture, -100f..100f) { v -> change { it.copy(texture = v) } }
-                        WorkflowSlider("Sharpen", edited.sharpen, 0f..100f) { v -> change { it.copy(sharpen = v) } }
-                        WorkflowSlider("Vibrance", edited.vibrance, -100f..100f) { v -> change { it.copy(vibrance = v) } }
-                        WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> change { it.copy(vignette = v) } }
+                        WorkflowSlider("Clarity", edited.clarity, -100f..100f) { v -> changeLight { it.copy(clarity = v) } }
+                        WorkflowSlider("Texture", edited.texture, -100f..100f) { v -> changeLight { it.copy(texture = v) } }
+                        WorkflowSlider("Sharpen", edited.sharpen, 0f..100f) { v -> changeLight { it.copy(sharpen = v) } }
+                        WorkflowSlider("Vibrance", edited.vibrance, -100f..100f) { v -> changeLight { it.copy(vibrance = v) } }
+                        WorkflowSlider("Vignette", edited.vignette, 0f..100f) { v -> changeLight { it.copy(vignette = v) } }
                         Divider()
                         Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -544,7 +684,7 @@ fun PhotoWorkflowScreen(
                         TextButton(onClick = {
                             val json = runCatching { JSONObject(edited.colorMixJson) }.getOrDefault(JSONObject())
                             listOf("Hue", "Saturation", "Luminance").forEach { json.put(selectedColor + it, 0) }
-                            change { it.copy(colorMixJson = json.toString()) }
+                            changeLight { it.copy(colorMixJson = json.toString()) }
                         }) { Text("Reset warna ${selectedColor}") }
                         Divider()
                         Text("KUAS LOKAL · ATUR AREA TERTENTU", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
@@ -617,7 +757,7 @@ fun PhotoWorkflowScreen(
                                             working = false
                                         }
                                     }
-                                }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Terapkan kuas") }
+                                }, enabled = !working && brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Simpan kuas sekarang") }
                                 OutlinedButton(onClick = { brushStrokes = emptyList() }, enabled = brushStrokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Bersihkan coretan") }
                             }
                         }
@@ -744,12 +884,20 @@ fun PhotoWorkflowScreen(
                             border = if (item.id == photo.id) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFF07824)) else null,
                             modifier = Modifier.width(57.dp).fillMaxHeight()
                         ) {
-                            AsyncImage(
-                                model = item.localPath?.let { File(it) } ?: item.uri,
-                                contentDescription = item.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Box(Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = item.localPath?.let { File(it) } ?: item.uri,
+                                    contentDescription = item.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Surface(
+                                    color = if (item.isCompleted) Color(0xFF16A34A) else Color(0xFFF59E0B),
+                                    shape = CircleShape,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(11.dp)
+                                ) {}
+                            }
                         }
                     }
                 }
@@ -783,6 +931,46 @@ fun PhotoWorkflowScreen(
             }
         }
     }
+}
+
+private fun lightSettingsJson(photo: PhotoEntity): String = JSONObject()
+    .put("brightness", photo.brightness)
+    .put("contrast", photo.contrast)
+    .put("saturation", photo.saturation)
+    .put("warmth", photo.warmth)
+    .put("highlights", photo.highlights)
+    .put("shadows", photo.shadows)
+    .put("blacks", photo.blacks)
+    .put("whites", photo.whites)
+    .put("dehaze", photo.dehaze)
+    .put("clarity", photo.clarity)
+    .put("texture", photo.texture)
+    .put("sharpen", photo.sharpen)
+    .put("vibrance", photo.vibrance)
+    .put("vignette", photo.vignette)
+    .put("colorMixJson", photo.colorMixJson)
+    .toString()
+
+private fun applyCustomLightPreset(photo: PhotoEntity, preset: LightPresetEntity): PhotoEntity {
+    val settings = JSONObject(preset.settingsJson)
+    return photo.copy(
+        brightness = settings.optDouble("brightness", 0.0).toFloat(),
+        contrast = settings.optDouble("contrast", 1.0).toFloat(),
+        saturation = settings.optDouble("saturation", 1.0).toFloat(),
+        warmth = settings.optDouble("warmth", 0.0).toFloat(),
+        highlights = settings.optDouble("highlights", 0.0).toFloat(),
+        shadows = settings.optDouble("shadows", 0.0).toFloat(),
+        blacks = settings.optDouble("blacks", 0.0).toFloat(),
+        whites = settings.optDouble("whites", 0.0).toFloat(),
+        dehaze = settings.optDouble("dehaze", 0.0).toFloat(),
+        clarity = settings.optDouble("clarity", 0.0).toFloat(),
+        texture = settings.optDouble("texture", 0.0).toFloat(),
+        sharpen = settings.optDouble("sharpen", 0.0).toFloat(),
+        vibrance = settings.optDouble("vibrance", 0.0).toFloat(),
+        vignette = settings.optDouble("vignette", 0.0).toFloat(),
+        colorMixJson = settings.optString("colorMixJson", "{}"),
+        lightPreset = preset.name
+    )
 }
 
 private val BUILT_IN_LIGHT_PRESETS = listOf(

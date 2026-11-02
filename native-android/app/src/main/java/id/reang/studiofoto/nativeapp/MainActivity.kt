@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
 private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
     val projects by vm.projects.collectAsState(initial = emptyList())
     val assets by vm.assets.collectAsState(initial = emptyList())
+    val lightPresets by vm.lightPresets.collectAsState(initial = emptyList())
     var activeProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var activePhoto by remember { mutableStateOf<PhotoEntity?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -125,6 +126,8 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
                 projectPhotos = activeProjectPhotos,
                 onSelectPhoto = { selected -> activePhoto = selected },
                 assets = assets,
+                lightPresets = lightPresets,
+                onSaveLightPreset = { name, settings -> vm.saveLightPreset(name, settings) },
                 falApiKey = falApiKey,
                 onBack = { activePhoto = null },
                 onSave = { updated ->

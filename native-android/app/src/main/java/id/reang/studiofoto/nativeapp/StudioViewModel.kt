@@ -15,6 +15,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     private val dao = PhotoDatabase.get(application).studioDao()
     val projects = dao.observeProjects()
     val assets = dao.observeAssets()
+    val lightPresets = dao.observeLightPresets()
     private val copyingIds = ConcurrentHashMap.newKeySet<Long>()
 
     suspend fun ensureStarterProject() {
@@ -71,6 +72,15 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteAsset(assetId: Long) {
         viewModelScope.launch { dao.deleteAsset(assetId) }
+    }
+
+    fun saveLightPreset(name: String, settingsJson: String) {
+        val cleanName = name.trim().take(32)
+        if (cleanName.isNotEmpty()) {
+            viewModelScope.launch {
+                dao.saveLightPreset(LightPresetEntity(name = cleanName, settingsJson = settingsJson))
+            }
+        }
     }
 
     fun ensureLocalCopies(photos: List<PhotoEntity>) {

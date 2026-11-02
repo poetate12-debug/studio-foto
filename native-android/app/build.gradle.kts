@@ -11,8 +11,8 @@ android {
         applicationId = "id.reang.studiofoto.nativeapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3.0-native-presets-brush"
+        versionCode = 11
+        versionName = "1.4.0-native-presets-review"
     }
     signingConfigs {
         create("release") {
