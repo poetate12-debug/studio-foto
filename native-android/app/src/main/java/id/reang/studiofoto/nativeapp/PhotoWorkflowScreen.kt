@@ -192,11 +192,11 @@ fun PhotoWorkflowScreen(
                         if (cutoutModel == "birefnet") input.put("model", "Portrait").put("operating_resolution", "2048x2048").put("refine_foreground", true).put("output_format", "png")
                         val result = FalAiClient.run(context, model, input, key) { status = it }
                         if (action == "cutout") {
-                            change { it.copy(cutoutPath = result.localPath, enhancedPath = null, aiCompositePath = null) }
+                            change { it.copy(cutoutPath = result.localPath, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
                             status = "Cutout berhasil. File transparan tersimpan."
                         } else {
                             val blurred = NativeImageEngine.makeBokeh(context, source, result.localPath, blurStrength.roundToInt())
-                            change { it.copy(aiCompositePath = blurred, cutoutPath = result.localPath, enhancedPath = null) }
+                            change { it.copy(aiCompositePath = blurred, cutoutPath = result.localPath, enhancedPath = null, localAdjustmentPath = null) }
                             status = "Efek bokeh berhasil dibuat."
                         }
                         persist()
@@ -219,7 +219,7 @@ fun PhotoWorkflowScreen(
                             .put("num_images", 1).put("aspect_ratio", ratio)
                         val bg = FalAiClient.run(context, "fal-ai/bria/text-to-image/base", bgInput, key) { status = it }
                         onRegisterAsset("Background AI", bg.localPath, "background")
-                        change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null) }
+                        change { it.copy(backgroundPath = bg.localPath, cutoutPath = cutout.localPath, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
                         persist()
                         status = "Background selesai. Objek asli tetap terpisah agar wajah tidak digambar ulang; atur posisinya di tahap Template."
                     }
@@ -256,7 +256,7 @@ fun PhotoWorkflowScreen(
                         }
                         val result = FalAiClient.run(context, model, input, key) { status = it }
                         val merged = NativeImageEngine.mergeEnhancement(context, subject, result.localPath, edited.enhanceStrength)
-                        change { it.copy(enhancedPath = merged, aiCompositePath = null) }
+                        change { it.copy(enhancedPath = merged, aiCompositePath = null, localAdjustmentPath = null) }
                         persist()
                         status = "Enhance selesai dengan kekuatan " + edited.enhanceStrength + "%."
                     }
@@ -265,7 +265,7 @@ fun PhotoWorkflowScreen(
                         val input = JSONObject().put("image_url", NativeFiles.imageDataUri(source))
                             .put("prompt", objectPrompt).put("model", "high_quality").put("mask_expansion", 15)
                         val result = FalAiClient.run(context, "fal-ai/object-removal", input, key) { status = it }
-                        change { it.copy(aiCompositePath = result.localPath, enhancedPath = null) }
+                        change { it.copy(aiCompositePath = result.localPath, enhancedPath = null, localAdjustmentPath = null) }
                         persist()
                         status = "Penghapusan objek selesai. Periksa hasil."
                     }
@@ -496,7 +496,7 @@ fun PhotoWorkflowScreen(
                                             status = "Menerapkan koreksi kuas…"
                                             runCatching { NativeImageEngine.applyCutoutBrush(context, source, cutout, brushStrokes) }
                                                 .onSuccess { file ->
-                                                    change { it.copy(cutoutPath = file, enhancedPath = null, aiCompositePath = null) }
+                                                    change { it.copy(cutoutPath = file, enhancedPath = null, aiCompositePath = null, localAdjustmentPath = null) }
                                                     persist()
                                                     brushStrokes = emptyList()
                                                     status = "Koreksi kuas tersimpan."
