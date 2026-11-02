@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
@@ -105,9 +106,14 @@ fun PhotoWorkflowScreen(
     var localWarmth by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushWarmth) }
     var localSaturation by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushSaturation) }
     var localTexture by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushTexture) }
+    var localRedReduction by rememberSaveable(photo.id) { mutableFloatStateOf(photo.localBrushRedReduction) }
     var selectedColor by rememberSaveable(photo.id) { mutableStateOf("orange") }
     val colorNames = listOf("red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta")
     val colorLabels = listOf("Merah", "Oranye", "Kuning", "Hijau", "Aqua", "Biru", "Ungu", "Magenta")
+    val colorSwatches = listOf(
+        Color(0xFFE53935), Color(0xFFF57C22), Color(0xFFFBC02D), Color(0xFF43A047),
+        Color(0xFF00ACC1), Color(0xFF1E88E5), Color(0xFF8E5BC7), Color(0xFFD64A9B)
+    )
     val lightBrushBase = edited.localBrushBasePath ?: edited.localAdjustmentPath ?: edited.enhancedPath ?: edited.localPath
     val brushSourcePath = if (stage == 1) (edited.cutoutBrushBasePath ?: edited.cutoutPath) else lightBrushBase
     val zoomModifier = Modifier.graphicsLayer {
@@ -126,6 +132,7 @@ fun PhotoWorkflowScreen(
     val latestLocalWarmth by rememberUpdatedState(localWarmth)
     val latestLocalSaturation by rememberUpdatedState(localSaturation)
     val latestLocalTexture by rememberUpdatedState(localTexture)
+    val latestLocalRedReduction by rememberUpdatedState(localRedReduction)
     val brushAspect = remember(stage, lightBrushBase, edited.cutoutPath) {
         NativeImageEngine.imageAspect(brushSourcePath)
     }
@@ -154,7 +161,7 @@ fun PhotoWorkflowScreen(
 
     var previewBitmap by remember(photo.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(
-        stage, brushEnabled, brushStrokes, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture,
+        stage, brushEnabled, brushStrokes, savedLocalBrushStrokes, localExposure, localWarmth, localSaturation, localTexture, localRedReduction,
         edited.localPath, edited.cutoutPath, edited.enhancedPath, edited.aiCompositePath, edited.localAdjustmentPath,
         edited.lightcraftPhotoId, edited.lightcraftRenderedPath,
         edited.backgroundPath, edited.overlayPath, edited.logoPath, edited.brightness,
@@ -173,13 +180,13 @@ fun PhotoWorkflowScreen(
                 if (stage == 0) {
                     val developed = LightCraftDevelopEngine.renderPreview(context, edited, 1600)
                     val history = savedLocalBrushStrokes + brushStrokes
-                    val display = if (brushEnabled && history.isNotEmpty()) {
+                    val display = if (history.isNotEmpty()) {
                         val basePath = LightCraftDevelopEngine.writePreview(context, developed.bitmap, developed.photoId)
                         try {
                             NativeImageEngine.previewLocalBrush(
                                 context, basePath, history,
                                 localExposure, localWarmth, localSaturation, localTexture,
-                                LightCraftDevelopEngine.neutralPhoto(edited)
+                                LightCraftDevelopEngine.neutralPhoto(edited), localRedReduction
                             )
                         } finally {
                             developed.bitmap.recycle()
@@ -305,7 +312,7 @@ fun PhotoWorkflowScreen(
         val finalPath = if (strokes.isNotEmpty()) {
             NativeImageEngine.applyLocalBrush(
                 context, developed.path, strokes,
-                localExposure, localWarmth, localSaturation, localTexture
+                localExposure, localWarmth, localSaturation, localTexture, localRedReduction
             )
         } else developed.path
         return sourcePhoto.copy(
@@ -314,7 +321,8 @@ fun PhotoWorkflowScreen(
             localBrushExposure = localExposure,
             localBrushWarmth = localWarmth,
             localBrushSaturation = localSaturation,
-            localBrushTexture = localTexture
+            localBrushTexture = localTexture,
+            localBrushRedReduction = localRedReduction
         )
     }
 
@@ -557,7 +565,8 @@ fun PhotoWorkflowScreen(
                                                     NativeImageEngine.applyLocalBrush(
                                                         context, developed.path, history,
                                                         latestLocalExposure, latestLocalWarmth,
-                                                        latestLocalSaturation, latestLocalTexture
+                                                        latestLocalSaturation, latestLocalTexture,
+                                                        latestLocalRedReduction
                                                     ) to history
                                                 }
                                                 1 -> {
@@ -580,6 +589,7 @@ fun PhotoWorkflowScreen(
                                                     localBrushWarmth = latestLocalWarmth,
                                                     localBrushSaturation = latestLocalSaturation,
                                                     localBrushTexture = latestLocalTexture,
+                                                    localBrushRedReduction = latestLocalRedReduction,
                                                     lightcraftPhotoId = generatedLightCraftId,
                                                     lightcraftRenderedPath = savedPath
                                                 )
@@ -707,10 +717,57 @@ fun PhotoWorkflowScreen(
                 Spacer(Modifier.height(10.dp))
                 when (stage) {
                     0 -> {
-                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilterChip(selected = lightPanel == "cahaya", onClick = { lightPanel = "cahaya"; brushEnabled = false }, modifier = Modifier.weight(1f), label = { Text("Cahaya") })
-                            FilterChip(selected = lightPanel == "warna", onClick = { lightPanel = "warna"; brushEnabled = false }, modifier = Modifier.weight(1f), label = { Text("Warna") })
-                            FilterChip(selected = lightPanel == "kuas", onClick = { lightPanel = "kuas" }, modifier = Modifier.weight(1f), label = { Text("Kuas") })
+                        val activePanelIcon = when (lightPanel) {
+                            "warna" -> Icons.Default.Palette
+                            "kuas" -> Icons.Default.Brush
+                            else -> Icons.Default.WbSunny
+                        }
+                        val activePanelTitle = when (lightPanel) {
+                            "warna" -> "Color Lab"
+                            "kuas" -> "Selective Brush"
+                            else -> "LightCraft Develop"
+                        }
+                        val activePanelSubtitle = when (lightPanel) {
+                            "warna" -> "Pilih rentang warna dan atur karakter warnanya."
+                            "kuas" -> "Koreksi lokal dengan mask yang tetap tersimpan."
+                            else -> "Kontrol cahaya presisi dengan pratinjau langsung."
+                        }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFF5F6FB),
+                            shape = RoundedCornerShape(19.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E8F1)),
+                            shadowElevation = 1.dp
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(13.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(44.dp).clip(RoundedCornerShape(14.dp))
+                                        .background(Brush.linearGradient(listOf(Color(0xFF514A9A), Color(0xFF26859A)))),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(activePanelIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(23.dp))
+                                }
+                                Spacer(Modifier.width(11.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(activePanelTitle, color = Color(0xFF202743), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                    Text(activePanelSubtitle, color = Color(0xFF758098), style = MaterialTheme.typography.labelSmall)
+                                }
+                                Surface(color = Color.White, shape = CircleShape, border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0E4EF))) {
+                                    Text("LIVE", color = Color(0xFF299B78), modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(9.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFFEAEDF5)).padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            PremiumEditorTab("Cahaya", Icons.Default.WbSunny, lightPanel == "cahaya", Modifier.weight(1f)) { lightPanel = "cahaya"; brushEnabled = false }
+                            PremiumEditorTab("Warna", Icons.Default.Palette, lightPanel == "warna", Modifier.weight(1f)) { lightPanel = "warna"; brushEnabled = false }
+                            PremiumEditorTab("Kuas", Icons.Default.Brush, lightPanel == "kuas", Modifier.weight(1f)) { lightPanel = "kuas" }
                         }
                         when (lightPanel) {
                             "cahaya" -> {
@@ -797,9 +854,27 @@ Text("PRESET CAHAYA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, s
                             }
                             "warna" -> {
 Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                             items(colorNames.size) { i ->
-                                FilterChip(selected = selectedColor == colorNames[i], onClick = { selectedColor = colorNames[i] }, label = { Text(colorLabels[i]) })
+                                val selected = selectedColor == colorNames[i]
+                                Surface(
+                                    onClick = { selectedColor = colorNames[i] },
+                                    modifier = Modifier.size(42.dp),
+                                    shape = CircleShape,
+                                    color = Color.White,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (selected) 2.5.dp else 1.dp,
+                                        if (selected) Color(0xFF5C55B8) else Color(0xFFD9DFEA)
+                                    ),
+                                    shadowElevation = if (selected) 3.dp else 0.dp
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxSize().padding(5.dp).clip(CircleShape).background(colorSwatches[i]),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                                    }
+                                }
                             }
                         }
                         WorkflowSlider("Hue / Rona", colorValue("Hue"), -100f..100f) { updateColorValue("Hue", it) }
@@ -809,7 +884,7 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                             val json = runCatching { JSONObject(edited.colorMixJson) }.getOrDefault(JSONObject())
                             listOf("Hue", "Saturation", "Luminance").forEach { json.put(selectedColor + it, 0) }
                             changeLight { it.copy(colorMixJson = json.toString()) }
-                        }) { Text("Reset warna ${selectedColor}") }
+                        }) { Text("Reset warna terpilih") }
                         Divider()
                                                     }
                             else -> {
@@ -826,6 +901,8 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                         WorkflowSlider("Exposure lokal", localExposure, -100f..100f) { localExposure = it }
                         WorkflowSlider("Warmth lokal", localWarmth, -100f..100f) { localWarmth = it }
                         WorkflowSlider("Saturation lokal", localSaturation, -100f..100f) { localSaturation = it }
+                        WorkflowSlider("Reduksi merah wajah", localRedReduction, 0f..100f, resetValue = 0f) { localRedReduction = it }
+                        Text("Mengurangi kejenuhan merah dan oranye hanya pada area yang disapu. Gunakan perlahan agar warna kulit tetap alami.", color = Color(0xFF64748B), style = MaterialTheme.typography.labelSmall)
                         WorkflowSlider("Texture lokal", localTexture, -100f..100f) { localTexture = it }
                         if (savedLocalBrushStrokes.isNotEmpty()) {
                             Button(
@@ -839,7 +916,8 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                             val developed = LightCraftDevelopEngine.exportDeveloped(context, edited)
                                             val path = NativeImageEngine.applyLocalBrush(
                                                 context, developed.path, savedLocalBrushStrokes,
-                                                localExposure, localWarmth, localSaturation, localTexture
+                                                localExposure, localWarmth, localSaturation, localTexture,
+                                                localRedReduction
                                             )
                                             developed to path
                                         }.onSuccess { (developed, path) ->
@@ -851,7 +929,8 @@ Text("COLOR MIXER · PENGATURAN PER WARNA", color = Color(0xFFF07824), fontWeigh
                                                 localBrushExposure = localExposure,
                                                 localBrushWarmth = localWarmth,
                                                 localBrushSaturation = localSaturation,
-                                                localBrushTexture = localTexture
+                                                localBrushTexture = localTexture,
+                                                localBrushRedReduction = localRedReduction
                                             )
                                             edited = updated
                                             onSave(updated)
@@ -1216,6 +1295,33 @@ private fun applyBuiltInLightPreset(photo: PhotoEntity, name: String): PhotoEnti
             vibrance = 0f, vignette = 12f
         )
         else -> base
+    }
+}
+
+@Composable
+private fun PremiumEditorTab(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(44.dp),
+        color = if (selected) Color(0xFF292B50) else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = if (selected) 3.dp else 0.dp
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = if (selected) Color.White else Color(0xFF79839A), modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = if (selected) Color.White else Color(0xFF657089), style = MaterialTheme.typography.labelMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        }
     }
 }
 
