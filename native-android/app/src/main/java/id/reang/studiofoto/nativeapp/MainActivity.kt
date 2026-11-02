@@ -112,7 +112,14 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
             onSave = { updated ->
                 vm.savePhoto(updated)
                 activePhoto = updated
-                scope.launch { snackbar.showSnackbar("Perubahan foto tersimpan.") }
+            },
+            onExportAll = {
+                val projectId = activeProject?.id
+                if (projectId != null) {
+                    vm.exportAll(projectId) { saved, total ->
+                        scope.launch { snackbar.showSnackbar("Ekspor selesai: $saved dari $total foto.") }
+                    }
+                }
             }
         )
         return
