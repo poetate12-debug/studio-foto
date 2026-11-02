@@ -6,7 +6,7 @@ plugins {
 }
 android {
     namespace = "id.reang.studiofoto.nativeapp"
-    compileSdk = 37
+    compileSdk = 35
     defaultConfig {
         applicationId = "id.reang.studiofoto.nativeapp"
         minSdk = 29

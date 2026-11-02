@@ -435,7 +435,7 @@ object NativeImageEngine {
             }
         }
 
-        val sourcePath = photo.cutoutPath ?: photo.enhancedPath ?: photo.lightcraftRenderedPath ?: photo.localAdjustmentPath ?: photo.localPath
+        val sourcePath = photo.enhancedPath ?: photo.cutoutPath ?: photo.lightcraftRenderedPath ?: photo.localAdjustmentPath ?: photo.localPath
         val subject = if (photo.aiCompositePath == null) decode(sourcePath, max(width, height)) else null
         if (subject != null) {
             val baseW = width * 0.82f * photo.objectScale.coerceIn(0.2f, 2.5f)
