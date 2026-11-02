@@ -28,6 +28,21 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         if (clean.isNotEmpty()) viewModelScope.launch { dao.insertProject(ProjectEntity(name = clean)) }
     }
 
+    fun deletePhoto(photo: PhotoEntity) {
+        viewModelScope.launch {
+            NativeFiles.deletePrivatePhotoFiles(photo)
+            dao.deletePhoto(photo.id)
+        }
+    }
+
+    fun deleteProject(projectId: Long) {
+        viewModelScope.launch {
+            val photos = dao.observePhotos(projectId).first()
+            photos.forEach { NativeFiles.deletePrivatePhotoFiles(it) }
+            dao.deleteProject(projectId)
+        }
+    }
+
     fun addPhotos(projectId: Long, items: List<ImportedPhoto>) {
         viewModelScope.launch {
             items.forEach { item ->
