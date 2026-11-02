@@ -192,7 +192,22 @@ object NativeImageEngine {
         if (path.isNullOrBlank()) return 1f
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, options)
-        return if (options.outWidth > 0 && options.outHeight > 0) options.outWidth.toFloat() / options.outHeight.toFloat() else 1f
+        if (options.outWidth <= 0 || options.outHeight <= 0) return 1f
+        val rotated = runCatching {
+            val orientation = ExifInterface(path).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            orientation in setOf(
+                ExifInterface.ORIENTATION_ROTATE_90,
+                ExifInterface.ORIENTATION_ROTATE_270,
+                ExifInterface.ORIENTATION_TRANSPOSE,
+                ExifInterface.ORIENTATION_TRANSVERSE
+            )
+        }.getOrDefault(false)
+        val width = if (rotated) options.outHeight else options.outWidth
+        val height = if (rotated) options.outWidth else options.outHeight
+        return width.toFloat() / height.toFloat()
     }
 
     suspend fun applyCutoutBrush(
