@@ -137,7 +137,8 @@ private fun ReangStudioApp(vm: StudioViewModel = viewModel()) {
             photos = photos,
             onBack = { activeProject = null },
             onImport = { importPhotos.launch(arrayOf("image/*")) },
-            onPhotoClick = { activePhoto = it }
+            onPhotoClick = { activePhoto = it },
+            onDeletePhoto = { vm.deletePhoto(it) }
         )
         return
     }
@@ -431,8 +432,10 @@ private fun QuickTile(
 private fun ProjectsScreen(
     projects: List<ProjectEntity>,
     onNewProject: () -> Unit,
-    onOpenProject: (ProjectEntity) -> Unit
+    onOpenProject: (ProjectEntity) -> Unit,
+    onDeleteProject: (ProjectEntity) -> Unit
 ) {
+    var pendingDelete by remember { mutableStateOf<ProjectEntity?>(null) }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -459,15 +462,27 @@ private fun ProjectsScreen(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                 items(projects, key = { it.id }) { project ->
-                    ProjectRow(project = project, onClick = { onOpenProject(project) }, large = true)
+                    ProjectRow(project = project, onClick = { onOpenProject(project) }, large = true, onDelete = { pendingDelete = project })
                 }
             }
         }
     }
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Hapus proyek?") },
+            text = { Text("Proyek “${target.name}” dan seluruh foto serta hasil edit privatnya akan dihapus dari perangkat.") },
+            confirmButton = {
+                TextButton(onClick = { onDeleteProject(target); pendingDelete = null }) { Text("Hapus", color = Color(0xFFFF8D8D)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Batal") }
+            }
+        )
+    }
 }
 
 @Composable
-private fun ProjectRow(project: ProjectEntity, onClick: () -> Unit, large: Boolean = false) {
+private fun ProjectRow(project: ProjectEntity, onClick: () -> Unit, large: Boolean = false, onDelete: (() -> Unit)? = null) {
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = Panel),
@@ -487,6 +502,9 @@ private fun ProjectRow(project: ProjectEntity, onClick: () -> Unit, large: Boole
             Column(Modifier.weight(1f)) {
                 Text(project.name, color = White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Proyek foto • Buka galeri", color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus proyek", tint = Color(0xFFFF8D8D)) }
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Muted)
         }
@@ -559,8 +577,10 @@ private fun ProjectDetailScreen(
     photos: List<PhotoEntity>,
     onBack: () -> Unit,
     onImport: () -> Unit,
-    onPhotoClick: (PhotoEntity) -> Unit
+    onPhotoClick: (PhotoEntity) -> Unit,
+    onDeletePhoto: (PhotoEntity) -> Unit
 ) {
+    var pendingDelete by remember { mutableStateOf<PhotoEntity?>(null) }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = White) }
@@ -609,11 +629,25 @@ private fun ProjectDetailScreen(
                                 Text("Buka editor cahaya & warna", color = Muted, style = MaterialTheme.typography.bodySmall)
                             }
                             Icon(Icons.Default.Tune, contentDescription = null, tint = Violet)
+                            IconButton(onClick = { pendingDelete = photo }) {
+                                Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus foto", tint = Color(0xFFFF8D8D))
+                            }
                         }
                     }
                 }
             }
         }
+    }
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Hapus foto?") },
+            text = { Text("Foto “${target.name}” dan hasil editnya akan dihapus. Aset background/template yang tersimpan di koleksi tidak ikut dihapus.") },
+            confirmButton = {
+                TextButton(onClick = { onDeletePhoto(target); pendingDelete = null }) { Text("Hapus", color = Color(0xFFFF8D8D)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Batal") } }
+        )
     }
 }
 
