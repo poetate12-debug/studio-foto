@@ -64,7 +64,12 @@ data class PhotoEntity(
     @ColumnInfo(defaultValue = "0") val vignette: Float = 0f,
     @ColumnInfo(defaultValue = "1") val backgroundScale: Float = 1f,
     @ColumnInfo(defaultValue = "0") val backgroundX: Float = 0f,
-    @ColumnInfo(defaultValue = "0") val backgroundY: Float = 0f
+    @ColumnInfo(defaultValue = "0") val backgroundY: Float = 0f,
+    @ColumnInfo(defaultValue = "'{}'") val colorMixJson: String = "{}",
+    @ColumnInfo(defaultValue = "NULL") val localAdjustmentPath: String? = null,
+    @ColumnInfo(defaultValue = "0") val texture: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val sharpen: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val whites: Float = 0f
 )
 
 @Dao
@@ -88,7 +93,7 @@ interface StudioDao {
     @Query("SELECT COUNT(*) FROM projects") suspend fun projectCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 4, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class, StudioAssetEntity::class], version = 5, exportSchema = false)
 abstract class PhotoDatabase : RoomDatabase() {
     abstract fun studioDao(): StudioDao
     companion object {
@@ -137,9 +142,18 @@ abstract class PhotoDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_studio_assets_kind ON studio_assets(kind)")
             }
         }
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN colorMixJson TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localAdjustmentPath TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE photos ADD COLUMN texture REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN sharpen REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN whites REAL NOT NULL DEFAULT 0")
+            }
+        }
         fun get(context: Context): PhotoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, PhotoDatabase::class.java, "reang-studio-native.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build().also { INSTANCE = it }
         }
     }
