@@ -208,6 +208,12 @@ fun PhotoWorkflowScreen(
                         status = "Background selesai. Objek asli tetap terpisah agar wajah tidak digambar ulang; atur posisinya di tahap Template."
                     }
                     "enhance" -> {
+                        if (edited.enhanceStrength <= 0) {
+                            change { it.copy(enhancedPath = null) }
+                            persist()
+                            status = "Kekuatan 0%: objek asli dipertahankan tanpa menjalankan AI atau memakai saldo."
+                            return@launch
+                        }
                         val subject = edited.cutoutPath ?: source
                         val data = NativeFiles.imageDataUri(subject, 2200, forcePng = enhanceModel == "recraft")
                         val model: String
